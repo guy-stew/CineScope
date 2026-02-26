@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext'
 import Header from './components/Header'
 import MapView from './components/MapView'
 import AnalyticsPanel from './components/AnalyticsPanel'
+import SettingsPanel from './components/SettingsPanel'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
               </Col>
             </Row>
           </Container>
+          <SettingsPanel />
         </div>
       </AppProvider>
     </ThemeProvider>
