@@ -14,6 +14,8 @@ export default function Header() {
     gradeFilter, setGradeFilter,
     selectedFilm,
     showSettings, setShowSettings,
+    showMatchReview, setShowMatchReview,
+    matchDetails,
   } = useApp()
 
   const { themeName, toggleTheme } = useTheme()
@@ -153,6 +155,36 @@ export default function Header() {
 
           {/* Export menu */}
           <ExportMenu />
+
+          {/* Match review button — only when film loaded */}
+          {selectedFilm && matchDetails.length > 0 && (() => {
+            const reviewCount = matchDetails.filter(m => m.confidence.key === 'medium' || m.confidence.key === 'low').length
+            return (
+              <OverlayTrigger
+                placement="bottom"
+                overlay={<Tooltip>Review venue matching ({reviewCount > 0 ? `${reviewCount} need attention` : 'all good'})</Tooltip>}
+              >
+                <Button
+                  size="sm"
+                  variant={reviewCount > 0 ? 'outline-warning' : 'outline-light'}
+                  onClick={() => setShowMatchReview(true)}
+                  className="position-relative"
+                >
+                  🔗
+                  {reviewCount > 0 && (
+                    <Badge
+                      bg="danger"
+                      pill
+                      className="position-absolute"
+                      style={{ top: -4, right: -6, fontSize: '0.6rem' }}
+                    >
+                      {reviewCount}
+                    </Badge>
+                  )}
+                </Button>
+              </OverlayTrigger>
+            )
+          })()}
 
           {/* Settings */}
           <OverlayTrigger

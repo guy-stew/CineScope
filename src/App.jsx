@@ -6,6 +6,7 @@ import Header from './components/Header'
 import MapView from './components/MapView'
 import AnalyticsPanel from './components/AnalyticsPanel'
 import SettingsPanel from './components/SettingsPanel'
+import MatchReviewPanel from './components/MatchReviewPanel'
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
             </Row>
           </Container>
           <SettingsPanel />
+          <MatchReviewPanel />
         </div>
       </AppProvider>
     </ThemeProvider>

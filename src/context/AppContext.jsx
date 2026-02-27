@@ -47,6 +47,7 @@ export function AppProvider({ children }) {
   const [selectedVenue, setSelectedVenue] = useState(null)
   const [showHeatMap, setShowHeatMap] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showMatchReview, setShowMatchReview] = useState(false)
   const [importStatus, setImportStatus] = useState(null)
 
   // Get the currently selected film data (or build aggregate for "all-films")
@@ -103,13 +104,22 @@ export function AppProvider({ children }) {
     }
   }, [selectedFilmId, importedFilms])
 
-  // Build the enriched venue list with grades
-  const venues = useMemo(() => {
+  // Force re-run matching (called after manual override changes)
+  const [matchVersion, setMatchVersion] = useState(0)
+  const rerunMatching = useCallback(() => {
+    setMatchVersion(v => v + 1)
+  }, [])
+
+  // Run venue matching (produces both venues and match details)
+  const matchResult = useMemo(() => {
     if (!selectedFilm) {
-      return baseVenues.map(v => ({ ...v, grade: null, revenue: null }))
+      return {
+        venues: baseVenues.map(v => ({ ...v, grade: null, revenue: null })),
+        details: [],
+      }
     }
 
-    const { matched, unmatched } = matchVenues(selectedFilm.comscoreVenues, baseVenues)
+    const { matched, unmatched, matchDetails: details } = matchVenues(selectedFilm.comscoreVenues, baseVenues)
 
     // Pass grade settings to calculateGrades
     const graded = calculateGrades(matched, gradeSettings)
@@ -120,8 +130,15 @@ export function AppProvider({ children }) {
       .filter(v => !matchedKeys.has(`${v.name}|${v.city}`.toLowerCase()))
       .map(v => ({ ...v, grade: 'E', revenue: null }))
 
-    return [...graded, ...eGradeVenues]
-  }, [baseVenues, selectedFilm, gradeSettings])
+    return {
+      venues: [...graded, ...eGradeVenues],
+      details,
+    }
+    // matchVersion triggers re-computation after manual overrides
+  }, [baseVenues, selectedFilm, gradeSettings, matchVersion])
+
+  const venues = matchResult.venues
+  const matchDetails = matchResult.details
 
   // Filtered venues
   const filteredVenues = useMemo(() => {
@@ -186,6 +203,7 @@ export function AppProvider({ children }) {
       setImportedFilms(prev => [...prev, filmEntry])
       setSelectedFilmId(filmId)
       setGradeFilter([])
+      setShowMatchReview(true) // Auto-show review panel after import
 
       setImportStatus({
         loading: false,
@@ -239,7 +257,10 @@ export function AppProvider({ children }) {
     selectedVenue, setSelectedVenue,
     showHeatMap, setShowHeatMap,
     showSettings, setShowSettings,
+    showMatchReview, setShowMatchReview,
     gradeCounts,
+    matchDetails,
+    rerunMatching,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
