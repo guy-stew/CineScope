@@ -2,6 +2,7 @@ import React, { useRef, useState, useMemo } from 'react'
 import { Navbar, Nav, Form, Button, Badge, Spinner, OverlayTrigger, Tooltip, Dropdown } from 'react-bootstrap'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
+import ExportMenu from './ExportMenu'
 
 export default function Header() {
   const {
@@ -149,6 +150,9 @@ export default function Header() {
           <Button size="sm" variant="outline-light" onClick={handleFileClick}>
             📊 Import Comscore
           </Button>
+
+          {/* Export menu */}
+          <ExportMenu />
 
           {/* Settings */}
           <OverlayTrigger
