@@ -138,35 +138,74 @@ export async function parseComscoreFile(file) {
 
 
 /**
- * Try to extract film title and date range from header rows
+ * Extract film title and date range from Comscore header rows.
+ * 
+ * Comscore format:
+ *   Row 0: "Grosses By Theatre"
+ *   Row 1: "Film Title - Distribution Label Year (Type), The - Producer - Rating"
+ *   Row 2: "UK & Ireland, GB Pound £, ... Data from MM/DD/YYYY to MM/DD/YYYY"
+ *   Row 3: Column headers (Theater, City, etc.)
+ * 
+ * The film title is extracted from Row 1, taking the first segment before " - "
+ * and cleaning up trailing articles like ", The".
  */
 function extractFilmInfo(rawRows) {
-  const info = { title: 'Unknown Film', dateRange: '' }
+  const info = { title: '', dateRange: '', rawTitle: '' }
 
-  // Comscore exports sometimes have metadata in the first few rows
-  // Look for patterns like "Title: NT Live..." or just the film name
   for (let i = 0; i < Math.min(10, rawRows.length); i++) {
-    const rowText = rawRows[i].map(c => String(c)).join(' ').trim()
+    const rowText = rawRows[i]
+      .filter(c => c != null && String(c).trim() !== '')
+      .map(c => String(c).trim())
+      .join(' ')
+      .trim()
 
-    // Skip empty rows
-    if (!rowText || rowText === ' ') continue
+    if (!rowText) continue
 
-    // Look for a row that might be the title (before the data headers)
-    if (rowText.toLowerCase().includes('theater') || rowText.toLowerCase().includes('theatre')) break
+    // Stop at the data header row
+    if (rowText.toLowerCase().includes('theater') || rowText.toLowerCase().includes('theatre')) {
+      // But check if this is the report title "Grosses By Theatre" — skip that
+      if (rowText.toLowerCase().startsWith('grosses by theatre')) continue
+      break
+    }
 
-    // Check if this row has film-like content
-    if (rowText.length > 5 && !rowText.toLowerCase().includes('gross') && !rowText.toLowerCase().includes('date')) {
-      // Could be a title row
-      const cleaned = rawRows[i].filter(c => c && String(c).trim()).map(c => String(c).trim())
-      if (cleaned.length > 0 && cleaned.length <= 3) {
-        info.title = cleaned[0]
+    // Skip the report title row
+    if (rowText.toLowerCase().startsWith('grosses by theatre')) continue
+
+    // Extract date range from filter row (contains "Data from MM/DD/YYYY to MM/DD/YYYY")
+    const dateMatch = rowText.match(/Data from\s+(\d{2}\/\d{2}\/\d{4})\s+to\s+(\d{2}\/\d{2}\/\d{4})/)
+    if (dateMatch) {
+      info.dateRange = `${dateMatch[1]} to ${dateMatch[2]}`
+      continue
+    }
+
+    // This should be the film info row (Row 1)
+    // Format: "Film Title - Label Year (Type), The - Producer - Rating"
+    if (rowText.length > 5 && !info.rawTitle) {
+      info.rawTitle = rowText
+
+      // Split on " - " separator
+      const segments = rowText.split(/\s+-\s+/)
+      
+      if (segments.length > 0) {
+        let title = segments[0].trim()
+        
+        // Handle trailing article: "Something, The" → "The Something"
+        const articleMatch = title.match(/^(.+),\s*(The|A|An)$/i)
+        if (articleMatch) {
+          title = `${articleMatch[2]} ${articleMatch[1]}`
+        }
+        
+        // Clean up parenthetical suffixes like "(Theatre)" 
+        title = title.replace(/\s*\(Theatre\)\s*$/i, '').trim()
+        
+        info.title = title
       }
     }
+  }
 
-    // Check for date range pattern
-    if (rowText.match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/)) {
-      info.dateRange = rowText
-    }
+  // Fallback if nothing found
+  if (!info.title) {
+    info.title = 'Unknown Film'
   }
 
   return info

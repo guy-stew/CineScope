@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { Modal, Badge, Button, Form, Tab, Tabs, OverlayTrigger, Tooltip } from 'react-bootstrap'
 import { useApp } from '../context/AppContext'
 import { CONFIDENCE, makeOverrideKey, loadOverrides, saveOverrides } from '../utils/venueMatcher'
+import Icon from './Icon'
 
 /**
  * MatchReviewPanel — Shows matching results after import with confidence tiers.
@@ -17,7 +18,7 @@ export default function MatchReviewPanel() {
     return (
       <Modal show={show} onHide={onHide} size="lg" centered>
         <Modal.Header closeButton>
-          <Modal.Title>🔗 Venue Matching</Modal.Title>
+          <Modal.Title><Icon name="link" size={22} className="me-2" />Venue Matching</Modal.Title>
         </Modal.Header>
         <Modal.Body className="text-center text-muted py-5">
           Import a Comscore file to see matching results.
@@ -41,7 +42,7 @@ export default function MatchReviewPanel() {
     <Modal show={show} onHide={onHide} size="xl" centered scrollable>
       <Modal.Header closeButton style={{ background: 'var(--cs-header, #1a365d)', color: 'white' }}>
         <Modal.Title className="d-flex align-items-center gap-2">
-          🔗 Venue Matching Review
+          <Icon name="link" size={22} className="me-2" /> Venue Matching Review
           {selectedFilm && (
             <Badge bg="light" text="dark" style={{ fontSize: '0.7rem', fontWeight: 'normal' }}>
               {selectedFilm.filmInfo.title || selectedFilm.filmInfo.fileName}
@@ -99,7 +100,7 @@ export default function MatchReviewPanel() {
           {/* Needs Review tab */}
           <Tab
             eventKey="medium"
-            title={<>⚠️ Needs Review <Badge bg="warning" text="dark">{medium.length}</Badge></>}
+            title={<><Icon name="warning" size={16} className="me-1" /> Needs Review <Badge bg="warning" text="dark">{medium.length}</Badge></>}
           >
             {medium.length === 0 ? (
               <EmptyState message="No venues need review — all matches are high confidence!" />
@@ -116,7 +117,7 @@ export default function MatchReviewPanel() {
           {/* Unmatched tab */}
           <Tab
             eventKey="low"
-            title={<>❌ Unmatched <Badge bg="danger">{low.length}</Badge></>}
+            title={<><Icon name="cancel" size={16} className="me-1" /> Unmatched <Badge bg="danger">{low.length}</Badge></>}
           >
             {low.length === 0 ? (
               <EmptyState message="All Comscore venues matched successfully!" />
@@ -133,7 +134,7 @@ export default function MatchReviewPanel() {
           {/* High Confidence tab */}
           <Tab
             eventKey="high"
-            title={<>✅ Matched <Badge bg="success">{high.length}</Badge></>}
+            title={<><Icon name="check_circle" size={16} className="me-1" /> Matched <Badge bg="success">{high.length}</Badge></>}
           >
             <MatchTable details={high} baseVenues={baseVenues} />
           </Tab>
@@ -274,8 +275,8 @@ function MatchRow({ detail, baseVenues, showReassign, rerunMatching }) {
     fuzzy_token: 'Fuzzy',
     chain_prefix: 'Chain+Name',
     chain_city: 'Chain+City',
-    manual_override: '✏️ Manual',
-    manual_dismiss: '🚫 Dismissed',
+    manual_override: 'Manual',
+    manual_dismiss: 'Dismissed',
     none: '—',
   }
 
@@ -290,7 +291,7 @@ function MatchRow({ detail, baseVenues, showReassign, rerunMatching }) {
               placement="top"
               overlay={<Tooltip>Chain mismatch: circuit "{comscore.circuit}" doesn't match venue chain</Tooltip>}
             >
-              <Badge bg="warning" text="dark" className="ms-1" style={{ fontSize: '0.65rem' }}>⚠️ Chain</Badge>
+              <Badge bg="warning" text="dark" className="ms-1" style={{ fontSize: '0.65rem' }}><Icon name="warning" size={12} /> Chain</Badge>
             </OverlayTrigger>
           )}
         </td>
@@ -299,7 +300,7 @@ function MatchRow({ detail, baseVenues, showReassign, rerunMatching }) {
         <td>£{(comscore.revenue || 0).toLocaleString()}</td>
 
         {/* Arrow */}
-        <td className="text-center">{venue ? '→' : '✗'}</td>
+        <td className="text-center">{venue ? <Icon name="arrow_forward" size={16} /> : <Icon name="close" size={16} style={{ color: '#dc3545' }} />}</td>
 
         {/* Matched venue */}
         <td>
@@ -340,7 +341,7 @@ function MatchRow({ detail, baseVenues, showReassign, rerunMatching }) {
                 style={{ fontSize: '0.7rem', padding: '1px 6px' }}
                 title="Reassign to a different venue"
               >
-                ✏️
+                <Icon name="edit" size={14} />
               </Button>
               {isOverride && (
                 <Button
@@ -350,7 +351,7 @@ function MatchRow({ detail, baseVenues, showReassign, rerunMatching }) {
                   style={{ fontSize: '0.7rem', padding: '1px 6px' }}
                   title="Remove override, revert to auto-matching"
                 >
-                  ↩️
+                  <Icon name="undo" size={14} />
                 </Button>
               )}
             </div>
@@ -379,7 +380,7 @@ function MatchRow({ detail, baseVenues, showReassign, rerunMatching }) {
                   onClick={handleDismiss}
                   title="Mark as intentionally unmatched (e.g. venue not in our database)"
                 >
-                  🚫 Dismiss
+                  <Icon name="block" size={14} className="me-1" /> Dismiss
                 </Button>
                 <Button
                   size="sm"

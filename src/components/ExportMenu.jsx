@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Dropdown, Spinner } from 'react-bootstrap'
 import { useApp } from '../context/AppContext'
 import { exportCSV, exportMapPNG, exportPDF } from '../utils/exportUtils'
+import Icon from './Icon'
 
 export default function ExportMenu() {
   const { filteredVenues, selectedFilm, gradeCounts } = useApp()
@@ -61,7 +62,7 @@ export default function ExportMenu() {
             Exporting…
           </>
         ) : (
-          '📥 Export'
+          <><Icon name="download" size={16} className="me-1" /> Export</>
         )}
       </Dropdown.Toggle>
 
@@ -72,7 +73,7 @@ export default function ExportMenu() {
         </Dropdown.Header>
 
         <Dropdown.Item onClick={handleCSV}>
-          <span className="me-2">📊</span>
+          <Icon name="table_chart" size={18} className="me-2" />
           CSV Spreadsheet
           <div className="text-muted" style={{ fontSize: '0.72rem' }}>
             Opens in Excel — includes all visible columns
@@ -80,7 +81,7 @@ export default function ExportMenu() {
         </Dropdown.Item>
 
         <Dropdown.Item onClick={handlePNG}>
-          <span className="me-2">🗺️</span>
+          <Icon name="map" size={18} className="me-2" />
           Map Screenshot (PNG)
           <div className="text-muted" style={{ fontSize: '0.72rem' }}>
             High-res image of the current map view
@@ -90,7 +91,7 @@ export default function ExportMenu() {
         <Dropdown.Divider />
 
         <Dropdown.Item onClick={handlePDF}>
-          <span className="me-2">📄</span>
+          <Icon name="picture_as_pdf" size={18} className="me-2" />
           Full PDF Report
           <div className="text-muted" style={{ fontSize: '0.72rem' }}>
             Map + grade summary + venue table

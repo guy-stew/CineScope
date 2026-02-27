@@ -50,6 +50,9 @@ export function AppProvider({ children }) {
   const [showMatchReview, setShowMatchReview] = useState(false)
   const [importStatus, setImportStatus] = useState(null)
 
+  // Pending import — holds parsed data while waiting for film name confirmation
+  const [pendingImport, setPendingImport] = useState(null)
+
   // Get the currently selected film data (or build aggregate for "all-films")
   const selectedFilm = useMemo(() => {
     if (!selectedFilmId) return null
@@ -184,42 +187,65 @@ export function AppProvider({ children }) {
     return counts
   }, [venues])
 
-  // Import a Comscore file
+  // Import a Comscore file — parse and show film name dialog
   const importComscoreFile = useCallback(async (file) => {
     setImportStatus({ loading: true, error: null, success: null })
 
     try {
       const result = await parseComscoreFile(file)
-      const filmId = `film-${Date.now()}`
 
-      const filmEntry = {
-        id: filmId,
-        filmInfo: result.filmInfo,
-        comscoreVenues: result.venues,
-        stats: result.stats,
-        aggregationLog: result.aggregationLog || [],
-      }
-
-      setImportedFilms(prev => [...prev, filmEntry])
-      setSelectedFilmId(filmId)
-      setGradeFilter([])
-      setShowMatchReview(true) // Auto-show review panel after import
-
-      setImportStatus({
-        loading: false,
-        error: null,
-        success: `Imported ${result.venues.length} venues from "${result.filmInfo.title || file.name}"` +
-          (result.stats.aggregatedCount > 0
-            ? ` (${result.stats.aggregatedCount} multi-screen rows combined)`
-            : ''),
+      // Store parsed data and show the film name confirmation dialog
+      setPendingImport({
+        result,
+        fileName: file.name,
       })
 
-      setTimeout(() => setImportStatus(null), 5000)
-      return filmEntry
+      setImportStatus({ loading: false, error: null, success: null })
     } catch (err) {
       setImportStatus({ loading: false, error: err.message, success: null })
       throw err
     }
+  }, [])
+
+  // Confirm film name and finalize import
+  const confirmImport = useCallback((confirmedTitle) => {
+    if (!pendingImport) return
+
+    const { result, fileName } = pendingImport
+    const filmId = `film-${Date.now()}`
+
+    // Override the title with what the user confirmed/edited
+    const filmInfo = { ...result.filmInfo, title: confirmedTitle }
+
+    const filmEntry = {
+      id: filmId,
+      filmInfo,
+      comscoreVenues: result.venues,
+      stats: result.stats,
+      aggregationLog: result.aggregationLog || [],
+    }
+
+    setImportedFilms(prev => [...prev, filmEntry])
+    setSelectedFilmId(filmId)
+    setGradeFilter([])
+    setPendingImport(null)
+    setShowMatchReview(true) // Auto-show review panel after import
+
+    setImportStatus({
+      loading: false,
+      error: null,
+      success: `Imported ${result.venues.length} venues — "${confirmedTitle}"` +
+        (result.stats.aggregatedCount > 0
+          ? ` (${result.stats.aggregatedCount} multi-screen rows combined)`
+          : ''),
+    })
+
+    setTimeout(() => setImportStatus(null), 5000)
+  }, [pendingImport])
+
+  // Cancel pending import
+  const cancelImport = useCallback(() => {
+    setPendingImport(null)
   }, [])
 
   // Clear film selection
@@ -242,6 +268,9 @@ export function AppProvider({ children }) {
     importComscoreFile,
     clearFilmSelection,
     importStatus,
+    pendingImport,
+    confirmImport,
+    cancelImport,
 
     // Grade settings
     gradeSettings, updateGradeSettings, resetGradeSettings,

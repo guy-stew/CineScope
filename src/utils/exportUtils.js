@@ -219,10 +219,29 @@ export async function exportPDF({ venues, gradeCounts, selectedFilm, mapSelector
       })
 
       const imgData = canvas.toDataURL('image/png')
-      const mapWidth = pageWidth - margin * 2
-      const mapHeight = Math.min(80, (canvas.height / canvas.width) * mapWidth)
 
-      pdf.addImage(imgData, 'PNG', margin, yPos, mapWidth, mapHeight)
+      // Preserve the actual aspect ratio of the captured map
+      const aspectRatio = canvas.width / canvas.height
+      const maxMapWidth = pageWidth - margin * 2
+      const maxMapHeight = 90 // Max height available on page 1
+
+      let mapWidth, mapHeight
+
+      // Fit within bounds while preserving aspect ratio
+      if (maxMapWidth / aspectRatio <= maxMapHeight) {
+        // Width-constrained: use full width, calculate height
+        mapWidth = maxMapWidth
+        mapHeight = maxMapWidth / aspectRatio
+      } else {
+        // Height-constrained: use max height, calculate width
+        mapHeight = maxMapHeight
+        mapWidth = maxMapHeight * aspectRatio
+      }
+
+      // Centre the map horizontally if it doesn't fill full width
+      const mapX = margin + (maxMapWidth - mapWidth) / 2
+
+      pdf.addImage(imgData, 'PNG', mapX, yPos, mapWidth, mapHeight)
       yPos += mapHeight + 6
     }
   } catch (err) {

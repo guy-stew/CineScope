@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Toolti
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import { GRADES, GRADE_ORDER, DEFAULT_GRADE_SETTINGS, suggestBoundaries, buildHistogram } from '../utils/grades'
+import Icon from './Icon'
 
 export default function SettingsPanel() {
   const { showSettings, setShowSettings, gradeSettings, updateGradeSettings, resetGradeSettings, selectedFilm, venues } = useApp()
@@ -136,14 +137,14 @@ export default function SettingsPanel() {
         }}
       >
         <Modal.Title style={{ fontSize: '1.1rem' }}>
-          ⚙️ Grade Boundary Settings
+          <Icon name="settings" size={20} className="me-1" /> Grade Boundary Settings
         </Modal.Title>
       </Modal.Header>
 
       <Modal.Body style={{ background: theme.surface, color: theme.text }}>
         {noFilm ? (
           <div className="text-center py-4" style={{ color: theme.textMuted }}>
-            <div style={{ fontSize: '2rem', marginBottom: 8 }}>📊</div>
+            <div style={{ marginBottom: 8 }}><Icon name="bar_chart" size={40} /></div>
             <p>Import a Comscore file first to configure grade boundaries.</p>
             <p style={{ fontSize: '0.85rem' }}>
               The settings panel needs revenue data to show the distribution histogram

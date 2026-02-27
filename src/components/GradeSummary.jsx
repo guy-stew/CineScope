@@ -2,6 +2,7 @@ import React from 'react'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import { GRADES, GRADE_ORDER } from '../utils/grades'
+import Icon from './Icon'
 
 export default function GradeSummary() {
   const { gradeCounts, gradeFilter, setGradeFilter, selectedFilm } = useApp()
@@ -16,7 +17,7 @@ export default function GradeSummary() {
         className="grade-summary-empty mb-3 text-center p-3"
         style={{ background: theme.surfaceAlt, borderRadius: 8 }}
       >
-        <div style={{ fontSize: '1.5rem', marginBottom: 4 }}>📊</div>
+        <div style={{ marginBottom: 4 }}><Icon name="bar_chart" size={32} /></div>
         <div style={{ color: theme.textMuted, fontSize: '0.85rem' }}>
           Import a Comscore file to see grades
         </div>

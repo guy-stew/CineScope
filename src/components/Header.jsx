@@ -3,6 +3,7 @@ import { Navbar, Nav, Form, Button, Badge, Spinner, OverlayTrigger, Tooltip, Dro
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import ExportMenu from './ExportMenu'
+import Icon from './Icon'
 
 export default function Header() {
   const {
@@ -52,7 +53,7 @@ export default function Header() {
     <Navbar variant="dark" expand="lg" className="px-3 py-2 app-header">
       {/* Brand */}
       <Navbar.Brand className="d-flex align-items-center me-3">
-        <span className="me-2" style={{ fontSize: '1.3rem' }}>🎬</span>
+        <span className="me-2" style={{ fontSize: '1.3rem' }}><Icon name="movie" size={24} /></span>
         <span className="fw-bold">CineScope</span>
         <Badge bg="secondary" className="ms-2 fw-normal" style={{ fontSize: '0.6rem' }}>v1.5</Badge>
       </Navbar.Brand>
@@ -132,12 +133,12 @@ export default function Header() {
           )}
           {importStatus?.success && (
             <Badge bg="success" className="text-truncate" style={{ maxWidth: 200 }}>
-              ✓ {importStatus.success}
+              <Icon name="check_circle" size={14} className="me-1" /> {importStatus.success}
             </Badge>
           )}
           {importStatus?.error && (
             <Badge bg="danger" className="text-truncate" style={{ maxWidth: 200 }}>
-              ✗ {importStatus.error}
+              <Icon name="error" size={14} className="me-1" /> {importStatus.error}
             </Badge>
           )}
 
@@ -150,7 +151,7 @@ export default function Header() {
             className="d-none"
           />
           <Button size="sm" variant="outline-light" onClick={handleFileClick}>
-            📊 Import Comscore
+            <Icon name="upload_file" size={16} className="me-1" /> Import Comscore
           </Button>
 
           {/* Export menu */}
@@ -170,7 +171,7 @@ export default function Header() {
                   onClick={() => setShowMatchReview(true)}
                   className="position-relative"
                 >
-                  🔗
+                  <Icon name="link" size={18} />
                   {reviewCount > 0 && (
                     <Badge
                       bg="danger"
@@ -196,7 +197,7 @@ export default function Header() {
               variant="outline-light"
               onClick={() => setShowSettings(true)}
             >
-              ⚙️
+              <Icon name="settings" size={18} />
             </Button>
           </OverlayTrigger>
 
@@ -211,7 +212,7 @@ export default function Header() {
               onClick={toggleTheme}
               style={{ minWidth: 36 }}
             >
-              {themeName === 'light' ? '🌙' : '☀️'}
+              {themeName === 'light' ? <Icon name="dark_mode" size={18} /> : <Icon name="light_mode" size={18} />}
             </Button>
           </OverlayTrigger>
 
@@ -264,7 +265,7 @@ function FilmSelector({ importedFilms, selectedFilmId, onSelect }) {
   // Get selected film label
   const selectedLabel = useMemo(() => {
     if (!selectedFilmId) return 'All Venues (no film)'
-    if (selectedFilmId === 'all-films') return '📈 All Films (Combined)'
+    if (selectedFilmId === 'all-films') return 'All Films (Combined)'
     const film = importedFilms.find(f => f.id === selectedFilmId)
     return film ? (film.filmInfo.title || film.filmInfo.fileName) : 'Select film...'
   }, [selectedFilmId, importedFilms])
@@ -336,7 +337,7 @@ function FilmSelector({ importedFilms, selectedFilmId, onSelect }) {
             active={selectedFilmId === 'all-films'}
             onClick={() => handleSelect('all-films')}
           >
-            📈 All Films (Combined)
+            <Icon name="trending_up" size={16} className="me-1" /> All Films (Combined)
             <span className="text-muted ms-1" style={{ fontSize: '0.75rem' }}>
               {importedFilms.length} films
             </span>
