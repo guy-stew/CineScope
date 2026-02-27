@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
-import MarkerClusterGroup from 'react-leaflet-markercluster'
+import MarkerClusterGroup from 'react-leaflet-cluster'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import { getGradeColor, GRADES } from '../utils/grades'
