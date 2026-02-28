@@ -9,12 +9,6 @@ import { useApp } from '../context/AppContext'
  *
  * Renders a Leaflet.heat canvas overlay using pre-processed population
  * density points from /data/population-heatmap.json.
- *
- * Each point is [lat, lng, intensity] where intensity is log-normalised
- * (0.05-1.0) across all four jurisdictions (E&W, Scotland, NI, Ireland).
- *
- * The layer is only active when populationMode === 'heatmap'.
- * Intensity is controlled via heatmapIntensity (0.1-1.0).
  */
 
 const HEAT_GRADIENT = {
@@ -34,7 +28,7 @@ export default function PopulationHeatLayer() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // -- Effect 1: Fetch heatmap data on first toggle (lazy load, then cache) --
+  // -- Fetch data once on first toggle --
   useEffect(() => {
     if (populationMode !== 'heatmap' || points) return
 
@@ -64,53 +58,37 @@ export default function PopulationHeatLayer() {
     return () => { cancelled = true }
   }, [populationMode, points])
 
-  // -- Effect 2: Create or remove the heat layer --
+  // -- Create / destroy heat layer (rebuilds cleanly on every change) --
   useEffect(() => {
-    // Remove layer if mode switched off or no data yet
-    if (populationMode !== 'heatmap' || !points) {
-      if (heatLayerRef.current) {
-        map.removeLayer(heatLayerRef.current)
-        heatLayerRef.current = null
-      }
-      return
+    // Always clean up the old layer first
+    if (heatLayerRef.current) {
+      map.removeLayer(heatLayerRef.current)
+      heatLayerRef.current = null
     }
 
-    // Create the heat layer if it doesn't exist
-    if (!heatLayerRef.current) {
-      heatLayerRef.current = L.heatLayer(points, {
-        radius: Math.round(12 + heatmapIntensity * 14),
-        blur: Math.round(14 + heatmapIntensity * 14),
-        maxZoom: 12,
-        max: 1.0,
-        minOpacity: 0.05 + heatmapIntensity * 0.5,
-        gradient: HEAT_GRADIENT,
-      })
-      heatLayerRef.current.addTo(map)
-    }
+    // Only create if mode is on and we have data
+    if (populationMode !== 'heatmap' || !points) return
 
-    // Cleanup only on unmount or when mode/points change
+    const layer = L.heatLayer(points, {
+      radius: Math.round(12 + heatmapIntensity * 14),
+      blur: Math.round(14 + heatmapIntensity * 14),
+      maxZoom: 12,
+      max: 1.0,
+      minOpacity: 0.05 + heatmapIntensity * 0.5,
+      gradient: HEAT_GRADIENT,
+    })
+
+    layer.addTo(map)
+    heatLayerRef.current = layer
+
     return () => {
       if (heatLayerRef.current) {
         map.removeLayer(heatLayerRef.current)
         heatLayerRef.current = null
       }
     }
-  }, [map, points, populationMode])
+  }, [map, points, populationMode, heatmapIntensity])
 
-  // -- Effect 3: Update intensity without destroying the layer --
-  useEffect(() => {
-    if (!heatLayerRef.current) return
-
-    heatLayerRef.current.setOptions({
-      radius: Math.round(12 + heatmapIntensity * 14),
-      blur: Math.round(14 + heatmapIntensity * 14),
-      minOpacity: 0.05 + heatmapIntensity * 0.5,
-      gradient: HEAT_GRADIENT,
-    })
-    heatLayerRef.current.redraw()
-  }, [heatmapIntensity])
-
-  // Show loading indicator on the map
   if (populationMode === 'heatmap' && loading) {
     return (
       <div className="population-loading">
