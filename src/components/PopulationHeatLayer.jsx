@@ -43,7 +43,7 @@ export default function PopulationHeatLayer() {
       })
       .then(data => {
         if (!cancelled) {
-          setPoints(data)
+          setPoints(Array.isArray(data) ? data : data.points)
           setLoading(false)
         }
       })
