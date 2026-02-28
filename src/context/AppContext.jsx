@@ -50,6 +50,31 @@ export function AppProvider({ children }) {
   const [showMatchReview, setShowMatchReview] = useState(false)
   const [importStatus, setImportStatus] = useState(null)
 
+  // Population layer state (persisted to localStorage)
+  const [populationMode, setPopulationMode] = useState(() => {
+    try {
+      return localStorage.getItem('cinescope-pop-mode') || 'off'
+    } catch { return 'off' }
+  })
+
+  const [heatmapIntensity, setHeatmapIntensity] = useState(() => {
+    try {
+      const saved = localStorage.getItem('cinescope-pop-intensity')
+      return saved ? parseFloat(saved) : 0.6
+    } catch { return 0.6 }
+  })
+
+  // Persist population settings
+  const updatePopulationMode = useCallback((mode) => {
+    setPopulationMode(mode)
+    try { localStorage.setItem('cinescope-pop-mode', mode) } catch {}
+  }, [])
+
+  const updateHeatmapIntensity = useCallback((val) => {
+    setHeatmapIntensity(val)
+    try { localStorage.setItem('cinescope-pop-intensity', String(val)) } catch {}
+  }, [])
+
   // Pending import — holds parsed data while waiting for film name confirmation
   const [pendingImport, setPendingImport] = useState(null)
 
@@ -290,6 +315,10 @@ export function AppProvider({ children }) {
     gradeCounts,
     matchDetails,
     rerunMatching,
+
+    // Population layer
+    populationMode, updatePopulationMode,
+    heatmapIntensity, updateHeatmapIntensity,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

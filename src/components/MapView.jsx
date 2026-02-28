@@ -4,6 +4,7 @@ import MarkerClusterGroup from 'react-leaflet-cluster'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import { getGradeColor, GRADES } from '../utils/grades'
+import PopulationHeatLayer from './PopulationHeatLayer'
 
 const UK_CENTER = [54.0, -2.5]
 const DEFAULT_ZOOM = 6
@@ -79,6 +80,7 @@ export default function MapView() {
         scrollWheelZoom={true}
       >
         <ThemeTiles />
+        <PopulationHeatLayer />
         <FitBounds venues={mappableVenues} />
 
         <MarkerClusterGroup

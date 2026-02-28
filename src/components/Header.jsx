@@ -17,6 +17,8 @@ export default function Header() {
     showSettings, setShowSettings,
     showMatchReview, setShowMatchReview,
     matchDetails,
+    populationMode, updatePopulationMode,
+    heatmapIntensity, updateHeatmapIntensity,
   } = useApp()
 
   const { themeName, toggleTheme } = useTheme()
@@ -153,6 +155,62 @@ export default function Header() {
           <Button size="sm" variant="outline-light" onClick={handleFileClick}>
             <Icon name="upload_file" size={16} className="me-1" /> Import Comscore
           </Button>
+
+          {/* Population layer toggle */}
+          <Dropdown>
+            <OverlayTrigger
+              placement="bottom"
+              overlay={<Tooltip>Population density layer</Tooltip>}
+            >
+              <Dropdown.Toggle
+                size="sm"
+                variant={populationMode !== 'off' ? 'info' : 'outline-light'}
+                id="pop-toggle"
+                className="d-flex align-items-center gap-1"
+              >
+                <Icon name="groups" size={16} />
+                <span style={{ fontSize: '0.78rem' }}>
+                  {populationMode === 'off' ? 'Population' : populationMode === 'heatmap' ? 'Heat Map' : 'Zones'}
+                </span>
+              </Dropdown.Toggle>
+            </OverlayTrigger>
+            <Dropdown.Menu style={{ minWidth: 220, fontSize: '0.85rem' }}>
+              <Dropdown.Header style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                Population Overlay
+              </Dropdown.Header>
+              {[
+                { key: 'off', label: 'Off', icon: 'visibility_off' },
+                { key: 'heatmap', label: 'Heat Map', icon: 'local_fire_department' },
+                // { key: 'zones', label: 'Area Zones', icon: 'map' },  // Phase 2
+              ].map(({ key, label, icon }) => (
+                <Dropdown.Item
+                  key={key}
+                  active={populationMode === key}
+                  onClick={() => updatePopulationMode(key)}
+                >
+                  <Icon name={icon} size={16} className="me-2" />
+                  {label}
+                </Dropdown.Item>
+              ))}
+              {populationMode === 'heatmap' && (
+                <>
+                  <Dropdown.Divider />
+                  <div className="px-3 py-1">
+                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#888', marginBottom: 4 }}>
+                      Intensity
+                    </div>
+                    <Form.Range
+                      min={0.1}
+                      max={1.0}
+                      step={0.05}
+                      value={heatmapIntensity}
+                      onChange={e => updateHeatmapIntensity(parseFloat(e.target.value))}
+                    />
+                  </div>
+                </>
+              )}
+            </Dropdown.Menu>
+          </Dropdown>
 
           {/* Export menu */}
           <ExportMenu />
