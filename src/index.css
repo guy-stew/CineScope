@@ -227,6 +227,47 @@ body {
   background: rgba(220, 38, 38, 0.9);
 }
 
+.zone-tooltip {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  padding: 6px 10px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.population-legend {
+  position: absolute;
+  bottom: 30px;
+  right: 12px;
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 800;
+  font-size: 0.72rem;
+}
+
+.pop-legend-title {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.pop-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.pop-legend-swatch {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
 /* ── Responsive ──────────────────────────────────────────── */
 
 @media (max-width: 991.98px) {

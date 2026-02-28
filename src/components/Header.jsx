@@ -170,7 +170,7 @@ export default function Header() {
               >
                 <Icon name="groups" size={16} />
                 <span style={{ fontSize: '0.78rem' }}>
-                  {populationMode === 'off' ? 'Population' : populationMode === 'heatmap' ? 'Heat Map' : 'Zones'}
+                  {populationMode === 'off' ? 'Population' : populationMode === 'heatmap' ? 'Heat Map' : 'Area Zones'}
                 </span>
               </Dropdown.Toggle>
             </OverlayTrigger>
@@ -181,7 +181,7 @@ export default function Header() {
               {[
                 { key: 'off', label: 'Off', icon: 'visibility_off' },
                 { key: 'heatmap', label: 'Heat Map', icon: 'local_fire_department' },
-                // { key: 'zones', label: 'Area Zones', icon: 'map' },  // Phase 2
+                { key: 'zones', label: 'Area Zones', icon: 'map' },
               ].map(({ key, label, icon }) => (
                 <Dropdown.Item
                   key={key}
@@ -192,7 +192,7 @@ export default function Header() {
                   {label}
                 </Dropdown.Item>
               ))}
-              {populationMode === 'heatmap' && (
+              {(populationMode === 'heatmap' || populationMode === 'zones') && (
                 <>
                   <Dropdown.Divider />
                   <div className="px-3 py-1">

@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import { getGradeColor, GRADES } from '../utils/grades'
 import PopulationHeatLayer from './PopulationHeatLayer'
+import PopulationZonesLayer from './PopulationZonesLayer'
 
 const UK_CENTER = [54.0, -2.5]
 const DEFAULT_ZOOM = 6
@@ -61,7 +62,7 @@ function MapLegend({ hasGrades }) {
 }
 
 export default function MapView() {
-  const { filteredVenues, selectedFilm, setSelectedVenue } = useApp()
+  const { filteredVenues, selectedFilm, setSelectedVenue, populationMode } = useApp()
   const { theme } = useTheme()
 
   const mappableVenues = useMemo(() => {
@@ -81,6 +82,7 @@ export default function MapView() {
       >
         <ThemeTiles />
         <PopulationHeatLayer />
+        <PopulationZonesLayer />
         <FitBounds venues={mappableVenues} />
 
         <MarkerClusterGroup
@@ -162,6 +164,26 @@ export default function MapView() {
       </MapContainer>
 
       <MapLegend hasGrades={hasGrades} />
+
+      {populationMode !== 'off' && (
+        <div className="population-legend" style={{ background: `${theme.surface}ee` }}>
+          <div className="pop-legend-title" style={{ color: theme.textMuted }}>
+            Population Density
+          </div>
+          {[
+            { color: '#b91c1c', label: '> 10,000/km²' },
+            { color: '#ea580c', label: '5,000–10,000' },
+            { color: '#eab308', label: '2,000–5,000' },
+            { color: '#22c55e', label: '500–2,000' },
+            { color: '#3b82f6', label: '< 500/km²' },
+          ].map(({ color, label }) => (
+            <div key={label} className="pop-legend-item">
+              <span className="pop-legend-swatch" style={{ backgroundColor: color }} />
+              <span style={{ color: theme.text }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="map-venue-count" style={{ background: `${theme.header}dd` }}>
         {mappableVenues.length} venues shown
