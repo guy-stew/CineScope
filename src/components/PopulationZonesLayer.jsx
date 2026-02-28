@@ -7,9 +7,9 @@ import { useApp } from '../context/AppContext'
 /**
  * PopulationZonesLayer
  *
- * Renders choropleth polygons from TopoJSON boundary files.
- * Four files are lazy-loaded on first toggle, converted to GeoJSON,
- * and rendered as a single Leaflet layer with density-based colouring.
+ * Renders choropleth polygons using Canvas renderer for performance.
+ * 12,750 zones as SVG is painfully slow; Canvas handles it smoothly.
+ * Tooltips use mousemove on the canvas layer for lightweight interaction.
  */
 
 const TOPO_FILES = [
@@ -19,14 +19,13 @@ const TOPO_FILES = [
   { url: '/data/ireland-ed.json', objectKey: 'ireland-ed-joined', label: 'Ireland' },
 ]
 
-// Density colour scale (persons per km²)
 function getDensityColor(den) {
   if (den == null) return '#cccccc'
-  if (den > 10000) return '#b91c1c'   // very high — deep red
-  if (den > 5000)  return '#ea580c'   // high — orange
-  if (den > 2000)  return '#eab308'   // medium — yellow
-  if (den > 500)   return '#22c55e'   // low — green
-  return '#3b82f6'                     // very low — blue
+  if (den > 10000) return '#b91c1c'
+  if (den > 5000)  return '#ea580c'
+  if (den > 2000)  return '#eab308'
+  if (den > 500)   return '#22c55e'
+  return '#3b82f6'
 }
 
 function getDensityOpacity(den) {
@@ -43,10 +42,14 @@ function formatNumber(n) {
   return n.toLocaleString()
 }
 
+// Shared canvas renderer — one for all zones, much faster than SVG
+const canvasRenderer = L.canvas({ padding: 0.5, tolerance: 5 })
+
 export default function PopulationZonesLayer() {
   const map = useMap()
   const { populationMode, heatmapIntensity } = useApp()
   const layerRef = useRef(null)
+  const tooltipRef = useRef(null)
   const [geoData, setGeoData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -73,24 +76,17 @@ export default function PopulationZonesLayer() {
           const res = await fetch(url)
           if (!res.ok) throw new Error(`HTTP ${res.status} for ${label}`)
           const topo = await res.json()
-
-          // Convert TopoJSON → GeoJSON
           const geo = feature(topo, topo.objects[objectKey])
           allFeatures.push(...geo.features)
-
           console.log(`[CineScope] ${label}: ${geo.features.length} zones loaded`)
         } catch (err) {
           console.error(`Failed to load ${label}:`, err)
-          // Continue with other files even if one fails
         }
       }
 
       if (!cancelled) {
         console.log(`[CineScope] Total zones: ${allFeatures.length}`)
-        setGeoData({
-          type: 'FeatureCollection',
-          features: allFeatures,
-        })
+        setGeoData({ type: 'FeatureCollection', features: allFeatures })
         setLoading(false)
         setProgress('')
       }
@@ -108,44 +104,57 @@ export default function PopulationZonesLayer() {
 
   // -- Create / destroy the GeoJSON layer --
   useEffect(() => {
-    // Clean up old layer
+    // Clean up
     if (layerRef.current) {
       map.removeLayer(layerRef.current)
       layerRef.current = null
     }
+    if (tooltipRef.current) {
+      map.removeLayer(tooltipRef.current)
+      tooltipRef.current = null
+    }
 
     if (populationMode !== 'zones' || !geoData) return
 
-    const opacity = heatmapIntensity // reuse the same slider
+    const opacity = heatmapIntensity
+
+    // Create a persistent tooltip (lightweight — one tooltip, not 12,750)
+    const tooltip = L.tooltip({ sticky: true, className: 'zone-tooltip' })
+    tooltipRef.current = tooltip
 
     const layer = L.geoJSON(geoData, {
+      renderer: canvasRenderer,
+      interactive: true,
       style: (feat) => {
         const den = feat.properties?.den
         return {
           fillColor: getDensityColor(den),
           fillOpacity: getDensityOpacity(den) * opacity,
-          color: 'rgba(255,255,255,0.3)',
-          weight: 0.5,
+          color: 'rgba(255,255,255,0.2)',
+          weight: 0.3,
         }
       },
       onEachFeature: (feat, lyr) => {
-        const p = feat.properties || {}
-        const parts = [
-          `<strong>${p.nm || 'Unknown'}</strong>`,
-        ]
+        lyr.on('mouseover', (e) => {
+          const p = feat.properties || {}
+          const parts = [`<strong>${p.nm || 'Unknown'}</strong>`]
+          if (p.la) parts.push(`<span style="color:#888">${p.la}</span>`)
+          else if (p.lgd) parts.push(`<span style="color:#888">${p.lgd}</span>`)
+          else if (p.county) parts.push(`<span style="color:#888">${p.county}</span>`)
+          parts.push(`Pop: ${formatNumber(p.pop)}`)
+          parts.push(`Density: ${formatNumber(Math.round(p.den || 0))}/km²`)
+          if (p.area) parts.push(`Area: ${p.area} km²`)
 
-        // Add region context
-        if (p.la) parts.push(`<span style="color:#888">${p.la}</span>`)
-        else if (p.lgd) parts.push(`<span style="color:#888">${p.lgd}</span>`)
-        else if (p.county) parts.push(`<span style="color:#888">${p.county}</span>`)
-
-        parts.push(`Pop: ${formatNumber(p.pop)}`)
-        parts.push(`Density: ${formatNumber(Math.round(p.den || 0))}/km²`)
-        if (p.area) parts.push(`Area: ${p.area} km²`)
-
-        lyr.bindTooltip(parts.join('<br>'), {
-          sticky: true,
-          className: 'zone-tooltip',
+          tooltip
+            .setLatLng(e.latlng)
+            .setContent(parts.join('<br>'))
+            .addTo(map)
+        })
+        lyr.on('mousemove', (e) => {
+          tooltip.setLatLng(e.latlng)
+        })
+        lyr.on('mouseout', () => {
+          map.removeLayer(tooltip)
         })
       },
     })
@@ -157,6 +166,10 @@ export default function PopulationZonesLayer() {
       if (layerRef.current) {
         map.removeLayer(layerRef.current)
         layerRef.current = null
+      }
+      if (tooltipRef.current) {
+        map.removeLayer(tooltipRef.current)
+        tooltipRef.current = null
       }
     }
   }, [map, geoData, populationMode, heatmapIntensity])
