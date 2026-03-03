@@ -17,6 +17,7 @@ export default function Header() {
     selectedFilm,
     showSettings, setShowSettings,
     showMatchReview, setShowMatchReview,
+    showTrends, setShowTrends,
     matchDetails,
     populationMode, updatePopulationMode,
     heatmapIntensity, updateHeatmapIntensity,
@@ -232,6 +233,24 @@ export default function Header() {
 
           {/* Export menu */}
           <ExportMenu />
+
+          {/* Trend analysis button — only when 2+ films imported */}
+          {importedFilms.length >= 2 && (
+            <OverlayTrigger
+              placement="bottom"
+              overlay={<Tooltip>Trend analysis across {importedFilms.length} films</Tooltip>}
+            >
+              <Button
+                size="sm"
+                variant="outline-light"
+                onClick={() => setShowTrends(true)}
+                className="d-flex align-items-center gap-1"
+              >
+                <Icon name="insights" size={16} />
+                <span style={{ fontSize: '0.78rem' }}>Trends</span>
+              </Button>
+            </OverlayTrigger>
+          )}
 
           {/* Match review button — only when film loaded */}
           {selectedFilm && matchDetails.length > 0 && (() => {

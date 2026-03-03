@@ -67,6 +67,24 @@ export function AppProvider({ children }) {
     try { localStorage.setItem('cinescope-revenue-format', format) } catch {}
   }, [])
 
+  // Anthropic API key for AI insights (stored in localStorage, never leaves browser)
+  const [apiKey, setApiKey] = useState(() => {
+    try {
+      return localStorage.getItem('cinescope-api-key') || ''
+    } catch { return '' }
+  })
+
+  const updateApiKey = useCallback((key) => {
+    setApiKey(key)
+    try {
+      if (key) {
+        localStorage.setItem('cinescope-api-key', key)
+      } else {
+        localStorage.removeItem('cinescope-api-key')
+      }
+    } catch {}
+  }, [])
+
   // Grade boundary settings (persisted to localStorage)
   const [gradeSettings, setGradeSettings] = useState(() => {
     try {
@@ -99,6 +117,7 @@ export function AppProvider({ children }) {
   const [showHeatMap, setShowHeatMap] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showMatchReview, setShowMatchReview] = useState(false)
+  const [showTrends, setShowTrends] = useState(false)
   const [importStatus, setImportStatus] = useState(null)
 
   // Population layer state (persisted to localStorage)
@@ -407,6 +426,9 @@ export function AppProvider({ children }) {
     // Revenue formatting
     revenueFormat, updateRevenueFormat,
 
+    // API key for AI insights
+    apiKey, updateApiKey,
+
     // Multi-film venue data (for popups showing all films)
     venueFilmData,
 
@@ -422,6 +444,7 @@ export function AppProvider({ children }) {
     showHeatMap, setShowHeatMap,
     showSettings, setShowSettings,
     showMatchReview, setShowMatchReview,
+    showTrends, setShowTrends,
     gradeCounts,
     matchDetails,
     rerunMatching,

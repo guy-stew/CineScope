@@ -7,7 +7,7 @@ import { GRADES, GRADE_ORDER, DEFAULT_GRADE_SETTINGS, suggestBoundaries, buildHi
 import Icon from './Icon'
 
 export default function SettingsPanel() {
-  const { showSettings, setShowSettings, gradeSettings, updateGradeSettings, resetGradeSettings, selectedFilm, venues, revenueFormat, updateRevenueFormat } = useApp()
+  const { showSettings, setShowSettings, gradeSettings, updateGradeSettings, resetGradeSettings, selectedFilm, venues, revenueFormat, updateRevenueFormat, apiKey, updateApiKey } = useApp()
   const { theme } = useTheme()
 
   // Local draft settings (only applied on "Apply")
@@ -167,6 +167,43 @@ export default function SettingsPanel() {
           </div>
           <div style={{ fontSize: '0.75rem', color: theme.textMuted, marginTop: 6 }}>
             Applies to all revenue figures across the map, tables, and exports.
+          </div>
+        </div>
+
+        {/* Anthropic API Key — for AI Insights */}
+        <div className="mb-4 p-3 rounded" style={{ background: theme.surfaceAlt, border: `1px solid ${theme.border}` }}>
+          <Form.Label style={{ fontSize: '0.85rem', fontWeight: 600, color: theme.textMuted }}>
+            <Icon name="auto_awesome" size={18} className="me-1" /> AI Insights — Anthropic API Key
+          </Form.Label>
+          <Form.Control
+            size="sm"
+            type="password"
+            placeholder="sk-ant-..."
+            value={apiKey}
+            onChange={e => updateApiKey(e.target.value)}
+            style={{
+              backgroundColor: theme.inputBg,
+              borderColor: theme.inputBorder,
+              color: theme.inputText,
+              fontFamily: 'monospace',
+              fontSize: '0.82rem',
+            }}
+          />
+          <div style={{ fontSize: '0.75rem', color: theme.textMuted, marginTop: 6 }}>
+            {apiKey ? (
+              <span style={{ color: '#27ae60' }}>
+                <Icon name="check_circle" size={14} className="me-1" />
+                Key saved — used for AI-powered trend reports. Stored locally, never sent to our servers.
+              </span>
+            ) : (
+              <>
+                Optional. Get a key from{' '}
+                <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" style={{ color: theme.link || '#0d6efd' }}>
+                  console.anthropic.com
+                </a>
+                {' '}to enable AI-generated trend insights.
+              </>
+            )}
           </div>
         </div>
 

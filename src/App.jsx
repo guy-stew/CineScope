@@ -7,10 +7,11 @@ import MapView from './components/MapView'
 import AnalyticsPanel from './components/AnalyticsPanel'
 import SettingsPanel from './components/SettingsPanel'
 import MatchReviewPanel from './components/MatchReviewPanel'
+import TrendPanel from './components/TrendPanel'
 import FilmNameDialog from './components/FilmNameDialog'
 
 function AppContent() {
-  const { pendingImport, confirmImport, cancelImport } = useApp()
+  const { pendingImport, confirmImport, cancelImport, showTrends, setShowTrends } = useApp()
 
   return (
     <div className="app-container d-flex flex-column vh-100">
@@ -27,6 +28,7 @@ function AppContent() {
       </Container>
       <SettingsPanel />
       <MatchReviewPanel />
+      <TrendPanel show={showTrends} onHide={() => setShowTrends(false)} />
       <FilmNameDialog
         show={!!pendingImport}
         onConfirm={confirmImport}
