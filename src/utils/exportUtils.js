@@ -1,20 +1,33 @@
 /**
- * CineScope — Export Utilities v1.9
+ * CineScope - Export Utilities v1.10
  * CSV download, map screenshot (PNG), and multi-page PDF report
- * All processing runs client-side — no data leaves the browser.
+ * All processing runs client-side - no data leaves the browser.
  *
  * PDF page order:
  *   1. Cover page (branding, film title, chain, grade summary, key highlights)
- *   2. AI Insights (optional — if generated and toggled on)
+ *   2. AI Insights (optional - if generated and toggled on)
  *   3. Dashboard charts (grade distribution + chain comparison)
  *   4. Map screenshot
- *   5. Venue list (multi-page table)
+ *   5. Venue list (multi-page table with grade dots, page numbers, improved layout)
+ *
+ * v1.10 changes (Section 3 - venue list):
+ *   - Grade colour dots next to grade letter
+ *   - Right-aligned revenue column (bold)
+ *   - Page numbers on all pages (except cover) via global post-processing
+ *   - Footer with rule line on every venue list page
+ *   - Better continuation headers showing film title + chain + count
+ *   - ASCII-safe truncation (no Unicode ellipsis)
+ *   - Multi-screen aggregation indicator [+]
+ *   - Summary line below table (venue count + aggregation count)
+ *   - Improved column proportions for landscape A4
+ *   - Zebra striping with softer colour
+ *   - Table bottom border + gold underline on column headers
  */
 
 import { GRADES } from './grades'
 import { formatRevenue, formatRevenueCSV } from './formatRevenue'
 
-// ─── Lazy loaders ──────────────────────────────────────────
+// --- Lazy loaders ---
 
 let _html2canvas = null
 async function getHtml2Canvas() {
@@ -34,7 +47,7 @@ async function getJsPDF() {
   return _jsPDF
 }
 
-// ─── Brand colours ─────────────────────────────────────────
+// --- Brand colours ---
 
 const NAVY = [26, 54, 93]
 const GOLD = [212, 175, 55]
@@ -42,11 +55,13 @@ const WHITE = [255, 255, 255]
 const LIGHT_GREY = [240, 240, 240]
 const MID_GREY = [150, 150, 150]
 const DARK_TEXT = [50, 50, 50]
+const TABLE_HEADER_BG = [235, 238, 245]
+const ZEBRA_BG = [248, 249, 252]
 
 
-// ═══════════════════════════════════════════════════════════
+// ===================================================================
 // CSV Export
-// ═══════════════════════════════════════════════════════════
+// ===================================================================
 
 export function exportCSV(venues, options = {}) {
   const { filmTitle = 'All Venues', includeGrades = true, revenueFormat = 'decimal' } = options
@@ -76,9 +91,9 @@ export function exportCSV(venues, options = {}) {
 }
 
 
-// ═══════════════════════════════════════════════════════════
+// ===================================================================
 // Map Screenshot (PNG)
-// ═══════════════════════════════════════════════════════════
+// ===================================================================
 
 export async function exportMapPNG(selector = '.map-wrapper') {
   const mapEl = document.querySelector(selector)
@@ -102,11 +117,11 @@ export async function exportMapPNG(selector = '.map-wrapper') {
 }
 
 
-// ═══════════════════════════════════════════════════════════
-// PDF — Page Builders
-// ═══════════════════════════════════════════════════════════
+// ===================================================================
+// PDF - Page Builders
+// ===================================================================
 
-// ─── 1. Cover Page ─────────────────────────────────────────
+// --- 1. Cover Page ---
 
 function addCoverPage(pdf, o) {
   const { selectedFilm, gradeCounts, venues, chainName, revenueFormat } = o
@@ -114,13 +129,11 @@ function addCoverPage(pdf, o) {
   const H = pdf.internal.pageSize.getHeight()
   const m = 12
 
-  // Navy background + gold accent bars
   pdf.setFillColor(...NAVY)
   pdf.rect(0, 0, W, H, 'F')
   pdf.setFillColor(...GOLD)
   pdf.rect(0, 0, W, 3, 'F')
 
-  // Title
   pdf.setTextColor(...WHITE)
   pdf.setFontSize(32)
   pdf.setFont('helvetica', 'bold')
@@ -130,12 +143,10 @@ function addCoverPage(pdf, o) {
   pdf.setTextColor(180, 200, 220)
   pdf.text('Cinema Performance Analytics', m, 50)
 
-  // Gold divider
   pdf.setDrawColor(...GOLD)
   pdf.setLineWidth(0.8)
   pdf.line(m, 57, W - m, 57)
 
-  // Film title + chain
   let y = 70
   if (selectedFilm) {
     pdf.setTextColor(...WHITE)
@@ -158,14 +169,12 @@ function addCoverPage(pdf, o) {
     y += 12
   }
 
-  // Date
   pdf.setTextColor(180, 200, 220)
   pdf.setFontSize(10)
   pdf.setFont('helvetica', 'normal')
   pdf.text(`Report generated: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`, m, y)
   y += 16
 
-  // Grade summary boxes
   if (gradeCounts) {
     const gl = ['A', 'B', 'C', 'D', 'E']
     const tot = Object.values(gradeCounts).reduce((a, b) => a + b, 0)
@@ -194,7 +203,6 @@ function addCoverPage(pdf, o) {
     y += bH + 14
   }
 
-  // Key highlights panel
   if (selectedFilm) {
     pdf.setFillColor(15, 40, 70)
     pdf.roundedRect(m, y, W - m * 2, 52, 4, 4, 'F')
@@ -230,17 +238,16 @@ function addCoverPage(pdf, o) {
     }
   }
 
-  // Footer + bottom accent
   pdf.setTextColor(100, 120, 150)
   pdf.setFontSize(7)
   pdf.text('Liberator Film Services  \u00B7  Confidential', m, H - 8)
-  pdf.text('Powered by CineScope v1.9', W - m, H - 8, { align: 'right' })
+  pdf.text('Powered by CineScope v1.10', W - m, H - 8, { align: 'right' })
   pdf.setFillColor(...GOLD)
   pdf.rect(0, H - 3, W, 3, 'F')
 }
 
 
-// ─── 2. Dashboard Charts Page ──────────────────────────────
+// --- 2. Dashboard Charts Page ---
 
 function addDashboardChartsPage(pdf, o) {
   const { venues, gradeCounts, revenueFormat, chainName } = o
@@ -248,7 +255,6 @@ function addDashboardChartsPage(pdf, o) {
   const H = pdf.internal.pageSize.getHeight()
   const m = 12
 
-  // Header
   pdf.setFillColor(...NAVY)
   pdf.rect(0, 0, W, 16, 'F')
   pdf.setTextColor(...WHITE)
@@ -261,7 +267,6 @@ function addDashboardChartsPage(pdf, o) {
 
   let y = 24
 
-  // ── Grade Distribution ──
   pdf.setTextColor(...NAVY)
   pdf.setFontSize(11)
   pdf.setFont('helvetica', 'bold')
@@ -315,7 +320,6 @@ function addDashboardChartsPage(pdf, o) {
 
   y += 10
 
-  // ── Chain Comparison ──
   pdf.setTextColor(...NAVY)
   pdf.setFontSize(11)
   pdf.setFont('helvetica', 'bold')
@@ -391,28 +395,28 @@ function addDashboardChartsPage(pdf, o) {
 
   pdf.setTextColor(...MID_GREY)
   pdf.setFontSize(6)
-  pdf.text('CineScope v1.9 \u2014 Liberator Film Services \u2014 Confidential', m, H - 5)
+  pdf.text('CineScope v1.10 \u2014 Liberator Film Services \u2014 Confidential', m, H - 5)
 }
 
 
-// ─── 3. AI Report Pages ────────────────────────────────────
+// --- 3. AI Report Pages ---
 
 function sanitiseForPDF(text) {
   return text
-    .replace(/\u2192/g, ' > ')    // → arrow (grade transitions)
-    .replace(/\u2190/g, ' < ')    // ← arrow
-    .replace(/\u2194/g, ' <> ')   // ↔ double arrow
-    .replace(/\u2013/g, '-')      // – en dash
-    .replace(/\u2014/g, ' - ')    // — em dash
-    .replace(/\u2018/g, "'")      // ' left single quote
-    .replace(/\u2019/g, "'")      // ' right single quote
-    .replace(/\u201C/g, '"')      // " left double quote
-    .replace(/\u201D/g, '"')      // " right double quote
-    .replace(/\u2026/g, '...')    // … ellipsis
-    .replace(/\u00B7/g, ' - ')    // · middle dot
-    .replace(/\u2022/g, '-')      // • bullet
-    .replace(/\u2715/g, 'x')      // ✕ multiplication
-    .replace(/[^\x00-\x7F\u00A0-\u00FF]/g, '') // strip remaining non-Latin1
+    .replace(/\u2192/g, ' > ')
+    .replace(/\u2190/g, ' < ')
+    .replace(/\u2194/g, ' <> ')
+    .replace(/\u2013/g, '-')
+    .replace(/\u2014/g, ' - ')
+    .replace(/\u2018/g, "'")
+    .replace(/\u2019/g, "'")
+    .replace(/\u201C/g, '"')
+    .replace(/\u201D/g, '"')
+    .replace(/\u2026/g, '...')
+    .replace(/\u00B7/g, ' - ')
+    .replace(/\u2022/g, '-')
+    .replace(/\u2715/g, 'x')
+    .replace(/[^\x00-\x7F\u00A0-\u00FF]/g, '')
 }
 
 function addAIReportPage(pdf, aiText, selectedFilm, margin) {
@@ -500,7 +504,7 @@ function addAIReportPage(pdf, aiText, selectedFilm, margin) {
 
   pdf.setTextColor(...MID_GREY)
   pdf.setFontSize(6)
-  pdf.text('AI-generated insights \u2014 CineScope v1.9 \u2014 Liberator Film Services \u2014 Confidential', margin, H - 5)
+  pdf.text('AI-generated insights \u2014 CineScope v1.10 \u2014 Liberator Film Services \u2014 Confidential', margin, H - 5)
 }
 
 function parseInlineBold(text) {
@@ -554,7 +558,7 @@ function renderSegmentLine(pdf, segs, x, y) {
 }
 
 
-// ─── 4. Map Page ───────────────────────────────────────────
+// --- 4. Map Page ---
 
 async function addMapPage(pdf, o) {
   const { selectedFilm, gradeCounts, mapSelector, revenueFormat } = o
@@ -592,7 +596,6 @@ async function addMapPage(pdf, o) {
     yP += 8
   }
 
-  // Compact grade boxes
   if (selectedFilm && gradeCounts) {
     const bW = 30, bH = 14, gap = 4
     const tot = Object.values(gradeCounts).reduce((a, b) => a + b, 0)
@@ -638,41 +641,36 @@ async function addMapPage(pdf, o) {
 }
 
 
-// ─── 5. Venue List Pages ───────────────────────────────────
+// --- 5. Venue List Pages (v1.10 - improved) ---
 
 function addVenueListPages(pdf, o) {
-  const { venues, revenueFormat } = o
+  const { venues, revenueFormat, selectedFilm, chainName } = o
   const W = pdf.internal.pageSize.getWidth()
   const H = pdf.internal.pageSize.getHeight()
   const m = 12
-
-  pdf.setFillColor(...NAVY)
-  pdf.rect(0, 0, W, 14, 'F')
-  pdf.setTextColor(...WHITE)
-  pdf.setFontSize(11)
-  pdf.setFont('helvetica', 'bold')
-  pdf.text('Venue List', m, 10)
-  pdf.setFontSize(8)
-  pdf.setFont('helvetica', 'normal')
-  pdf.text(`${venues.length} venues`, W - m, 10, { align: 'right' })
-
-  let yP = 20
   const hasRev = venues.some(v => v.revenue != null)
-  const cW = hasRev ? [85, 45, 40, 35, 35, 25] : [100, 55, 50, 40, 30]
-  const cH = hasRev ? ['Venue', 'City', 'Chain', 'Category', 'Revenue', 'Grade'] : ['Venue', 'City', 'Chain', 'Category', 'Country']
+  const footerY = H - 10
 
-  const drawTH = (at) => {
-    pdf.setFillColor(...LIGHT_GREY)
-    pdf.rect(m, at - 4, W - m * 2, 6, 'F')
-    pdf.setTextColor(80, 80, 80)
-    pdf.setFontSize(7)
-    pdf.setFont('helvetica', 'bold')
-    let x = m
-    cH.forEach((h, i) => { pdf.text(h, x + 1, at); x += cW[i] })
-  }
+  const cols = hasRev
+    ? [
+        { header: 'Venue',    w: 80, align: 'left',   trunc: 40 },
+        { header: 'City',     w: 40, align: 'left',   trunc: 20 },
+        { header: 'Chain',    w: 44, align: 'left',   trunc: 22 },
+        { header: 'Category', w: 34, align: 'left',   trunc: 17 },
+        { header: 'Revenue',  w: 34, align: 'right',  trunc: 0  },
+        { header: 'Grade',    w: 24, align: 'center', trunc: 0  },
+      ]
+    : [
+        { header: 'Venue',    w: 100, align: 'left',  trunc: 50 },
+        { header: 'City',     w: 52,  align: 'left',  trunc: 28 },
+        { header: 'Chain',    w: 50,  align: 'left',  trunc: 26 },
+        { header: 'Category', w: 40,  align: 'left',  trunc: 20 },
+        { header: 'Country',  w: 30,  align: 'left',  trunc: 15 },
+      ]
 
-  drawTH(yP)
-  yP += 5
+  const tableW = cols.reduce((s, c) => s + c.w, 0)
+  const rowH = 5
+  const headerRowH = 6
 
   const sorted = [...venues].sort((a, b) => {
     const go = { A: 0, B: 1, C: 2, D: 3, E: 4 }
@@ -680,50 +678,208 @@ function addVenueListPages(pdf, o) {
     return d !== 0 ? d : (b.revenue || 0) - (a.revenue || 0)
   })
 
-  for (let i = 0; i < sorted.length; i++) {
-    const v = sorted[i]
-    if (yP > H - 10) {
-      pdf.addPage('landscape')
-      yP = m + 4
-      drawTH(yP)
-      yP += 5
+  const drawPageHeader = (isFirst) => {
+    const barH = isFirst ? 16 : 14
+    pdf.setFillColor(...NAVY)
+    pdf.rect(0, 0, W, barH, 'F')
+    pdf.setTextColor(...WHITE)
+    pdf.setFontSize(isFirst ? 13 : 11)
+    pdf.setFont('helvetica', 'bold')
+    pdf.text(isFirst ? 'Venue Performance List' : 'Venue List (continued)', m, isFirst ? 11 : 10)
+
+    pdf.setFontSize(8)
+    pdf.setFont('helvetica', 'normal')
+    const parts = []
+    if (selectedFilm) parts.push(truncate(selectedFilm.filmInfo.title || selectedFilm.filmInfo.fileName, 40))
+    if (chainName) parts.push(chainName)
+    parts.push(`${venues.length} venues`)
+    pdf.text(parts.join('  |  '), W - m, isFirst ? 11 : 10, { align: 'right' })
+
+    return barH + 4
+  }
+
+  const drawTableHeader = (y) => {
+    pdf.setFillColor(...TABLE_HEADER_BG)
+    pdf.rect(m, y, tableW, headerRowH, 'F')
+
+    pdf.setDrawColor(...GOLD)
+    pdf.setLineWidth(0.4)
+    pdf.line(m, y + headerRowH, m + tableW, y + headerRowH)
+
+    pdf.setTextColor(...NAVY)
+    pdf.setFontSize(7)
+    pdf.setFont('helvetica', 'bold')
+
+    let x = m
+    for (const col of cols) {
+      const textY = y + 4.2
+      if (col.align === 'right') {
+        pdf.text(col.header, x + col.w - 3, textY, { align: 'right' })
+      } else if (col.align === 'center') {
+        pdf.text(col.header, x + col.w / 2, textY, { align: 'center' })
+      } else {
+        pdf.text(col.header, x + 2, textY)
+      }
+      x += col.w
     }
 
-    if (i % 2 === 0) {
-      pdf.setFillColor(248, 249, 250)
-      pdf.rect(m, yP - 3, W - m * 2, 4.5, 'F')
+    return y + headerRowH + 2
+  }
+
+  const drawPageFooter = () => {
+    pdf.setDrawColor(220, 220, 220)
+    pdf.setLineWidth(0.3)
+    pdf.line(m, footerY - 2, m + tableW, footerY - 2)
+    pdf.setTextColor(...MID_GREY)
+    pdf.setFontSize(6)
+    pdf.setFont('helvetica', 'normal')
+    pdf.text('CineScope v1.10 \u2014 Liberator Film Services \u2014 Confidential', m, footerY + 2)
+  }
+
+  let yP = drawPageHeader(true)
+  yP = drawTableHeader(yP)
+  let rowIndex = 0
+
+  for (let i = 0; i < sorted.length; i++) {
+    const v = sorted[i]
+
+    if (yP + rowH > footerY - 4) {
+      drawPageFooter()
+      pdf.addPage('landscape')
+      yP = drawPageHeader(false)
+      yP = drawTableHeader(yP)
+      rowIndex = 0
+    }
+
+    if (rowIndex % 2 === 0) {
+      pdf.setFillColor(...ZEBRA_BG)
+      pdf.rect(m, yP - 1, tableW, rowH, 'F')
     }
 
     let x = m
-    const cells = hasRev
-      ? [truncate(v.name, 42), truncate(v.city || '', 22), truncate(v.chain || '', 20), truncate(v.category || '', 17), v.revenue != null ? formatRevenue(v.revenue, revenueFormat) : '\u2014', v.grade || '\u2014']
-      : [truncate(v.name, 50), truncate(v.city || '', 28), truncate(v.chain || '', 25), truncate(v.category || '', 20), v.country || '']
 
-    cells.forEach((cell, ci) => {
-      if (hasRev && ci === 5 && v.grade && GRADES[v.grade]) {
-        const rgb = hexToRgb(GRADES[v.grade].color)
-        pdf.setTextColor(rgb.r, rgb.g, rgb.b)
-        pdf.setFont('helvetica', 'bold')
-      } else {
-        pdf.setTextColor(...DARK_TEXT)
-        pdf.setFont('helvetica', 'normal')
-      }
+    if (hasRev) {
       pdf.setFontSize(6.5)
-      pdf.text(String(cell), x + 1, yP)
-      x += cW[ci]
-    })
-    yP += 4.5
+      pdf.setFont('helvetica', 'normal')
+      pdf.setTextColor(...DARK_TEXT)
+      const vName = truncate(v.name, cols[0].trunc)
+      pdf.text(vName, x + 2, yP + 3)
+
+      if (v.wasAggregated) {
+        const nameW = pdf.getTextWidth(vName)
+        pdf.setFontSize(5)
+        pdf.setTextColor(...MID_GREY)
+        pdf.text('[+]', x + 3 + nameW, yP + 3)
+      }
+      x += cols[0].w
+
+      pdf.setFontSize(6.5)
+      pdf.setFont('helvetica', 'normal')
+      pdf.setTextColor(...DARK_TEXT)
+      pdf.text(truncate(v.city || '', cols[1].trunc), x + 2, yP + 3)
+      x += cols[1].w
+
+      pdf.text(truncate(v.chain || '', cols[2].trunc), x + 2, yP + 3)
+      x += cols[2].w
+
+      pdf.setTextColor(...MID_GREY)
+      pdf.text(truncate(v.category || '', cols[3].trunc), x + 2, yP + 3)
+      x += cols[3].w
+
+      if (v.revenue != null) {
+        pdf.setTextColor(...DARK_TEXT)
+        pdf.setFont('helvetica', 'bold')
+        pdf.setFontSize(6.5)
+        pdf.text(formatRevenue(v.revenue, revenueFormat), x + cols[4].w - 3, yP + 3, { align: 'right' })
+      } else {
+        pdf.setTextColor(...MID_GREY)
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(6.5)
+        pdf.text('-', x + cols[4].w - 3, yP + 3, { align: 'right' })
+      }
+      x += cols[4].w
+
+      if (v.grade && GRADES[v.grade]) {
+        const rgb = hexToRgb(GRADES[v.grade].color)
+        const dotX = x + cols[5].w / 2 - 5
+        const dotY = yP + 2
+
+        pdf.setFillColor(rgb.r, rgb.g, rgb.b)
+        pdf.circle(dotX, dotY, 1.5, 'F')
+
+        pdf.setTextColor(rgb.r, rgb.g, rgb.b)
+        pdf.setFontSize(7.5)
+        pdf.setFont('helvetica', 'bold')
+        pdf.text(v.grade, dotX + 3.5, yP + 3)
+      } else {
+        pdf.setTextColor(...MID_GREY)
+        pdf.setFontSize(6.5)
+        pdf.setFont('helvetica', 'normal')
+        pdf.text('-', x + cols[5].w / 2, yP + 3, { align: 'center' })
+      }
+
+    } else {
+      pdf.setFontSize(6.5)
+      pdf.setFont('helvetica', 'normal')
+      pdf.setTextColor(...DARK_TEXT)
+      pdf.text(truncate(v.name, cols[0].trunc), x + 2, yP + 3)
+      x += cols[0].w
+      pdf.text(truncate(v.city || '', cols[1].trunc), x + 2, yP + 3)
+      x += cols[1].w
+      pdf.text(truncate(v.chain || '', cols[2].trunc), x + 2, yP + 3)
+      x += cols[2].w
+      pdf.setTextColor(...MID_GREY)
+      pdf.text(truncate(v.category || '', cols[3].trunc), x + 2, yP + 3)
+      x += cols[3].w
+      pdf.setTextColor(...DARK_TEXT)
+      pdf.text(v.country || '', x + 2, yP + 3)
+    }
+
+    yP += rowH
+    rowIndex++
   }
 
-  pdf.setTextColor(...MID_GREY)
-  pdf.setFontSize(6)
-  pdf.text('CineScope v1.9 \u2014 Liberator Film Services \u2014 Confidential', m, H - 5)
+  pdf.setDrawColor(200, 200, 200)
+  pdf.setLineWidth(0.3)
+  pdf.line(m, yP, m + tableW, yP)
+
+  yP += 5
+  if (yP < footerY - 8) {
+    pdf.setFontSize(7)
+    pdf.setFont('helvetica', 'italic')
+    pdf.setTextColor(...MID_GREY)
+    const summaryParts = [`${sorted.length} venues listed`]
+    const aggCount = sorted.filter(v => v.wasAggregated).length
+    if (aggCount > 0) summaryParts.push(`${aggCount} with multi-screen aggregation [+]`)
+    pdf.text(summaryParts.join('  |  '), m, yP)
+  }
+
+  drawPageFooter()
 }
 
 
-// ═══════════════════════════════════════════════════════════
-// Main PDF Export — orchestrator
-// ═══════════════════════════════════════════════════════════
+// --- 6. Page Numbering (global post-processing pass) ---
+
+function addPageNumbers(pdf) {
+  const totalPages = pdf.getNumberOfPages()
+  const W = pdf.internal.pageSize.getWidth()
+  const H = pdf.internal.pageSize.getHeight()
+
+  for (let i = 1; i <= totalPages; i++) {
+    pdf.setPage(i)
+    if (i === 1) continue
+
+    pdf.setFontSize(6.5)
+    pdf.setFont('helvetica', 'normal')
+    pdf.setTextColor(...MID_GREY)
+    pdf.text(`Page ${i} of ${totalPages}`, W - 12, H - 5, { align: 'right' })
+  }
+}
+
+
+// ===================================================================
+// Main PDF Export - orchestrator
+// ===================================================================
 
 export async function exportPDF({
   venues, gradeCounts, selectedFilm,
@@ -750,9 +906,12 @@ export async function exportPDF({
   pdf.addPage('landscape')
   await addMapPage(pdf, { selectedFilm, gradeCounts, mapSelector, revenueFormat })
 
-  // 5. Venue List
+  // 5. Venue List (now receives film/chain context for better headers)
   pdf.addPage('landscape')
-  addVenueListPages(pdf, { venues, revenueFormat })
+  addVenueListPages(pdf, { venues, revenueFormat, selectedFilm, chainName })
+
+  // 6. Global page numbers (all pages except cover)
+  addPageNumbers(pdf)
 
   // Save
   const fn = selectedFilm?.filmInfo.title || 'All_Venues'
@@ -760,7 +919,7 @@ export async function exportPDF({
 }
 
 
-// ─── Helpers ───────────────────────────────────────────────
+// --- Helpers ---
 
 function csvEscape(v) {
   const s = String(v)
@@ -789,4 +948,5 @@ function hexToRgb(hex) {
   return r ? { r: parseInt(r[1], 16), g: parseInt(r[2], 16), b: parseInt(r[3], 16) } : { r: 0, g: 0, b: 0 }
 }
 
-function truncate(s, n) { return s.length <= n ? s : s.substring(0, n - 1) + '\u2026' }
+// ASCII-safe truncation - uses '..' instead of Unicode ellipsis for Helvetica compatibility
+function truncate(s, n) { return s.length <= n ? s : s.substring(0, n - 2) + '..' }
