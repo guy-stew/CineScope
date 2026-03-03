@@ -4,12 +4,20 @@
  * Sends trend analysis data to the Claude API (client-side) and returns
  * a narrative insights report. Uses streaming for responsive UI.
  *
+ * v1.11 changes:
+ *   - Added generateChainAIReport() — chain-tailored analysis for PDF pitch packs
+ *   - Added buildChainDataForAI() — builds chain-specific data summary
+ *   - Refactored shared streaming logic into _callClaude()
+ *   - Chain reports work with a single film (no trend data dependency)
+ *
  * The API key is stored locally by the user — never sent anywhere except
  * directly to Anthropic's API.
  */
 
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const MODEL = 'claude-sonnet-4-20250514'
+
+// ─── General Report (unchanged) ─────────────────────────────────
 
 const SYSTEM_PROMPT = `You are CineScope's AI analyst — a sharp, commercially-minded cinema distribution analyst helping Austin Shaw at Liberator Film Services make smarter marketing decisions.
 
@@ -29,15 +37,137 @@ Write a concise, actionable analysis report covering:
 
 Keep the tone professional but conversational — this is a working tool for a busy distributor, not an academic paper. Use £ for currency. Be specific with venue names, chains, and regions where possible. Keep the total report under 600 words.`
 
+
+// ─── Chain-Tailored Report (NEW v1.11) ──────────────────────────
+
+const CHAIN_SYSTEM_PROMPT = `You are CineScope's AI analyst — a sharp, commercially-minded cinema distribution analyst working for Liberator Film Services.
+
+You will receive performance data for a SPECIFIC cinema chain. This report will be sent to the chain's cinema manager, so write it as an external-facing performance summary — professional, encouraging where warranted, but honest about underperformance.
+
+Write a concise, tailored performance report covering:
+
+1. **Chain Overview** (2-3 sentences) — How did this chain perform overall? Set the context: number of venues, total and average revenue, overall grade.
+
+2. **Top Performers** — Which venues in this chain did best? Celebrate specific locations by name, with revenue and grade. If a venue outperformed the network average, highlight it.
+
+3. **Growth Opportunities** — Which venues in this chain underperformed? For each, note the grade and revenue. Where population density data is available and relevant, reference it (e.g. "Your Leeds venue sits in a densely populated area but earned only £X — there may be untapped audience here"). Frame these constructively — as opportunities, not failures.
+
+4. **Chain vs Network** — How does this chain compare to the overall network average? Is it above or below? By how much?
+
+5. **Recommendations** — 2-3 specific, actionable suggestions for improving performance at their weaker venues. Think marketing activity, screening times, local partnerships.
+
+Tone: Professional and respectful — this is going to someone outside the company. Use £ for currency. Be specific with venue names, cities, and numbers. Keep the total report under 500 words.`
+
+
 /**
- * Generate an AI insights report from trend data.
+ * Generate a general AI insights report from trend data.
+ * (Unchanged from v1.10)
+ */
+export async function generateAIReport(apiKey, trendSummary, onChunk) {
+  return _callClaude(apiKey, SYSTEM_PROMPT, `Here is the CineScope trend data for analysis. Please write the insights report.\n\n${trendSummary}`, onChunk)
+}
+
+
+/**
+ * Generate a chain-tailored AI report for a specific cinema chain.
+ * Works with a single film — does NOT require trend data.
  *
  * @param {string} apiKey — Anthropic API key
- * @param {string} trendSummary — Compact text summary from buildTrendSummaryForAI()
+ * @param {string} chainName — Name of the selected chain (e.g. "Everyman")
+ * @param {Array} chainVenues — Venues in this chain (with grade, revenue, city etc.)
+ * @param {Array} allVenues — All venues (for network-wide comparison)
+ * @param {Object} selectedFilm — Current film object (filmInfo, stats)
  * @param {function} onChunk — Called with each text chunk as it streams in
  * @returns {Promise<string>} — Complete report text
  */
-export async function generateAIReport(apiKey, trendSummary, onChunk) {
+export async function generateChainAIReport(apiKey, chainName, chainVenues, allVenues, selectedFilm, onChunk) {
+  const dataSummary = buildChainDataForAI(chainName, chainVenues, allVenues, selectedFilm)
+  return _callClaude(apiKey, CHAIN_SYSTEM_PROMPT, dataSummary, onChunk)
+}
+
+
+/**
+ * Build a compact text summary of chain performance data for the AI prompt.
+ * Includes venue-level detail, network comparison, and population context.
+ */
+export function buildChainDataForAI(chainName, chainVenues, allVenues, selectedFilm) {
+  const lines = []
+
+  const filmTitle = selectedFilm?.filmInfo?.title || 'Unknown Film'
+  lines.push(`=== CineScope Chain Performance Report ===`)
+  lines.push(`Chain: ${chainName}`)
+  lines.push(`Film: ${filmTitle}`)
+  lines.push('')
+
+  // Chain stats
+  const screenedVenues = chainVenues.filter(v => v.grade && v.grade !== 'E')
+  const notScreened = chainVenues.filter(v => v.grade === 'E' || !v.grade)
+  const totalChainRevenue = screenedVenues.reduce((s, v) => s + (v.revenue || 0), 0)
+  const avgChainRevenue = screenedVenues.length > 0 ? Math.round(totalChainRevenue / screenedVenues.length) : 0
+
+  lines.push(`CHAIN SUMMARY:`)
+  lines.push(`  Total venues in chain: ${chainVenues.length}`)
+  lines.push(`  Screened this film: ${screenedVenues.length}`)
+  if (notScreened.length > 0) {
+    lines.push(`  Did not screen: ${notScreened.length}`)
+  }
+  lines.push(`  Total chain revenue: £${totalChainRevenue.toLocaleString()}`)
+  lines.push(`  Average revenue per venue: £${avgChainRevenue.toLocaleString()}`)
+  lines.push('')
+
+  // Network comparison
+  const allScreened = allVenues.filter(v => v.grade && v.grade !== 'E' && v.revenue != null)
+  const networkTotalRevenue = allScreened.reduce((s, v) => s + (v.revenue || 0), 0)
+  const networkAvgRevenue = allScreened.length > 0 ? Math.round(networkTotalRevenue / allScreened.length) : 0
+
+  lines.push(`NETWORK COMPARISON:`)
+  lines.push(`  Network average revenue per venue: £${networkAvgRevenue.toLocaleString()}`)
+  lines.push(`  Chain average vs network: ${avgChainRevenue >= networkAvgRevenue ? '+' : ''}£${(avgChainRevenue - networkAvgRevenue).toLocaleString()} (${avgChainRevenue >= networkAvgRevenue ? 'above' : 'below'} average)`)
+  lines.push('')
+
+  // Grade distribution for this chain
+  const gradeDist = { A: 0, B: 0, C: 0, D: 0, E: 0 }
+  chainVenues.forEach(v => { if (v.grade) gradeDist[v.grade] = (gradeDist[v.grade] || 0) + 1 })
+  lines.push(`CHAIN GRADE DISTRIBUTION:`)
+  lines.push(`  A (Top): ${gradeDist.A} | B (Above avg): ${gradeDist.B} | C (Below avg): ${gradeDist.C} | D (Poor): ${gradeDist.D} | E (No screening): ${gradeDist.E}`)
+  lines.push('')
+
+  // Individual venue breakdown (sorted by revenue desc)
+  const venuesSorted = [...screenedVenues].sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
+
+  lines.push(`VENUE BREAKDOWN (${screenedVenues.length} venues, ranked by revenue):`)
+  for (const v of venuesSorted) {
+    const vsNetwork = (v.revenue || 0) >= networkAvgRevenue ? 'above network avg' : 'below network avg'
+    let line = `  ${v.name} (${v.city || 'Unknown'}): Grade ${v.grade}, £${(v.revenue || 0).toLocaleString()} — ${vsNetwork}`
+
+    if (v.wasAggregated) {
+      line += ' [multi-screen combined]'
+    }
+
+    lines.push(line)
+  }
+  lines.push('')
+
+  // Venues that didn't screen
+  if (notScreened.length > 0) {
+    lines.push(`VENUES THAT DID NOT SCREEN:`)
+    for (const v of notScreened) {
+      lines.push(`  ${v.name} (${v.city || 'Unknown'})`)
+    }
+    lines.push('')
+  }
+
+  // Population context hint
+  lines.push(`NOTES:`)
+  lines.push(`  Population density data is available in CineScope. When venues in densely populated areas underperform, this may indicate untapped audience potential worth investigating with targeted local marketing.`)
+
+  return lines.join('\n')
+}
+
+
+// ─── Shared streaming API call ──────────────────────────────────
+
+async function _callClaude(apiKey, systemPrompt, userMessage, onChunk) {
   if (!apiKey) {
     throw new Error('No API key provided. Add your Anthropic API key in Settings.')
   }
@@ -53,12 +183,12 @@ export async function generateAIReport(apiKey, trendSummary, onChunk) {
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 1500,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       stream: true,
       messages: [
         {
           role: 'user',
-          content: `Here is the CineScope trend data for analysis. Please write the insights report.\n\n${trendSummary}`,
+          content: userMessage,
         },
       ],
     }),

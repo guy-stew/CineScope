@@ -124,7 +124,7 @@ export async function exportMapPNG(selector = '.map-wrapper') {
 // --- 1. Cover Page ---
 
 function addCoverPage(pdf, o) {
-  const { selectedFilm, gradeCounts, venues, chainName, revenueFormat } = o
+  const { selectedFilm, gradeCounts, venues, chainName, revenueFormat, filmTitlesList = [] } = o
   const W = pdf.internal.pageSize.getWidth()
   const H = pdf.internal.pageSize.getHeight()
   const m = 12
@@ -167,6 +167,18 @@ function addCoverPage(pdf, o) {
     pdf.setFont('helvetica', 'bold')
     pdf.text('All Venues', m, y)
     y += 12
+  }
+
+  // v1.11: Film list below title for "All Films (combined)" view
+  if (selectedFilm && selectedFilm.id === 'all-films' && filmTitlesList.length > 0) {
+    pdf.setFontSize(9)
+    pdf.setFont('helvetica', 'italic')
+    pdf.setTextColor(180, 200, 220)
+    for (const title of filmTitlesList) {
+      pdf.text(`\u2022  ${title}`, m + 4, y)
+      y += 5
+    }
+    y += 4
   }
 
   pdf.setTextColor(180, 200, 220)
@@ -884,13 +896,13 @@ function addPageNumbers(pdf) {
 export async function exportPDF({
   venues, gradeCounts, selectedFilm,
   mapSelector = '.map-wrapper', revenueFormat = 'decimal',
-  aiReportText = null, chainName = '', theme = 'light',
+  aiReportText = null, chainName = '', filmTitlesList = [], theme = 'light',
 }) {
   const jsPDF = await getJsPDF()
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 
   // 1. Cover
-  addCoverPage(pdf, { selectedFilm, gradeCounts, venues, chainName, revenueFormat })
+  addCoverPage(pdf, { selectedFilm, gradeCounts, venues, chainName, revenueFormat, filmTitlesList })
 
   // 2. AI Insights (optional)
   if (aiReportText) {

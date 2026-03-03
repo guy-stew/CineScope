@@ -89,6 +89,8 @@ export function AppProvider({ children }) {
   const [aiReportText, setAiReportText] = useState(null)
   // Which film the AI report was generated for (so ExportMenu knows if it's stale)
   const [aiReportFilmId, setAiReportFilmId] = useState(null)
+  // Which chain the AI report was generated for (null = general report)
+  const [aiReportChainName, setAiReportChainName] = useState(null)
 
   // Grade boundary settings (persisted to localStorage)
   const [gradeSettings, setGradeSettings] = useState(() => {
@@ -438,6 +440,7 @@ export function AppProvider({ children }) {
     aiReportText, setAiReportText,
     // Which film the AI report was generated for (lets ExportMenu check freshness)
     aiReportFilmId, setAiReportFilmId,
+    aiReportChainName, setAiReportChainName,
 
     // Multi-film venue data (for popups showing all films)
     venueFilmData,
