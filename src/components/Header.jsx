@@ -9,6 +9,7 @@ export default function Header() {
   const {
     filteredVenues,
     importedFilms, selectedFilmId, setSelectedFilmId, clearFilmSelection,
+    removeFilm, clearAllFilmsData,
     importComscoreFile, importStatus,
     chainFilter, setChainFilter, availableChains,
     categoryFilter, setCategoryFilter, availableCategories,
@@ -23,6 +24,7 @@ export default function Header() {
 
   const { themeName, toggleTheme } = useTheme()
   const fileInputRef = useRef(null)
+  const [localIntensity, setLocalIntensity] = useState(heatmapIntensity)
 
   const handleFileClick = () => fileInputRef.current?.click()
 
@@ -75,6 +77,8 @@ export default function Header() {
             importedFilms={importedFilms}
             selectedFilmId={selectedFilmId}
             onSelect={handleFilmSelect}
+            onRemoveFilm={removeFilm}
+            onClearAll={clearAllFilmsData}
           />
 
           {/* Chain filter */}
@@ -215,8 +219,10 @@ export default function Header() {
                       min={0.1}
                       max={1.0}
                       step={0.05}
-                      value={heatmapIntensity}
-                      onChange={e => updateHeatmapIntensity(parseFloat(e.target.value))}
+                      value={localIntensity}
+                      onChange={e => setLocalIntensity(parseFloat(e.target.value))}
+                      onPointerUp={e => updateHeatmapIntensity(parseFloat(e.target.value))}
+                      onTouchEnd={e => updateHeatmapIntensity(parseFloat(e.target.value))}
                     />
                   </div>
                 </>
@@ -296,9 +302,10 @@ export default function Header() {
 
 
 /**
- * FilmSelector — searchable dropdown with year grouping and All Films aggregate
+ * FilmSelector — searchable dropdown with year grouping, All Films aggregate,
+ * and delete buttons for managing saved films.
  */
-function FilmSelector({ importedFilms, selectedFilmId, onSelect }) {
+function FilmSelector({ importedFilms, selectedFilmId, onSelect, onRemoveFilm, onClearAll }) {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
 
@@ -346,6 +353,17 @@ function FilmSelector({ importedFilms, selectedFilmId, onSelect }) {
     setSearch('')
   }
 
+  const handleRemove = (e, filmId) => {
+    e.stopPropagation() // Don't select the film when clicking delete
+    if (onRemoveFilm) onRemoveFilm(filmId)
+  }
+
+  const handleClearAll = (e) => {
+    e.stopPropagation()
+    if (onClearAll) onClearAll()
+    setOpen(false)
+  }
+
   // If no films imported yet, show a simple disabled select
   if (importedFilms.length === 0) {
     return (
@@ -373,8 +391,8 @@ function FilmSelector({ importedFilms, selectedFilmId, onSelect }) {
 
       <Dropdown.Menu
         style={{
-          minWidth: 280,
-          maxHeight: 350,
+          minWidth: 300,
+          maxHeight: 400,
           overflowY: 'auto',
           fontSize: '0.85rem',
         }}
@@ -416,7 +434,7 @@ function FilmSelector({ importedFilms, selectedFilmId, onSelect }) {
 
         <Dropdown.Divider />
 
-        {/* Films grouped by year */}
+        {/* Films grouped by year — each with a delete button */}
         {Object.entries(grouped).map(([year, films]) => {
           const visibleFilms = films.filter(f => filteredFilms.includes(f))
           if (visibleFilms.length === 0) return null
@@ -431,11 +449,33 @@ function FilmSelector({ importedFilms, selectedFilmId, onSelect }) {
                   key={film.id}
                   active={selectedFilmId === film.id}
                   onClick={() => handleSelect(film.id)}
+                  className="d-flex align-items-start justify-content-between"
                 >
-                  <div>{film.filmInfo.title || film.filmInfo.fileName}</div>
-                  <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-                    {film.stats.totalVenues} venues · £{film.stats.totalRevenue.toLocaleString()}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="text-truncate">{film.filmInfo.title || film.filmInfo.fileName}</div>
+                    <div className="text-muted" style={{ fontSize: '0.72rem' }}>
+                      {film.stats.totalVenues} venues · £{film.stats.totalRevenue.toLocaleString()}
+                    </div>
                   </div>
+                  <span
+                    role="button"
+                    title="Remove this film"
+                    onClick={(e) => handleRemove(e, film.id)}
+                    style={{
+                      marginLeft: 8,
+                      padding: '2px 4px',
+                      borderRadius: 4,
+                      fontSize: '0.7rem',
+                      color: '#dc3545',
+                      opacity: 0.6,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
+                  >
+                    <Icon name="close" size={14} />
+                  </span>
                 </Dropdown.Item>
               ))}
             </React.Fragment>
@@ -446,6 +486,20 @@ function FilmSelector({ importedFilms, selectedFilmId, onSelect }) {
           <Dropdown.ItemText className="text-muted text-center">
             No films match "{search}"
           </Dropdown.ItemText>
+        )}
+
+        {/* Clear all films option */}
+        {importedFilms.length > 0 && (
+          <>
+            <Dropdown.Divider />
+            <Dropdown.Item
+              className="text-danger"
+              style={{ fontSize: '0.78rem' }}
+              onClick={handleClearAll}
+            >
+              <Icon name="delete" size={14} className="me-1" /> Clear all saved films
+            </Dropdown.Item>
+          </>
         )}
       </Dropdown.Menu>
     </Dropdown>

@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useMemo, useCallback } from 'react'
+import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react'
 import venueData from '../data/venues.json'
 import { calculateGrades, DEFAULT_GRADE_SETTINGS } from '../utils/grades'
 import { parseComscoreFile } from '../utils/comscoreParser'
 import { matchVenues } from '../utils/venueMatcher'
+import { saveFilm, loadAllFilms, deleteFilm as removeFilmFromDB, clearAllFilms } from '../utils/filmStorage'
 
 const AppContext = createContext(null)
 
@@ -12,9 +13,47 @@ export function AppProvider({ children }) {
 
   // Imported films: array of { id, filmInfo, comscoreVenues, stats }
   const [importedFilms, setImportedFilms] = useState([])
+  const [filmsLoaded, setFilmsLoaded] = useState(false)
 
-  // Currently selected film ID (null = show all venues, no grades)
-  const [selectedFilmId, setSelectedFilmId] = useState(null)
+  // Currently selected film ID (persisted to localStorage)
+  const [selectedFilmId, setSelectedFilmId] = useState(() => {
+    try {
+      return localStorage.getItem('cinescope-selected-film') || null
+    } catch { return null }
+  })
+
+  // Persist selected film ID to localStorage
+  useEffect(() => {
+    try {
+      if (selectedFilmId) {
+        localStorage.setItem('cinescope-selected-film', selectedFilmId)
+      } else {
+        localStorage.removeItem('cinescope-selected-film')
+      }
+    } catch {}
+  }, [selectedFilmId])
+
+  // Load saved films from IndexedDB on mount
+  useEffect(() => {
+    loadAllFilms().then(savedFilms => {
+      if (savedFilms.length > 0) {
+        setImportedFilms(savedFilms)
+      }
+      setFilmsLoaded(true)
+    }).catch(() => {
+      setFilmsLoaded(true)
+    })
+  }, [])
+
+  // If the persisted selectedFilmId doesn't match any loaded film, clear it
+  useEffect(() => {
+    if (!filmsLoaded) return
+    if (!selectedFilmId) return
+    if (selectedFilmId === 'all-films' && importedFilms.length > 0) return
+    if (importedFilms.some(f => f.id === selectedFilmId)) return
+    // Film no longer exists — clear selection
+    setSelectedFilmId(null)
+  }, [filmsLoaded, importedFilms, selectedFilmId])
 
   // Revenue format setting: 'rounded' (whole pounds) or 'decimal' (2 d.p.)
   const [revenueFormat, setRevenueFormat] = useState(() => {
@@ -298,6 +337,9 @@ export function AppProvider({ children }) {
     setPendingImport(null)
     setShowMatchReview(true) // Auto-show review panel after import
 
+    // Persist to IndexedDB (fire and forget — non-blocking)
+    saveFilm(filmEntry)
+
     setImportStatus({
       loading: false,
       error: null,
@@ -321,6 +363,23 @@ export function AppProvider({ children }) {
     setGradeFilter([])
   }, [])
 
+  // Delete a single imported film (from state + IndexedDB)
+  const removeFilm = useCallback((filmId) => {
+    setImportedFilms(prev => prev.filter(f => f.id !== filmId))
+    removeFilmFromDB(filmId)
+    // If the deleted film was selected, clear selection
+    setSelectedFilmId(prev => prev === filmId ? null : prev)
+    setGradeFilter([])
+  }, [])
+
+  // Clear all imported films (state + IndexedDB)
+  const clearAllFilmsData = useCallback(() => {
+    setImportedFilms([])
+    clearAllFilms()
+    setSelectedFilmId(null)
+    setGradeFilter([])
+  }, [])
+
   const value = {
     // Venue data
     venues,
@@ -334,6 +393,9 @@ export function AppProvider({ children }) {
     setSelectedFilmId,
     importComscoreFile,
     clearFilmSelection,
+    removeFilm,
+    clearAllFilmsData,
+    filmsLoaded,
     importStatus,
     pendingImport,
     confirmImport,
