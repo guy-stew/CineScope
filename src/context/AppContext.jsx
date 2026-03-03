@@ -85,6 +85,9 @@ export function AppProvider({ children }) {
     } catch {}
   }, [])
 
+  // AI report text — shared between TrendPanel (generates) and ExportMenu (includes in PDF)
+  const [aiReportText, setAiReportText] = useState(null)
+
   // Grade boundary settings (persisted to localStorage)
   const [gradeSettings, setGradeSettings] = useState(() => {
     try {
@@ -428,6 +431,9 @@ export function AppProvider({ children }) {
 
     // API key for AI insights
     apiKey, updateApiKey,
+
+    // AI report text (shared between TrendPanel and ExportMenu for PDF export)
+    aiReportText, setAiReportText,
 
     // Multi-film venue data (for popups showing all films)
     venueFilmData,

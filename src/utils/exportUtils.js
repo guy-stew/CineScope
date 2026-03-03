@@ -114,18 +114,251 @@ export async function exportMapPNG(selector = '.map-wrapper') {
   downloadDataUrl(dataUrl, filename)
 }
 
+// ─── AI Report Page (Executive Summary) ────────────────────
+
+/**
+ * Render the AI-generated insights as the first page of a PDF.
+ * Called by exportPDF when the user opts to include insights.
+ *
+ * The AI report uses Markdown-like formatting (** for bold, ## for headings).
+ * This function parses that into styled PDF text.
+ *
+ * @param {Object} pdf - jsPDF instance
+ * @param {string} aiText - Raw AI report text (with Markdown formatting)
+ * @param {Object} selectedFilm - Film info object
+ * @param {number} margin - Page margin in mm
+ */
+function addAIReportPage(pdf, aiText, selectedFilm, margin) {
+  const pageWidth = pdf.internal.pageSize.getWidth()
+  const pageHeight = pdf.internal.pageSize.getHeight()
+
+  // ── Navy header bar ──
+  pdf.setFillColor(26, 54, 93)
+  pdf.rect(0, 0, pageWidth, 18, 'F')
+  pdf.setTextColor(255, 255, 255)
+  pdf.setFontSize(16)
+  pdf.setFont('helvetica', 'bold')
+  pdf.text('CineScope — AI Insights Report', margin, 12)
+
+  pdf.setFontSize(8)
+  pdf.setFont('helvetica', 'normal')
+  pdf.text(
+    `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`,
+    pageWidth - margin,
+    12,
+    { align: 'right' }
+  )
+
+  // ── Film title subtitle ──
+  let yPos = 26
+  if (selectedFilm) {
+    pdf.setTextColor(26, 54, 93)
+    pdf.setFontSize(11)
+    pdf.setFont('helvetica', 'bold')
+    pdf.text(selectedFilm.filmInfo.title || selectedFilm.filmInfo.fileName, margin, yPos)
+    yPos += 7
+  }
+
+  // ── Decorative accent line ──
+  pdf.setDrawColor(212, 175, 55) // Gold accent
+  pdf.setLineWidth(0.6)
+  pdf.line(margin, yPos, pageWidth - margin, yPos)
+  yPos += 6
+
+  // ── Render AI report text with basic Markdown parsing ──
+  const maxWidth = pageWidth - margin * 2
+  const lines = aiText.split('\n')
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+
+    // Check if we need a new page (leave room for footer)
+    if (yPos > pageHeight - 15) {
+      pdf.addPage('landscape')
+
+      // Repeat header on continuation pages
+      pdf.setFillColor(26, 54, 93)
+      pdf.rect(0, 0, pageWidth, 14, 'F')
+      pdf.setTextColor(255, 255, 255)
+      pdf.setFontSize(11)
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('AI Insights Report (continued)', margin, 10)
+
+      yPos = 20
+    }
+
+    // Empty line → small gap
+    if (!trimmed) {
+      yPos += 3
+      continue
+    }
+
+    // ## Heading → bold, navy, slightly larger
+    if (trimmed.startsWith('## ') || trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length < 60) {
+      const headingText = trimmed.replace(/^##\s*/, '').replace(/^\*\*/, '').replace(/\*\*$/, '')
+      pdf.setTextColor(26, 54, 93)
+      pdf.setFontSize(10)
+      pdf.setFont('helvetica', 'bold')
+      yPos += 2 // Extra space before headings
+      pdf.text(headingText, margin, yPos)
+      yPos += 5.5
+      continue
+    }
+
+    // Numbered list items (1. 2. 3. etc) or bullet points (- *)
+    const isListItem = /^(\d+\.\s|[-*]\s)/.test(trimmed)
+
+    // Parse inline **bold** segments
+    const segments = parseInlineBold(trimmed)
+    pdf.setFontSize(8)
+    pdf.setTextColor(50, 50, 50)
+
+    // Indent list items slightly
+    const lineX = isListItem ? margin + 3 : margin
+    const lineMaxWidth = isListItem ? maxWidth - 3 : maxWidth
+
+    // Render segments with word wrapping
+    const wrappedLines = wrapSegments(pdf, segments, lineMaxWidth)
+
+    for (const wrappedLine of wrappedLines) {
+      if (yPos > pageHeight - 15) {
+        pdf.addPage('landscape')
+        pdf.setFillColor(26, 54, 93)
+        pdf.rect(0, 0, pageWidth, 14, 'F')
+        pdf.setTextColor(255, 255, 255)
+        pdf.setFontSize(11)
+        pdf.setFont('helvetica', 'bold')
+        pdf.text('AI Insights Report (continued)', margin, 10)
+        yPos = 20
+      }
+
+      renderSegmentLine(pdf, wrappedLine, lineX, yPos)
+      yPos += 4
+    }
+
+    yPos += 1 // Small gap between paragraphs
+  }
+
+  // ── Footer ──
+  pdf.setTextColor(150, 150, 150)
+  pdf.setFontSize(6)
+  pdf.text(
+    'AI-generated insights — CineScope v1.9 — Liberator Film Services — Confidential',
+    margin,
+    pageHeight - 5
+  )
+}
+
+/**
+ * Parse a text line into segments of { text, bold } for inline **bold** formatting.
+ */
+function parseInlineBold(text) {
+  const segments = []
+  const regex = /\*\*(.+?)\*\*/g
+  let lastIndex = 0
+  let match
+
+  while ((match = regex.exec(text)) !== null) {
+    // Text before the bold
+    if (match.index > lastIndex) {
+      segments.push({ text: text.slice(lastIndex, match.index), bold: false })
+    }
+    // Bold text
+    segments.push({ text: match[1], bold: true })
+    lastIndex = regex.lastIndex
+  }
+
+  // Remaining text after last bold
+  if (lastIndex < text.length) {
+    segments.push({ text: text.slice(lastIndex), bold: false })
+  }
+
+  return segments.length > 0 ? segments : [{ text, bold: false }]
+}
+
+/**
+ * Word-wrap segments to fit within maxWidth, returning an array of lines
+ * where each line is an array of { text, bold } segments.
+ */
+function wrapSegments(pdf, segments, maxWidth) {
+  // Flatten all segments into one string to measure
+  const fullText = segments.map(s => s.text).join('')
+
+  // Quick check: if it fits in one line, return as-is
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(8)
+  const fullWidth = pdf.getTextWidth(fullText)
+
+  if (fullWidth <= maxWidth) {
+    return [segments]
+  }
+
+  // Need to wrap — split into words while preserving bold info
+  const words = []
+  for (const seg of segments) {
+    const parts = seg.text.split(/(\s+)/)
+    for (const part of parts) {
+      if (part) words.push({ text: part, bold: seg.bold })
+    }
+  }
+
+  const lines = []
+  let currentLine = []
+  let currentWidth = 0
+
+  for (const word of words) {
+    pdf.setFont('helvetica', word.bold ? 'bold' : 'normal')
+    const wordWidth = pdf.getTextWidth(word.text)
+
+    if (currentWidth + wordWidth > maxWidth && currentLine.length > 0) {
+      lines.push(currentLine)
+      currentLine = []
+      currentWidth = 0
+      // Skip leading whitespace on new line
+      if (word.text.trim() === '') continue
+    }
+
+    currentLine.push(word)
+    currentWidth += wordWidth
+  }
+
+  if (currentLine.length > 0) {
+    lines.push(currentLine)
+  }
+
+  return lines
+}
+
+/**
+ * Render a single wrapped line of segments at (x, y), switching bold on/off.
+ */
+function renderSegmentLine(pdf, segments, x, y) {
+  let currentX = x
+  pdf.setFontSize(8)
+  pdf.setTextColor(50, 50, 50)
+
+  for (const seg of segments) {
+    pdf.setFont('helvetica', seg.bold ? 'bold' : 'normal')
+    pdf.text(seg.text, currentX, y)
+    currentX += pdf.getTextWidth(seg.text)
+  }
+}
+
 // ─── PDF Report ────────────────────────────────────────────
 
 /**
  * Generate a PDF report with map screenshot, grade summary, and venue table.
+ * Optionally includes an AI insights executive summary as page 1.
  * 
  * @param {Object} params
  * @param {Array} params.venues - Filtered venue array
  * @param {Object} params.gradeCounts - { A, B, C, D, E }
  * @param {Object} params.selectedFilm - Film info object (or null)
  * @param {string} params.mapSelector - CSS selector for the map
+ * @param {string} params.revenueFormat - 'decimal' or 'whole'
+ * @param {string|null} params.aiReportText - AI insights text to include as page 1 (or null to skip)
  */
-export async function exportPDF({ venues, gradeCounts, selectedFilm, mapSelector = '.map-wrapper', revenueFormat = 'decimal' }) {
+export async function exportPDF({ venues, gradeCounts, selectedFilm, mapSelector = '.map-wrapper', revenueFormat = 'decimal', aiReportText = null }) {
   const jsPDF = await getJsPDF()
   const html2canvas = await getHtml2Canvas()
 
@@ -133,6 +366,12 @@ export async function exportPDF({ venues, gradeCounts, selectedFilm, mapSelector
   const pageWidth = pdf.internal.pageSize.getWidth()
   const pageHeight = pdf.internal.pageSize.getHeight()
   const margin = 12
+
+  // ── AI Insights page (optional, page 1) ──
+  if (aiReportText) {
+    addAIReportPage(pdf, aiReportText, selectedFilm, margin)
+    pdf.addPage('landscape') // Map page follows
+  }
 
   // ── Header ──
   pdf.setFillColor(26, 54, 93) // Dark navy header
@@ -252,7 +491,7 @@ export async function exportPDF({ venues, gradeCounts, selectedFilm, mapSelector
     yPos += 16
   }
 
-  // ── Venue table (page 2) ──
+  // ── Venue table (next page) ──
   pdf.addPage('landscape')
   yPos = margin
 
@@ -354,7 +593,7 @@ export async function exportPDF({ venues, gradeCounts, selectedFilm, mapSelector
   // ── Footer on last page ──
   pdf.setTextColor(150, 150, 150)
   pdf.setFontSize(6)
-  pdf.text('CineScope v1.5 — Liberator Film Services — Confidential', margin, pageHeight - 5)
+  pdf.text('CineScope v1.9 — Liberator Film Services — Confidential', margin, pageHeight - 5)
 
   // Save
   const filmName = selectedFilm?.filmInfo.title || 'All_Venues'

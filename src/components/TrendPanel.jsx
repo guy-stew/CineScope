@@ -63,7 +63,7 @@ export default function TrendPanel({ show, onHide }) {
 }
 
 function TrendPanelInner({ show, onHide }) {
-  const { importedFilms, baseVenues, gradeSettings, revenueFormat, apiKey } = useApp()
+  const { importedFilms, baseVenues, gradeSettings, revenueFormat, apiKey, setAiReportText } = useApp()
   const { theme } = useTheme()
 
   // AI report state
@@ -95,9 +95,11 @@ function TrendPanelInner({ show, onHide }) {
 
     try {
       const summary = buildTrendSummaryForAI(trendData)
-      await generateAIReport(apiKey, summary, (chunk) => {
+      const fullReport = await generateAIReport(apiKey, summary, (chunk) => {
         setAiReport(prev => prev + chunk)
       })
+      // Save to shared context so ExportMenu can include it in PDF
+      setAiReportText(fullReport)
     } catch (err) {
       setAiError(err.message)
     } finally {
