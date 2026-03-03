@@ -281,7 +281,7 @@ export default function SettingsPanel() {
                     <Badge
                       style={{
                         backgroundColor: GRADES[grade].color,
-                        color: grade === 'B' ? '#333' : '#fff',
+                        color: '#fff',
                         minWidth: 28,
                       }}
                     >
@@ -329,7 +329,7 @@ export default function SettingsPanel() {
                     <Badge
                       style={{
                         backgroundColor: GRADES[grade].color,
-                        color: grade === 'B' ? '#333' : '#fff',
+                        color: '#fff',
                         minWidth: 28,
                       }}
                     >

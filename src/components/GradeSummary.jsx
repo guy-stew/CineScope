@@ -26,10 +26,12 @@ export default function GradeSummary() {
   }
 
   const handleClick = (grade) => {
-    if (gradeFilter.length === 1 && gradeFilter[0] === grade) {
-      setGradeFilter([])
+    if (gradeFilter.includes(grade)) {
+      // Deselect — remove this grade from the filter
+      setGradeFilter(gradeFilter.filter(g => g !== grade))
     } else {
-      setGradeFilter([grade])
+      // Select — add this grade to the filter
+      setGradeFilter([...gradeFilter, grade])
     }
   }
 

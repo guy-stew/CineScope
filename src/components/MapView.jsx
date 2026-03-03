@@ -121,7 +121,7 @@ export default function MapView() {
                           className="popup-grade"
                           style={{
                             backgroundColor: color,
-                            color: grade === 'B' ? '#333' : '#fff',
+                            color: '#fff',
                           }}
                         >
                           {grade}

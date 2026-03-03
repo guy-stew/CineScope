@@ -95,7 +95,7 @@ export default function AnalyticsPanel() {
               <Badge
                 key={g}
                 className="me-1"
-                style={{ backgroundColor: GRADES[g].color, color: g === 'B' ? '#333' : '#fff' }}
+                style={{ backgroundColor: GRADES[g].color, color: '#fff' }}
               >
                 Grade {g}
               </Badge>
@@ -204,7 +204,7 @@ export default function AnalyticsPanel() {
                           <Badge
                             style={{
                               backgroundColor: GRADES[grade]?.color,
-                              color: grade === 'B' ? '#333' : '#fff',
+                              color: '#fff',
                               minWidth: 28,
                             }}
                           >

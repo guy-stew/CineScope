@@ -45,10 +45,16 @@ export default function Header() {
     }
   }
 
-  const toggleGradeFilter = (grades) => {
-    const current = JSON.stringify(gradeFilter)
-    const target = JSON.stringify(grades)
-    setGradeFilter(current === target ? [] : grades)
+  const toggleGradeFilter = (grade) => {
+    setGradeFilter(prev => {
+      if (prev.includes(grade)) {
+        // Deselect this grade
+        return prev.filter(g => g !== grade)
+      } else {
+        // Add this grade
+        return [...prev, grade]
+      }
+    })
   }
 
   return (
@@ -57,7 +63,7 @@ export default function Header() {
       <Navbar.Brand className="d-flex align-items-center me-3">
         <span className="me-2" style={{ fontSize: '1.3rem' }}><Icon name="movie" size={24} /></span>
         <span className="fw-bold">CineScope</span>
-        <Badge bg="secondary" className="ms-2 fw-normal" style={{ fontSize: '0.6rem' }}>v1.5</Badge>
+        <Badge bg="secondary" className="ms-2 fw-normal" style={{ fontSize: '0.6rem' }}>v1.6</Badge>
       </Navbar.Brand>
 
       <Navbar.Toggle aria-controls="header-nav" />
@@ -99,31 +105,37 @@ export default function Header() {
             ))}
           </Form.Select>
 
-          {/* Grade quick-filters */}
+          {/* Grade quick-filters — individual toggle buttons, synced with sidebar */}
           {selectedFilm && (
             <div className="d-flex gap-1 ms-1">
-              <Button
-                size="sm"
-                variant={JSON.stringify(gradeFilter) === JSON.stringify(['B', 'C']) ? 'warning' : 'outline-warning'}
-                onClick={() => toggleGradeFilter(['B', 'C'])}
-                title="Marketing targets (Grade B + C)"
-              >
-                B+C Targets
-              </Button>
-              <Button
-                size="sm"
-                variant={JSON.stringify(gradeFilter) === JSON.stringify(['A']) ? 'success' : 'outline-success'}
-                onClick={() => toggleGradeFilter(['A'])}
-              >
-                A
-              </Button>
-              <Button
-                size="sm"
-                variant={JSON.stringify(gradeFilter) === JSON.stringify(['D']) ? 'danger' : 'outline-danger'}
-                onClick={() => toggleGradeFilter(['D'])}
-              >
-                D
-              </Button>
+              {['A', 'B', 'C', 'D'].map(grade => {
+                const isActive = gradeFilter.includes(grade)
+                const gradeInfo = {
+                  A: { color: '#27ae60', variant: 'success' },
+                  B: { color: '#f1c40f', variant: 'warning' },
+                  C: { color: '#e67e22', variant: 'warning' },
+                  D: { color: '#e74c3c', variant: 'danger' },
+                }[grade]
+
+                return (
+                  <Button
+                    key={grade}
+                    size="sm"
+                    style={isActive ? {
+                      backgroundColor: gradeInfo.color,
+                      borderColor: gradeInfo.color,
+                      color: '#fff',
+                    } : {
+                      backgroundColor: 'transparent',
+                      borderColor: gradeInfo.color,
+                      color: gradeInfo.color,
+                    }}
+                    onClick={() => toggleGradeFilter(grade)}
+                  >
+                    {grade}
+                  </Button>
+                )
+              })}
             </div>
           )}
         </Nav>
@@ -153,7 +165,7 @@ export default function Header() {
             className="d-none"
           />
           <Button size="sm" variant="outline-light" onClick={handleFileClick}>
-            <Icon name="upload_file" size={16} className="me-1" /> Import Comscore
+            <Icon name="upload_file" size={16} className="me-1" /> Import
           </Button>
 
           {/* Population layer toggle */}

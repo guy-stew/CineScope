@@ -249,6 +249,20 @@ function MatchRow({ detail, baseVenues, showReassign, rerunMatching }) {
     if (rerunMatching) rerunMatching()
   }
 
+  // Quick accept — confirms the current auto-matched venue as correct
+  const handleAcceptMatch = () => {
+    if (!venue) return
+    const overrides = loadOverrides()
+    const key = makeOverrideKey(comscore.theater, comscore.city)
+    overrides[key] = {
+      venueName: venue.name,
+      venueCity: venue.city || '',
+      action: 'assign',
+    }
+    saveOverrides(overrides)
+    if (rerunMatching) rerunMatching()
+  }
+
   const handleDismiss = () => {
     const overrides = loadOverrides()
     const key = makeOverrideKey(comscore.theater, comscore.city)
@@ -334,6 +348,17 @@ function MatchRow({ detail, baseVenues, showReassign, rerunMatching }) {
         {showReassign && (
           <td>
             <div className="d-flex gap-1">
+              {venue && !isOverride && (
+                <Button
+                  size="sm"
+                  variant="outline-success"
+                  onClick={handleAcceptMatch}
+                  style={{ fontSize: '0.7rem', padding: '1px 6px' }}
+                  title="Accept this match as correct"
+                >
+                  <Icon name="check" size={14} />
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline-primary"
