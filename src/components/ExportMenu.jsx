@@ -1,177 +1,192 @@
-import React, { useState } from 'react'
-import { Dropdown, Form, Modal, Button, Spinner } from 'react-bootstrap'
+// ExportMenu.jsx — v1.9.0
+// Chain override for PDF cover, AI insights toggle, generate-first modal
+// Drop-in replacement for src/components/ExportMenu.jsx
+
+import { useState } from 'react'
+import { Dropdown, Form, Modal, Button } from 'react-bootstrap'
 import { useApp } from '../context/AppContext'
-import { exportCSV, exportMapPNG, exportPDF } from '../utils/exportUtils'
+import { useTheme } from '../context/ThemeContext'
 import Icon from './Icon'
 
 export default function ExportMenu() {
   const {
     filteredVenues,
     selectedFilm,
+    selectedFilmId,
     gradeCounts,
+    availableChains,
+    chainFilter,
     revenueFormat,
-    aiReportText,     // Lifted from TrendPanel -> AppContext
+    aiReportText,
+    aiReportFilmId,
   } = useApp()
 
-  const [exporting, setExporting] = useState(null) // 'csv' | 'png' | 'pdf' | null
-  const [includeAI, setIncludeAI] = useState(true) // checkbox default
-  const [showAIPrompt, setShowAIPrompt] = useState(false) // "generate first" modal
+  const { theme } = useTheme()
 
-  const filmTitle = selectedFilm?.filmInfo.title || 'All Venues'
-  const hasVenues = filteredVenues.length > 0
+  // ── Local state ──────────────────────────────────────────────
+  const [pdfChainOverride, setPdfChainOverride] = useState('')
+  const [includeAI, setIncludeAI] = useState(true)
+  const [showAIPrompt, setShowAIPrompt] = useState(false)
 
-  // AI insights are only relevant when a film is selected (need trend data)
-  const canIncludeAI = !!selectedFilm
-  const hasAIReport = !!aiReportText
+  // Can we include AI? Only if a report has been generated for the current film
+  const canIncludeAI = !!(aiReportText && aiReportFilmId === selectedFilmId)
 
-  const handleCSV = () => {
-    try {
-      exportCSV(filteredVenues, {
-        filmTitle,
-        includeGrades: !!selectedFilm,
-        revenueFormat,
-      })
-    } catch (err) {
-      console.error('CSV export failed:', err)
-    }
+  // ── Handlers ─────────────────────────────────────────────────
+
+  const handleCSV = async () => {
+    const { exportCSV } = await import('../utils/exportUtils')
+    const filmTitle = selectedFilm?.filmInfo?.title || 'All Venues'
+    exportCSV(filteredVenues, { filmTitle, revenueFormat })
   }
 
   const handlePNG = async () => {
-    setExporting('png')
-    try {
-      await exportMapPNG('.map-wrapper')
-    } catch (err) {
-      console.error('Map screenshot failed:', err)
-    } finally {
-      setExporting(null)
-    }
+    const { exportMapPNG } = await import('../utils/exportUtils')
+    exportMapPNG()
   }
 
   const handlePDF = async () => {
-    // If user wants AI insights but they haven't been generated yet, prompt them
-    if (includeAI && canIncludeAI && !hasAIReport) {
+    // If user wants AI but hasn't generated it yet, show prompt
+    if (includeAI && !canIncludeAI) {
       setShowAIPrompt(true)
       return
     }
 
-    setExporting('pdf')
-    try {
-      await exportPDF({
-        venues: filteredVenues,
-        gradeCounts,
-        selectedFilm,
-        mapSelector: '.map-wrapper',
-        revenueFormat,
-        aiReportText: (includeAI && canIncludeAI && hasAIReport) ? aiReportText : null,
-      })
-    } catch (err) {
-      console.error('PDF export failed:', err)
-    } finally {
-      setExporting(null)
-    }
+    const { exportPDF } = await import('../utils/exportUtils')
+    exportPDF({
+      venues: filteredVenues,
+      gradeCounts,
+      selectedFilm,
+      revenueFormat,
+      aiReportText: (includeAI && canIncludeAI) ? aiReportText : null,
+      chainName: pdfChainOverride || chainFilter || '',
+      theme,
+    })
   }
 
-  // Export PDF without AI (from the prompt modal)
-  const handlePDFWithoutAI = async () => {
+  // Export PDF without AI (from the modal's secondary button)
+  const handlePDFWithoutAI = () => {
     setShowAIPrompt(false)
-    setExporting('pdf')
-    try {
-      await exportPDF({
+    setIncludeAI(false)
+    // Small delay to let state settle, then trigger export
+    setTimeout(async () => {
+      const { exportPDF } = await import('../utils/exportUtils')
+      exportPDF({
         venues: filteredVenues,
         gradeCounts,
         selectedFilm,
-        mapSelector: '.map-wrapper',
         revenueFormat,
         aiReportText: null,
+        chainName: pdfChainOverride || chainFilter || '',
+        theme,
       })
-    } catch (err) {
-      console.error('PDF export failed:', err)
-    } finally {
-      setExporting(null)
-    }
+    }, 50)
   }
 
+  // ── Build PDF contents description ───────────────────────────
+  const pdfContents = [
+    'Cover',
+    includeAI && canIncludeAI ? 'AI insights' : null,
+    'map',
+    'venue list',
+  ].filter(Boolean).join(' + ')
+
+  // ── Render ───────────────────────────────────────────────────
   return (
     <>
-      <Dropdown>
+      <Dropdown align="end">
         <Dropdown.Toggle
+          variant={theme === 'dark' ? 'outline-light' : 'outline-secondary'}
           size="sm"
-          variant="outline-light"
-          disabled={!hasVenues || !!exporting}
+          className="d-flex align-items-center gap-1"
         >
-          {exporting ? (
-            <>
-              <Spinner animation="border" size="sm" className="me-1" />
-              Exporting...
-            </>
-          ) : (
-            <><Icon name="download" size={16} className="me-1" /> Export</>
-          )}
+          <Icon name="download" size={16} />
+          <span style={{ fontSize: '0.78rem' }}>Export</span>
         </Dropdown.Toggle>
 
-        <Dropdown.Menu align="end" style={{ fontSize: '0.85rem', minWidth: '260px' }}>
-          <Dropdown.Header style={{ fontSize: '0.72rem' }}>
-            Export {filteredVenues.length} venues
-            {selectedFilm && ` \u2014 ${filmTitle}`}
+        <Dropdown.Menu style={{ minWidth: 280, fontSize: '0.85rem' }}>
+
+          {/* ── Quick exports ─────────────────────────── */}
+          <Dropdown.Header style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+            Quick Export
           </Dropdown.Header>
 
           <Dropdown.Item onClick={handleCSV}>
             <Icon name="table_chart" size={18} className="me-2" />
             CSV Spreadsheet
-            <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-              Opens in Excel — includes all visible columns
-            </div>
           </Dropdown.Item>
 
           <Dropdown.Item onClick={handlePNG}>
-            <Icon name="map" size={18} className="me-2" />
+            <Icon name="image" size={18} className="me-2" />
             Map Screenshot (PNG)
-            <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-              High-res image of the current map view
-            </div>
           </Dropdown.Item>
 
           <Dropdown.Divider />
 
-          {/* AI Insights checkbox — only shown when a film is selected */}
-          {canIncludeAI && (
-            <div className="px-3 py-1">
-              <Form.Check
-                type="checkbox"
-                id="include-ai-insights"
-                label={
-                  <span style={{ fontSize: '0.8rem' }}>
-                    Include AI Insights
-                    {hasAIReport ? (
-                      <Icon name="check_circle" size={14} className="ms-1 text-success" />
-                    ) : (
-                      <span className="text-muted ms-1" style={{ fontSize: '0.7rem' }}>
-                        (not yet generated)
-                      </span>
-                    )}
-                  </span>
-                }
-                checked={includeAI}
-                onChange={(e) => setIncludeAI(e.target.checked)}
-                style={{ fontSize: '0.8rem' }}
-              />
-            </div>
-          )}
+          {/* ── PDF report options ────────────────────── */}
+          <Dropdown.Header style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+            PDF Report Options
+          </Dropdown.Header>
 
-          <Dropdown.Item onClick={handlePDF}>
+          {/* AI insights toggle */}
+          <div className="px-3 py-1">
+            <Form.Check
+              type="switch"
+              id="include-ai-toggle"
+              label={
+                <span style={{ fontSize: '0.78rem' }}>
+                  Include AI insights
+                  {!canIncludeAI && includeAI && (
+                    <span className="text-warning ms-1" style={{ fontSize: '0.68rem' }}>
+                      (not yet generated)
+                    </span>
+                  )}
+                </span>
+              }
+              checked={includeAI}
+              onChange={(e) => setIncludeAI(e.target.checked)}
+              style={{ fontSize: '0.78rem' }}
+            />
+          </div>
+
+          {/* Chain on cover selector */}
+          <div className="px-3 py-1">
+            <Form.Label style={{ fontSize: '0.75rem', marginBottom: 2, color: '#888' }}>
+              Chain on cover
+              {chainFilter && !pdfChainOverride && (
+                <span className="text-muted ms-1" style={{ fontSize: '0.68rem' }}>
+                  (using active filter)
+                </span>
+              )}
+            </Form.Label>
+            <Form.Select
+              size="sm"
+              value={pdfChainOverride}
+              onChange={(e) => setPdfChainOverride(e.target.value)}
+              style={{ fontSize: '0.78rem' }}
+            >
+              <option value="">
+                {chainFilter
+                  ? `Active filter: ${chainFilter}`
+                  : 'All chains (no cover name)'}
+              </option>
+              {availableChains.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </Form.Select>
+          </div>
+
+          {/* PDF export button */}
+          <Dropdown.Item onClick={handlePDF} className="mt-1">
             <Icon name="picture_as_pdf" size={18} className="me-2" />
             Full PDF Report
             <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-              {includeAI && canIncludeAI
-                ? 'AI insights + map + grade summary + venue table'
-                : 'Map + grade summary + venue table'
-              }
+              {pdfContents}
             </div>
           </Dropdown.Item>
         </Dropdown.Menu>
       </Dropdown>
 
-      {/* "Generate insights first" prompt modal */}
+      {/* ── "Generate insights first" modal ──────────── */}
       <Modal show={showAIPrompt} onHide={() => setShowAIPrompt(false)} centered size="sm">
         <Modal.Header closeButton>
           <Modal.Title style={{ fontSize: '1rem' }}>
@@ -181,27 +196,19 @@ export default function ExportMenu() {
         </Modal.Header>
         <Modal.Body style={{ fontSize: '0.85rem' }}>
           <p>
-            You've opted to include AI insights in the PDF, but they haven't been generated yet
-            for this film.
+            You have opted to include AI insights in the PDF, but they
+            haven't been generated yet for this film.
           </p>
           <p className="mb-0">
-            Open the <strong>Trends</strong> panel and click <strong>Generate AI Insights</strong> first,
-            then come back to export.
+            Open the <strong>Trends</strong> panel and click{' '}
+            <strong>Generate AI Insights</strong> first, then come back to export.
           </p>
         </Modal.Body>
         <Modal.Footer>
-          <Button
-            variant="outline-secondary"
-            size="sm"
-            onClick={handlePDFWithoutAI}
-          >
+          <Button variant="outline-secondary" size="sm" onClick={handlePDFWithoutAI}>
             Export without AI
           </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setShowAIPrompt(false)}
-          >
+          <Button variant="primary" size="sm" onClick={() => setShowAIPrompt(false)}>
             OK, I'll generate first
           </Button>
         </Modal.Footer>

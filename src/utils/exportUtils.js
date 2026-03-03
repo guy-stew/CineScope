@@ -351,14 +351,16 @@ function renderSegmentLine(pdf, segments, x, y) {
  * Optionally includes an AI insights executive summary as page 1.
  * 
  * @param {Object} params
- * @param {Array} params.venues - Filtered venue array
+ * @param {Array}  params.venues - Filtered venue array
  * @param {Object} params.gradeCounts - { A, B, C, D, E }
  * @param {Object} params.selectedFilm - Film info object (or null)
  * @param {string} params.mapSelector - CSS selector for the map
  * @param {string} params.revenueFormat - 'decimal' or 'whole'
- * @param {string|null} params.aiReportText - AI insights text to include as page 1 (or null to skip)
+ * @param {string|null} params.aiReportText - AI insights text to include (or null to skip)
+ * @param {string} params.chainName - Chain name for cover page ('' = all chains) — used in Section 2
+ * @param {string} params.theme - 'light' or 'dark' — used in Section 2
  */
-export async function exportPDF({ venues, gradeCounts, selectedFilm, mapSelector = '.map-wrapper', revenueFormat = 'decimal', aiReportText = null }) {
+export async function exportPDF({ venues, gradeCounts, selectedFilm, mapSelector = '.map-wrapper', revenueFormat = 'decimal', aiReportText = null, chainName = '', theme = 'light' }) {
   const jsPDF = await getJsPDF()
   const html2canvas = await getHtml2Canvas()
 
@@ -647,5 +649,5 @@ function hexToRgb(hex) {
 
 function truncate(str, maxLen) {
   if (str.length <= maxLen) return str
-  return str.substring(0, maxLen - 1) + '…'
+  return str.substring(0, maxLen - 1) + '\u2026'
 }
