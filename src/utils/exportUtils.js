@@ -397,7 +397,26 @@ function addDashboardChartsPage(pdf, o) {
 
 // ─── 3. AI Report Pages ────────────────────────────────────
 
+function sanitiseForPDF(text) {
+  return text
+    .replace(/\u2192/g, ' > ')    // → arrow (grade transitions)
+    .replace(/\u2190/g, ' < ')    // ← arrow
+    .replace(/\u2194/g, ' <> ')   // ↔ double arrow
+    .replace(/\u2013/g, '-')      // – en dash
+    .replace(/\u2014/g, ' - ')    // — em dash
+    .replace(/\u2018/g, "'")      // ' left single quote
+    .replace(/\u2019/g, "'")      // ' right single quote
+    .replace(/\u201C/g, '"')      // " left double quote
+    .replace(/\u201D/g, '"')      // " right double quote
+    .replace(/\u2026/g, '...')    // … ellipsis
+    .replace(/\u00B7/g, ' - ')    // · middle dot
+    .replace(/\u2022/g, '-')      // • bullet
+    .replace(/\u2715/g, 'x')      // ✕ multiplication
+    .replace(/[^\x00-\x7F\u00A0-\u00FF]/g, '') // strip remaining non-Latin1
+}
+
 function addAIReportPage(pdf, aiText, selectedFilm, margin) {
+  aiText = sanitiseForPDF(aiText)
   const W = pdf.internal.pageSize.getWidth()
   const H = pdf.internal.pageSize.getHeight()
 
