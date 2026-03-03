@@ -94,6 +94,7 @@ export default function AnalyticsPanel() {
             {gradeFilter.map(g => (
               <Badge
                 key={g}
+                bg=""
                 className="me-1"
                 style={{ backgroundColor: GRADES[g].color, color: '#fff' }}
               >
@@ -202,6 +203,7 @@ export default function AnalyticsPanel() {
                       <td className="text-center">
                         {grade && grade !== 'E' ? (
                           <Badge
+                            bg=""
                             style={{
                               backgroundColor: GRADES[grade]?.color,
                               color: '#fff',

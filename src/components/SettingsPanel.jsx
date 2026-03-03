@@ -278,7 +278,7 @@ export default function SettingsPanel() {
                 </Form.Label>
                 {['C', 'B', 'A'].map(grade => (
                   <div key={grade} className="d-flex align-items-center gap-2 mb-2">
-                    <Badge
+                    <Badge bg=""
                       style={{
                         backgroundColor: GRADES[grade].color,
                         color: '#fff',
@@ -326,7 +326,7 @@ export default function SettingsPanel() {
                 </Form.Label>
                 {['C', 'B', 'A'].map(grade => (
                   <div key={grade} className="d-flex align-items-center gap-2 mb-2">
-                    <Badge
+                    <Badge bg=""
                       style={{
                         backgroundColor: GRADES[grade].color,
                         color: '#fff',

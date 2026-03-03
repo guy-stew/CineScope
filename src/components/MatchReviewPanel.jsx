@@ -109,6 +109,7 @@ export default function MatchReviewPanel() {
                 details={medium}
                 baseVenues={baseVenues}
                 showReassign
+                showAccept
                 rerunMatching={rerunMatching}
               />
             )}
@@ -136,7 +137,7 @@ export default function MatchReviewPanel() {
             eventKey="high"
             title={<><Icon name="check_circle" size={16} className="me-1" /> Matched <Badge bg="success">{high.length}</Badge></>}
           >
-            <MatchTable details={high} baseVenues={baseVenues} />
+            <MatchTable details={high} baseVenues={baseVenues} showReassign rerunMatching={rerunMatching} />
           </Tab>
 
         </Tabs>
@@ -180,7 +181,7 @@ function StatBox({ label, value, color, pct }) {
 
 // ─── Match Table ───────────────────────────────────────────
 
-function MatchTable({ details, baseVenues, showReassign = false, rerunMatching }) {
+function MatchTable({ details, baseVenues, showReassign = false, showAccept = false, rerunMatching }) {
   return (
     <div className="table-responsive" style={{ fontSize: '0.82rem' }}>
       <table className="table table-sm table-hover align-middle mb-0">
@@ -203,6 +204,7 @@ function MatchTable({ details, baseVenues, showReassign = false, rerunMatching }
               detail={detail}
               baseVenues={baseVenues}
               showReassign={showReassign}
+              showAccept={showAccept}
               rerunMatching={rerunMatching}
             />
           ))}
@@ -215,7 +217,7 @@ function MatchTable({ details, baseVenues, showReassign = false, rerunMatching }
 
 // ─── Individual Match Row ──────────────────────────────────
 
-function MatchRow({ detail, baseVenues, showReassign, rerunMatching }) {
+function MatchRow({ detail, baseVenues, showReassign, showAccept, rerunMatching }) {
   const [showDropdown, setShowDropdown] = useState(false)
   const [search, setSearch] = useState('')
 
@@ -348,7 +350,7 @@ function MatchRow({ detail, baseVenues, showReassign, rerunMatching }) {
         {showReassign && (
           <td>
             <div className="d-flex gap-1">
-              {venue && !isOverride && (
+              {showAccept && venue && !isOverride && (
                 <Button
                   size="sm"
                   variant="outline-success"
