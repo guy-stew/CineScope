@@ -7,6 +7,7 @@
  */
 
 import { GRADES } from './grades'
+import { formatRevenue, formatRevenueCSV } from './formatRevenue'
 
 // ─── Lazy loaders for heavy deps ───────────────────────────
 
@@ -36,14 +37,14 @@ async function getJsPDF() {
  * @param {Object} options - { filmTitle, includeGrades }
  */
 export function exportCSV(venues, options = {}) {
-  const { filmTitle = 'All Venues', includeGrades = true } = options
+  const { filmTitle = 'All Venues', includeGrades = true, revenueFormat = 'decimal' } = options
 
   // Define columns based on whether grades are available
   const hasRevenue = venues.some(v => v.revenue != null)
 
   const headers = ['Venue', 'City', 'Chain', 'Category', 'Country', 'Latitude', 'Longitude']
   if (hasRevenue && includeGrades) {
-    headers.push('Revenue (£)', 'Grade', 'Revenue Per Screen', 'Screens', 'Aggregated')
+    headers.push('Revenue (£)', 'Grade', 'Screens', 'Aggregated')
   }
 
   const rows = venues.map(v => {
@@ -58,9 +59,8 @@ export function exportCSV(venues, options = {}) {
     ]
     if (hasRevenue && includeGrades) {
       row.push(
-        v.revenue != null ? v.revenue : '',
+        v.revenue != null ? formatRevenueCSV(v.revenue, revenueFormat) : '',
         v.grade || '',
-        v.revenuePerScreen != null ? v.revenuePerScreen : '',
         v.screens || '',
         v.wasAggregated ? 'Yes' : '',
       )
@@ -125,7 +125,7 @@ export async function exportMapPNG(selector = '.map-wrapper') {
  * @param {Object} params.selectedFilm - Film info object (or null)
  * @param {string} params.mapSelector - CSS selector for the map
  */
-export async function exportPDF({ venues, gradeCounts, selectedFilm, mapSelector = '.map-wrapper' }) {
+export async function exportPDF({ venues, gradeCounts, selectedFilm, mapSelector = '.map-wrapper', revenueFormat = 'decimal' }) {
   const jsPDF = await getJsPDF()
   const html2canvas = await getHtml2Canvas()
 
@@ -157,7 +157,7 @@ export async function exportPDF({ venues, gradeCounts, selectedFilm, mapSelector
 
     pdf.setFontSize(8)
     pdf.setFont('helvetica', 'normal')
-    const statsText = `${selectedFilm.stats.totalVenues} venues · £${selectedFilm.stats.totalRevenue.toLocaleString()} total · £${selectedFilm.stats.avgRevenue.toLocaleString()} avg`
+    const statsText = `${selectedFilm.stats.totalVenues} venues · ${formatRevenue(selectedFilm.stats.totalRevenue, revenueFormat)} total · ${formatRevenue(selectedFilm.stats.avgRevenue, revenueFormat)} avg`
     pdf.text(statsText, margin, yPos + 5)
     yPos += 12
   } else {
@@ -271,10 +271,10 @@ export async function exportPDF({ venues, gradeCounts, selectedFilm, mapSelector
   // Table headers
   const hasRevenue = venues.some(v => v.revenue != null)
   const colWidths = hasRevenue
-    ? [75, 40, 35, 30, 30, 25, 30]
+    ? [85, 45, 40, 35, 35, 25]
     : [100, 55, 50, 40, 30]
   const colHeaders = hasRevenue
-    ? ['Venue', 'City', 'Chain', 'Category', 'Revenue', 'Grade', 'Rev/Screen']
+    ? ['Venue', 'City', 'Chain', 'Category', 'Revenue', 'Grade']
     : ['Venue', 'City', 'Chain', 'Category', 'Country']
 
   pdf.setFillColor(240, 240, 240)
@@ -319,13 +319,12 @@ export async function exportPDF({ venues, gradeCounts, selectedFilm, mapSelector
     xPos = margin
     const cells = hasRevenue
       ? [
-          truncate(venue.name, 38),
-          truncate(venue.city || '', 20),
-          truncate(venue.chain || '', 18),
-          truncate(venue.category || '', 15),
-          venue.revenue != null ? `£${venue.revenue.toLocaleString()}` : '—',
+          truncate(venue.name, 42),
+          truncate(venue.city || '', 22),
+          truncate(venue.chain || '', 20),
+          truncate(venue.category || '', 17),
+          venue.revenue != null ? formatRevenue(venue.revenue, revenueFormat) : '—',
           venue.grade || '—',
-          venue.revenuePerScreen != null ? `£${venue.revenuePerScreen.toLocaleString()}` : '—',
         ]
       : [
           truncate(venue.name, 50),

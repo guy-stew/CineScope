@@ -3,10 +3,11 @@ import { Card, Table, Form, Badge } from 'react-bootstrap'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import { GRADES } from '../utils/grades'
+import { formatRevenue } from '../utils/formatRevenue'
 import GradeSummary from './GradeSummary'
 
 export default function AnalyticsPanel() {
-  const { filteredVenues, selectedVenue, setSelectedVenue, selectedFilm, gradeFilter } = useApp()
+  const { filteredVenues, selectedVenue, setSelectedVenue, selectedFilm, gradeFilter, revenueFormat } = useApp()
   const { theme } = useTheme()
   const [sortField, setSortField] = useState('name')
   const [sortDir, setSortDir] = useState('asc')
@@ -67,7 +68,7 @@ export default function AnalyticsPanel() {
                 {selectedFilm.filmInfo.title || selectedFilm.filmInfo.fileName}
               </strong>
               <div style={{ color: theme.textMuted, fontSize: '0.78rem' }}>
-                {selectedFilm.stats.totalVenues} venues · £{selectedFilm.stats.totalRevenue.toLocaleString()} total
+                {selectedFilm.stats.totalVenues} venues · {formatRevenue(selectedFilm.stats.totalRevenue, revenueFormat)} total
                 {selectedFilm.stats.aggregatedCount > 0 && (
                   <span title="Multi-screen entries were automatically combined">
                     {' '}· 🖥️ {selectedFilm.stats.aggregatedCount} rows combined
@@ -76,7 +77,7 @@ export default function AnalyticsPanel() {
               </div>
             </div>
             <Badge bg="info" style={{ fontSize: '0.75rem' }}>
-              Avg £{selectedFilm.stats.avgRevenue.toLocaleString()}
+              Avg {formatRevenue(selectedFilm.stats.avgRevenue, revenueFormat)}
             </Badge>
           </div>
         </div>
@@ -184,7 +185,7 @@ export default function AnalyticsPanel() {
                       <td className="text-end" style={{ fontWeight: 600, color: theme.text }}>
                         {venue.revenue != null ? (
                           <>
-                            £{venue.revenue.toLocaleString()}
+                            {formatRevenue(venue.revenue, revenueFormat)}
                             {venue.wasAggregated && (
                               <span
                                 title={`Combined from ${venue.screenEntries} screen entries`}

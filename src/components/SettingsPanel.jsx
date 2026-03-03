@@ -7,7 +7,7 @@ import { GRADES, GRADE_ORDER, DEFAULT_GRADE_SETTINGS, suggestBoundaries, buildHi
 import Icon from './Icon'
 
 export default function SettingsPanel() {
-  const { showSettings, setShowSettings, gradeSettings, updateGradeSettings, resetGradeSettings, selectedFilm, venues } = useApp()
+  const { showSettings, setShowSettings, gradeSettings, updateGradeSettings, resetGradeSettings, selectedFilm, venues, revenueFormat, updateRevenueFormat } = useApp()
   const { theme } = useTheme()
 
   // Local draft settings (only applied on "Apply")
@@ -137,11 +137,39 @@ export default function SettingsPanel() {
         }}
       >
         <Modal.Title style={{ fontSize: '1.1rem' }}>
-          <Icon name="settings" size={20} className="me-1" /> Grade Boundary Settings
+          <Icon name="settings" size={20} className="me-1" /> Settings
         </Modal.Title>
       </Modal.Header>
 
       <Modal.Body style={{ background: theme.surface, color: theme.text }}>
+        {/* Revenue Display Format — always available */}
+        <div className="mb-4 p-3 rounded" style={{ background: theme.surfaceAlt, border: `1px solid ${theme.border}` }}>
+          <Form.Label style={{ fontSize: '0.85rem', fontWeight: 600, color: theme.textMuted }}>
+            <Icon name="payments" size={18} className="me-1" /> Revenue Display Format
+          </Form.Label>
+          <div className="d-flex gap-2 mt-1">
+            <Button
+              size="sm"
+              variant={revenueFormat === 'rounded' ? 'primary' : 'outline-secondary'}
+              onClick={() => updateRevenueFormat('rounded')}
+              style={revenueFormat !== 'rounded' ? { color: theme.text, borderColor: theme.border } : {}}
+            >
+              Whole Pounds (£346)
+            </Button>
+            <Button
+              size="sm"
+              variant={revenueFormat === 'decimal' ? 'primary' : 'outline-secondary'}
+              onClick={() => updateRevenueFormat('decimal')}
+              style={revenueFormat !== 'decimal' ? { color: theme.text, borderColor: theme.border } : {}}
+            >
+              Two Decimals (£345.67)
+            </Button>
+          </div>
+          <div style={{ fontSize: '0.75rem', color: theme.textMuted, marginTop: 6 }}>
+            Applies to all revenue figures across the map, tables, and exports.
+          </div>
+        </div>
+
         {noFilm ? (
           <div className="text-center py-4" style={{ color: theme.textMuted }}>
             <div style={{ marginBottom: 8 }}><Icon name="bar_chart" size={40} /></div>

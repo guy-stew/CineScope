@@ -5,7 +5,7 @@ import { exportCSV, exportMapPNG, exportPDF } from '../utils/exportUtils'
 import Icon from './Icon'
 
 export default function ExportMenu() {
-  const { filteredVenues, selectedFilm, gradeCounts } = useApp()
+  const { filteredVenues, selectedFilm, gradeCounts, revenueFormat } = useApp()
   const [exporting, setExporting] = useState(null) // 'csv' | 'png' | 'pdf' | null
 
   const filmTitle = selectedFilm?.filmInfo.title || 'All Venues'
@@ -16,6 +16,7 @@ export default function ExportMenu() {
       exportCSV(filteredVenues, {
         filmTitle,
         includeGrades: !!selectedFilm,
+        revenueFormat,
       })
     } catch (err) {
       console.error('CSV export failed:', err)
@@ -41,6 +42,7 @@ export default function ExportMenu() {
         gradeCounts,
         selectedFilm,
         mapSelector: '.map-wrapper',
+        revenueFormat,
       })
     } catch (err) {
       console.error('PDF export failed:', err)

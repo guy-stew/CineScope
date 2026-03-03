@@ -211,7 +211,6 @@ function enrichMatch(venue, cs, score) {
     ...venue,
     revenue: cs.revenue,
     screens: cs.screens || venue.screens,
-    revenuePerScreen: cs.screens > 0 ? Math.round(cs.revenue / cs.screens) : null,
     comscoreRegion: cs.region,
     comscoreBranch: cs.branch,
     rankInComplex: cs.rankInComplex,

@@ -16,6 +16,18 @@ export function AppProvider({ children }) {
   // Currently selected film ID (null = show all venues, no grades)
   const [selectedFilmId, setSelectedFilmId] = useState(null)
 
+  // Revenue format setting: 'rounded' (whole pounds) or 'decimal' (2 d.p.)
+  const [revenueFormat, setRevenueFormat] = useState(() => {
+    try {
+      return localStorage.getItem('cinescope-revenue-format') || 'decimal'
+    } catch { return 'decimal' }
+  })
+
+  const updateRevenueFormat = useCallback((format) => {
+    setRevenueFormat(format)
+    try { localStorage.setItem('cinescope-revenue-format', format) } catch {}
+  }, [])
+
   // Grade boundary settings (persisted to localStorage)
   const [gradeSettings, setGradeSettings] = useState(() => {
     try {
@@ -168,6 +180,36 @@ export function AppProvider({ children }) {
   const venues = matchResult.venues
   const matchDetails = matchResult.details
 
+  // ── Multi-film venue lookup ────────────────────────────────
+  // Build a map of venueKey → [{ filmTitle, revenue }] across ALL imported films.
+  // This lets popups show all films' data for each venue regardless of which film is selected.
+  const venueFilmData = useMemo(() => {
+    const lookup = new Map() // venueKey → [{ filmTitle, revenue }]
+
+    for (const film of importedFilms) {
+      // Run matching for each film to get venue associations
+      const { matched } = matchVenues(film.comscoreVenues, baseVenues)
+
+      for (const venue of matched) {
+        const key = `${venue.name}|${venue.city}`.toLowerCase()
+        if (!lookup.has(key)) {
+          lookup.set(key, [])
+        }
+        lookup.get(key).push({
+          filmTitle: film.filmInfo.title,
+          revenue: venue.revenue,
+        })
+      }
+    }
+
+    // Sort each venue's film list alphabetically
+    for (const [, films] of lookup) {
+      films.sort((a, b) => a.filmTitle.localeCompare(b.filmTitle))
+    }
+
+    return lookup
+  }, [importedFilms, baseVenues])
+
   // Filtered venues
   const filteredVenues = useMemo(() => {
     let result = venues
@@ -299,6 +341,12 @@ export function AppProvider({ children }) {
 
     // Grade settings
     gradeSettings, updateGradeSettings, resetGradeSettings,
+
+    // Revenue formatting
+    revenueFormat, updateRevenueFormat,
+
+    // Multi-film venue data (for popups showing all films)
+    venueFilmData,
 
     // Filters
     gradeFilter, setGradeFilter,
