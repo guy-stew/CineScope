@@ -3,6 +3,7 @@ import { Modal, Badge, Button, Tab, Tabs, Spinner, Form, Alert } from 'react-boo
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as RTooltip, Cell } from 'recharts'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '@clerk/clerk-react'
 import { GRADES } from '../utils/grades'
 import { computeTrends, buildTrendSummaryForAI } from '../utils/trendAnalysis'
 import { generateAIReport } from '../utils/aiReport'
@@ -63,8 +64,9 @@ export default function TrendPanel({ show, onHide }) {
 }
 
 function TrendPanelInner({ show, onHide }) {
-  const { importedFilms, baseVenues, gradeSettings, revenueFormat, apiKey, selectedFilmId, setAiReportText, setAiReportFilmId } = useApp()
+  const { importedFilms, baseVenues, gradeSettings, revenueFormat, hasApiKey, selectedFilmId, setAiReportText, setAiReportFilmId } = useApp()
   const { theme } = useTheme()
+  const { getToken } = useAuth()
 
   // AI report state
   const [aiReport, setAiReport] = useState('')
@@ -95,7 +97,7 @@ function TrendPanelInner({ show, onHide }) {
 
     try {
       const summary = buildTrendSummaryForAI(trendData)
-      const fullReport = await generateAIReport(apiKey, summary, (chunk) => {
+      const fullReport = await generateAIReport(getToken, summary, (chunk) => {
         setAiReport(prev => prev + chunk)
       })
       // Save to shared context so ExportMenu can include it in PDF
@@ -106,7 +108,7 @@ function TrendPanelInner({ show, onHide }) {
     } finally {
       setAiLoading(false)
     }
-  }, [trendData, apiKey, selectedFilmId, setAiReportText, setAiReportFilmId])
+  }, [trendData, getToken, selectedFilmId, setAiReportText, setAiReportFilmId])
 
   // ── Not enough films ──
   if (!show) return null
@@ -448,7 +450,7 @@ function TrendPanelInner({ show, onHide }) {
           {/* ─── AI Insights ─── */}
           <Tab eventKey="ai" title={<span><Icon name="auto_awesome" size={16} className="me-1" />AI Insights</span>}>
             <div className="p-3">
-              {!apiKey ? (
+              {!hasApiKey ? (
                 <div className="text-center py-4" style={{ color: theme.textMuted }}>
                   <Icon name="key" size={40} />
                   <p className="mt-3">Add your Anthropic API key in <strong>Settings</strong> to enable AI-powered insights.</p>

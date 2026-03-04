@@ -1,15 +1,24 @@
 import React, { useState, useMemo } from 'react'
 import { Modal, Badge, Button, Form, Tab, Tabs, OverlayTrigger, Tooltip } from 'react-bootstrap'
 import { useApp } from '../context/AppContext'
-import { CONFIDENCE, makeOverrideKey, loadOverrides, saveOverrides } from '../utils/venueMatcher'
+import { CONFIDENCE, makeOverrideKey } from '../utils/venueMatcher'
 import Icon from './Icon'
 
 /**
  * MatchReviewPanel — Shows matching results after import with confidence tiers.
  * Allows manual reassignment of medium/unmatched venues.
+ *
+ * v2.0 changes:
+ *   - Overrides save/delete through cloud API (via AppContext)
+ *   - Removed direct localStorage imports from venueMatcher
+ *   - Override changes trigger automatic re-matching via state dependency
  */
 export default function MatchReviewPanel() {
-  const { matchDetails, baseVenues, selectedFilm, rerunMatching, showMatchReview, setShowMatchReview } = useApp()
+  const {
+    matchDetails, baseVenues, selectedFilm, rerunMatching,
+    showMatchReview, setShowMatchReview,
+    cloudSaveOverride, cloudDeleteOverride,
+  } = useApp()
 
   const show = showMatchReview
   const onHide = () => setShowMatchReview(false)
@@ -110,7 +119,8 @@ export default function MatchReviewPanel() {
                 baseVenues={baseVenues}
                 showReassign
                 showAccept
-                rerunMatching={rerunMatching}
+                cloudSaveOverride={cloudSaveOverride}
+                cloudDeleteOverride={cloudDeleteOverride}
               />
             )}
           </Tab>
@@ -127,7 +137,8 @@ export default function MatchReviewPanel() {
                 details={low}
                 baseVenues={baseVenues}
                 showReassign
-                rerunMatching={rerunMatching}
+                cloudSaveOverride={cloudSaveOverride}
+                cloudDeleteOverride={cloudDeleteOverride}
               />
             )}
           </Tab>
@@ -137,7 +148,13 @@ export default function MatchReviewPanel() {
             eventKey="high"
             title={<><Icon name="check_circle" size={16} className="me-1" /> Matched <Badge bg="success">{high.length}</Badge></>}
           >
-            <MatchTable details={high} baseVenues={baseVenues} showReassign rerunMatching={rerunMatching} />
+            <MatchTable
+              details={high}
+              baseVenues={baseVenues}
+              showReassign
+              cloudSaveOverride={cloudSaveOverride}
+              cloudDeleteOverride={cloudDeleteOverride}
+            />
           </Tab>
 
         </Tabs>
@@ -146,7 +163,7 @@ export default function MatchReviewPanel() {
 
       <Modal.Footer className="justify-content-between">
         <div className="text-muted" style={{ fontSize: '0.75rem' }}>
-          Overrides are saved automatically and apply to all future imports.
+          Overrides are saved automatically to the cloud and apply to all future imports.
         </div>
         <Button variant="secondary" onClick={onHide}>
           Close
@@ -181,7 +198,7 @@ function StatBox({ label, value, color, pct }) {
 
 // ─── Match Table ───────────────────────────────────────────
 
-function MatchTable({ details, baseVenues, showReassign = false, showAccept = false, rerunMatching }) {
+function MatchTable({ details, baseVenues, showReassign = false, showAccept = false, cloudSaveOverride, cloudDeleteOverride }) {
   return (
     <div className="table-responsive" style={{ fontSize: '0.82rem' }}>
       <table className="table table-sm table-hover align-middle mb-0">
@@ -205,7 +222,8 @@ function MatchTable({ details, baseVenues, showReassign = false, showAccept = fa
               baseVenues={baseVenues}
               showReassign={showReassign}
               showAccept={showAccept}
-              rerunMatching={rerunMatching}
+              cloudSaveOverride={cloudSaveOverride}
+              cloudDeleteOverride={cloudDeleteOverride}
             />
           ))}
         </tbody>
@@ -217,9 +235,10 @@ function MatchTable({ details, baseVenues, showReassign = false, showAccept = fa
 
 // ─── Individual Match Row ──────────────────────────────────
 
-function MatchRow({ detail, baseVenues, showReassign, showAccept, rerunMatching }) {
+function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverride, cloudDeleteOverride }) {
   const [showDropdown, setShowDropdown] = useState(false)
   const [search, setSearch] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const { comscore, venue, score, confidence, method, chainOk } = detail
 
@@ -236,50 +255,69 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, rerunMatching 
       .slice(0, 15) // Limit results for performance
   }, [search, baseVenues])
 
-  const handleAssign = (assignVenue) => {
-    const overrides = loadOverrides()
-    const key = makeOverrideKey(comscore.theater, comscore.city)
-    overrides[key] = {
-      venueName: assignVenue.name,
-      venueCity: assignVenue.city || '',
-      action: 'assign',
+  const handleAssign = async (assignVenue) => {
+    setSaving(true)
+    try {
+      await cloudSaveOverride({
+        comscoreTheater: comscore.theater,
+        comscoreCity: comscore.city,
+        action: 'assign',
+        venueName: assignVenue.name,
+        venueCity: assignVenue.city || '',
+      })
+      setShowDropdown(false)
+      setSearch('')
+    } catch (err) {
+      console.error('Failed to save override:', err)
+    } finally {
+      setSaving(false)
     }
-    saveOverrides(overrides)
-    setShowDropdown(false)
-    setSearch('')
-    // Re-run matching to reflect the change
-    if (rerunMatching) rerunMatching()
   }
 
   // Quick accept — confirms the current auto-matched venue as correct
-  const handleAcceptMatch = () => {
+  const handleAcceptMatch = async () => {
     if (!venue) return
-    const overrides = loadOverrides()
-    const key = makeOverrideKey(comscore.theater, comscore.city)
-    overrides[key] = {
-      venueName: venue.name,
-      venueCity: venue.city || '',
-      action: 'assign',
+    setSaving(true)
+    try {
+      await cloudSaveOverride({
+        comscoreTheater: comscore.theater,
+        comscoreCity: comscore.city,
+        action: 'assign',
+        venueName: venue.name,
+        venueCity: venue.city || '',
+      })
+    } catch (err) {
+      console.error('Failed to save override:', err)
+    } finally {
+      setSaving(false)
     }
-    saveOverrides(overrides)
-    if (rerunMatching) rerunMatching()
   }
 
-  const handleDismiss = () => {
-    const overrides = loadOverrides()
-    const key = makeOverrideKey(comscore.theater, comscore.city)
-    overrides[key] = { action: 'dismiss' }
-    saveOverrides(overrides)
-    setShowDropdown(false)
-    if (rerunMatching) rerunMatching()
+  const handleDismiss = async () => {
+    setSaving(true)
+    try {
+      await cloudSaveOverride({
+        comscoreTheater: comscore.theater,
+        comscoreCity: comscore.city,
+        action: 'dismiss',
+      })
+      setShowDropdown(false)
+    } catch (err) {
+      console.error('Failed to save override:', err)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleClearOverride = () => {
-    const overrides = loadOverrides()
-    const key = makeOverrideKey(comscore.theater, comscore.city)
-    delete overrides[key]
-    saveOverrides(overrides)
-    if (rerunMatching) rerunMatching()
+  const handleClearOverride = async () => {
+    setSaving(true)
+    try {
+      await cloudDeleteOverride(comscore.theater, comscore.city)
+    } catch (err) {
+      console.error('Failed to delete override:', err)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const isOverride = method === 'manual_override' || method === 'manual_dismiss'
@@ -355,6 +393,7 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, rerunMatching 
                   size="sm"
                   variant="outline-success"
                   onClick={handleAcceptMatch}
+                  disabled={saving}
                   style={{ fontSize: '0.7rem', padding: '1px 6px' }}
                   title="Accept this match as correct"
                 >
@@ -365,6 +404,7 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, rerunMatching 
                 size="sm"
                 variant="outline-primary"
                 onClick={() => setShowDropdown(!showDropdown)}
+                disabled={saving}
                 style={{ fontSize: '0.7rem', padding: '1px 6px' }}
                 title="Reassign to a different venue"
               >
@@ -375,6 +415,7 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, rerunMatching 
                   size="sm"
                   variant="outline-secondary"
                   onClick={handleClearOverride}
+                  disabled={saving}
                   style={{ fontSize: '0.7rem', padding: '1px 6px' }}
                   title="Remove override, revert to auto-matching"
                 >
@@ -405,6 +446,7 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, rerunMatching 
                   size="sm"
                   variant="outline-danger"
                   onClick={handleDismiss}
+                  disabled={saving}
                   title="Mark as intentionally unmatched (e.g. venue not in our database)"
                 >
                   <Icon name="block" size={14} className="me-1" /> Dismiss
@@ -448,9 +490,10 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, rerunMatching 
                               size="sm"
                               variant="success"
                               onClick={() => handleAssign(v)}
+                              disabled={saving}
                               style={{ fontSize: '0.7rem', padding: '1px 8px' }}
                             >
-                              Assign
+                              {saving ? '...' : 'Assign'}
                             </Button>
                           </td>
                         </tr>

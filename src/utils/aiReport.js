@@ -1,23 +1,29 @@
 /**
- * CineScope AI Report Generator
+ * CineScope AI Report Generator (v2.0 cloud)
  *
- * Sends trend analysis data to the Claude API (client-side) and returns
- * a narrative insights report. Uses streaming for responsive UI.
+ * Sends trend analysis data to Claude via the server-side proxy at
+ * /api/ai/report. The user's Anthropic API key is stored in the
+ * database and never exposed to the browser.
  *
- * v1.11 changes:
- *   - Added generateChainAIReport() — chain-tailored analysis for PDF pitch packs
- *   - Added buildChainDataForAI() — builds chain-specific data summary
- *   - Refactored shared streaming logic into _callClaude()
+ * v2.0 changes:
+ *   - Removed direct Anthropic API calls (no more x-api-key header)
+ *   - Removed anthropic-dangerous-direct-browser-access header
+ *   - Functions now take `getToken` (Clerk auth) instead of `apiKey`
+ *   - Calls go through /api/ai/report server proxy
+ *   - SSE stream parsing logic unchanged
+ *
+ * v1.11 features preserved:
+ *   - generateChainAIReport() — chain-tailored analysis for PDF pitch packs
+ *   - buildChainDataForAI() — builds chain-specific data summary
+ *   - Refactored shared streaming logic into _callProxy()
  *   - Chain reports work with a single film (no trend data dependency)
- *
- * The API key is stored locally by the user — never sent anywhere except
- * directly to Anthropic's API.
  */
 
-const API_URL = 'https://api.anthropic.com/v1/messages'
+import { generateAIReport as apiGenerateAIReport } from './apiClient'
+
 const MODEL = 'claude-sonnet-4-20250514'
 
-// ─── General Report (unchanged) ─────────────────────────────────
+// ─── General Report ─────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are CineScope's AI analyst — a sharp, commercially-minded cinema distribution analyst helping Austin Shaw at Liberator Film Services make smarter marketing decisions.
 
@@ -38,7 +44,7 @@ Write a concise, actionable analysis report covering:
 Keep the tone professional but conversational — this is a working tool for a busy distributor, not an academic paper. Use £ for currency. Be specific with venue names, chains, and regions where possible. Keep the total report under 600 words.`
 
 
-// ─── Chain-Tailored Report (NEW v1.11) ──────────────────────────
+// ─── Chain-Tailored Report ──────────────────────────────────────
 
 const CHAIN_SYSTEM_PROMPT = `You are CineScope's AI analyst — a sharp, commercially-minded cinema distribution analyst working for Liberator Film Services.
 
@@ -61,10 +67,19 @@ Tone: Professional and respectful — this is going to someone outside the compa
 
 /**
  * Generate a general AI insights report from trend data.
- * (Unchanged from v1.10)
+ *
+ * @param {Function} getToken — Clerk getToken() function for auth
+ * @param {string} trendSummary — Pre-built text summary of trend data
+ * @param {Function} onChunk — Called with each text chunk as it streams in
+ * @returns {Promise<string>} — Complete report text
  */
-export async function generateAIReport(apiKey, trendSummary, onChunk) {
-  return _callClaude(apiKey, SYSTEM_PROMPT, `Here is the CineScope trend data for analysis. Please write the insights report.\n\n${trendSummary}`, onChunk)
+export async function generateAIReport(getToken, trendSummary, onChunk) {
+  return _callProxy(
+    getToken,
+    SYSTEM_PROMPT,
+    `Here is the CineScope trend data for analysis. Please write the insights report.\n\n${trendSummary}`,
+    onChunk
+  )
 }
 
 
@@ -72,17 +87,17 @@ export async function generateAIReport(apiKey, trendSummary, onChunk) {
  * Generate a chain-tailored AI report for a specific cinema chain.
  * Works with a single film — does NOT require trend data.
  *
- * @param {string} apiKey — Anthropic API key
+ * @param {Function} getToken — Clerk getToken() function for auth
  * @param {string} chainName — Name of the selected chain (e.g. "Everyman")
  * @param {Array} chainVenues — Venues in this chain (with grade, revenue, city etc.)
  * @param {Array} allVenues — All venues (for network-wide comparison)
  * @param {Object} selectedFilm — Current film object (filmInfo, stats)
- * @param {function} onChunk — Called with each text chunk as it streams in
+ * @param {Function} onChunk — Called with each text chunk as it streams in
  * @returns {Promise<string>} — Complete report text
  */
-export async function generateChainAIReport(apiKey, chainName, chainVenues, allVenues, selectedFilm, onChunk) {
+export async function generateChainAIReport(getToken, chainName, chainVenues, allVenues, selectedFilm, onChunk) {
   const dataSummary = buildChainDataForAI(chainName, chainVenues, allVenues, selectedFilm)
-  return _callClaude(apiKey, CHAIN_SYSTEM_PROMPT, dataSummary, onChunk)
+  return _callProxy(getToken, CHAIN_SYSTEM_PROMPT, dataSummary, onChunk)
 }
 
 
@@ -165,47 +180,23 @@ export function buildChainDataForAI(chainName, chainVenues, allVenues, selectedF
 }
 
 
-// ─── Shared streaming API call ──────────────────────────────────
+// ─── Shared streaming proxy call ────────────────────────────────
 
-async function _callClaude(apiKey, systemPrompt, userMessage, onChunk) {
-  if (!apiKey) {
-    throw new Error('No API key provided. Add your Anthropic API key in Settings.')
-  }
+/**
+ * Call the server-side AI proxy and parse the SSE stream.
+ * Replaces the old _callClaude() that hit Anthropic directly.
+ */
+async function _callProxy(getToken, systemPrompt, userMessage, onChunk) {
+  // Call the server proxy via apiClient
+  const response = await apiGenerateAIReport({
+    model: MODEL,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userMessage }],
+    max_tokens: 1500,
+  }, getToken)
 
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 1500,
-      system: systemPrompt,
-      stream: true,
-      messages: [
-        {
-          role: 'user',
-          content: userMessage,
-        },
-      ],
-    }),
-  })
-
-  if (!response.ok) {
-    const errorBody = await response.text()
-    if (response.status === 401) {
-      throw new Error('Invalid API key. Please check your Anthropic API key in Settings.')
-    }
-    if (response.status === 429) {
-      throw new Error('Rate limit exceeded. Please wait a moment and try again.')
-    }
-    throw new Error(`API error (${response.status}): ${errorBody.slice(0, 200)}`)
-  }
-
-  // Parse the SSE stream
+  // The proxy returns the raw SSE stream from Anthropic,
+  // so the parsing logic is identical to before.
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let fullText = ''

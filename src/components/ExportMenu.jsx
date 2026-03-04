@@ -1,18 +1,16 @@
-// ExportMenu.jsx — v1.11
+// ExportMenu.jsx — v2.0 cloud
 // Chain-tailored AI report generation + film list on cover page
-// Drop-in replacement for src/components/ExportMenu.jsx
 //
-// v1.11 changes:
-//   - "Generate Chain Report" button when a chain is selected
-//   - Streaming modal for chain report generation
-//   - AI report tracks chain name (validates film + chain match)
-//   - Film titles list passed to PDF for cover page
-//   - Report replaces general AI insights when chain-specific
+// v2.0 changes:
+//   - AI calls use getToken (Clerk auth) instead of apiKey
+//   - UI checks hasApiKey (boolean) instead of apiKey (string)
+//   - All other logic unchanged from v1.11
 
 import { useState, useCallback } from 'react'
 import { Dropdown, Form, Modal, Button, Spinner, Alert } from 'react-bootstrap'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '@clerk/clerk-react'
 import { generateChainAIReport } from '../utils/aiReport'
 import Icon from './Icon'
 
@@ -27,23 +25,24 @@ export default function ExportMenu() {
     availableChains,
     chainFilter,
     revenueFormat,
-    apiKey,
+    hasApiKey,
     aiReportText,
     aiReportFilmId,
-    aiReportChainName,  // ← NEW v1.11
+    aiReportChainName,
     setAiReportText,
     setAiReportFilmId,
-    setAiReportChainName, // ← NEW v1.11
+    setAiReportChainName,
   } = useApp()
 
   const { theme } = useTheme()
+  const { getToken } = useAuth()
 
   // ── Local state ──────────────────────────────────────────────
   const [pdfChainOverride, setPdfChainOverride] = useState('')
   const [includeAI, setIncludeAI] = useState(true)
   const [showAIPrompt, setShowAIPrompt] = useState(false)
 
-  // Chain report generation state (NEW v1.11)
+  // Chain report generation state
   const [showChainReportModal, setShowChainReportModal] = useState(false)
   const [chainReportText, setChainReportText] = useState('')
   const [chainReportLoading, setChainReportLoading] = useState(false)
@@ -62,10 +61,10 @@ export default function ExportMenu() {
   // ── Build film titles list for cover page ──────────────────
   const filmTitlesList = importedFilms.map(f => f.filmInfo?.title || f.filmInfo?.fileName || 'Untitled')
 
-  // ── Chain Report Generation (NEW v1.11) ────────────────────
+  // ── Chain Report Generation ────────────────────────────────
 
   const handleGenerateChainReport = useCallback(async () => {
-    if (!effectiveChain || !apiKey || !selectedFilm) return
+    if (!effectiveChain || !hasApiKey || !selectedFilm) return
 
     setChainReportLoading(true)
     setChainReportError(null)
@@ -76,7 +75,7 @@ export default function ExportMenu() {
       const chainVenues = venues.filter(v => v.chain === effectiveChain)
 
       const fullReport = await generateChainAIReport(
-        apiKey,
+        getToken,
         effectiveChain,
         chainVenues,
         venues,
@@ -95,7 +94,7 @@ export default function ExportMenu() {
     } finally {
       setChainReportLoading(false)
     }
-  }, [effectiveChain, apiKey, selectedFilm, selectedFilmId, venues, setAiReportText, setAiReportFilmId, setAiReportChainName])
+  }, [effectiveChain, hasApiKey, getToken, selectedFilm, selectedFilmId, venues, setAiReportText, setAiReportFilmId, setAiReportChainName])
 
   // ── Handlers ─────────────────────────────────────────────────
 
@@ -125,7 +124,7 @@ export default function ExportMenu() {
       revenueFormat,
       aiReportText: (includeAI && canIncludeAI) ? aiReportText : null,
       chainName: effectiveChain,
-      filmTitlesList,  // ← NEW v1.11: individual film titles for cover page
+      filmTitlesList,
       theme,
     })
   }
@@ -242,8 +241,8 @@ export default function ExportMenu() {
             </Form.Select>
           </div>
 
-          {/* ── NEW v1.11: Generate Chain Report button ─── */}
-          {effectiveChain && selectedFilm && apiKey && (
+          {/* ── Generate Chain Report button ─── */}
+          {effectiveChain && selectedFilm && hasApiKey && (
             <div className="px-3 py-1">
               <Button
                 variant="outline-primary"
@@ -269,7 +268,7 @@ export default function ExportMenu() {
           )}
 
           {/* Show hint if no API key but chain selected */}
-          {effectiveChain && selectedFilm && !apiKey && (
+          {effectiveChain && selectedFilm && !hasApiKey && (
             <div className="px-3 py-1">
               <div className="text-muted" style={{ fontSize: '0.7rem' }}>
                 <Icon name="key" size={12} className="me-1" />
@@ -332,7 +331,7 @@ export default function ExportMenu() {
         </Modal.Footer>
       </Modal>
 
-      {/* ── NEW v1.11: Chain Report Generation Modal ─── */}
+      {/* ── Chain Report Generation Modal ─── */}
       <Modal
         show={showChainReportModal}
         onHide={() => { if (!chainReportLoading) setShowChainReportModal(false) }}

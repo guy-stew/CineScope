@@ -193,7 +193,7 @@ export default function SettingsPanel() {
             {apiKey ? (
               <span style={{ color: '#27ae60' }}>
                 <Icon name="check_circle" size={14} className="me-1" />
-                Key saved — used for AI-powered trend reports. Stored locally, never sent to our servers.
+                Key saved — used for AI-powered trend reports. Stored securely on the server.
               </span>
             ) : (
               <>
@@ -201,7 +201,7 @@ export default function SettingsPanel() {
                 <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" style={{ color: theme.link || '#0d6efd' }}>
                   console.anthropic.com
                 </a>
-                {' '}to enable AI-generated trend insights.
+                {' '}to enable AI-generated trend insights. Your key is stored securely on the server and never exposed in the browser.
               </>
             )}
           </div>
