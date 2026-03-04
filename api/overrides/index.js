@@ -1,7 +1,8 @@
 // api/overrides/index.js
 // ─────────────────────────────────────────────
-// GET  /api/overrides  → Get all match overrides
-// PUT  /api/overrides  → Upsert a match override
+// GET    /api/overrides         → Get all match overrides
+// PUT    /api/overrides         → Upsert a match override
+// DELETE /api/overrides?id=123  → Remove an override
 // ─────────────────────────────────────────────
 
 import { getDb } from '../_lib/db.js';
@@ -14,8 +15,6 @@ export default async function handler(req, res) {
   const sql = getDb();
 
   // ── GET: All overrides for user ──
-  // Returns in the same format the app currently reads
-  // from localStorage, so the frontend swap is minimal.
   if (req.method === 'GET') {
     try {
       const overrides = await sql`
@@ -85,6 +84,36 @@ export default async function handler(req, res) {
     } catch (err) {
       console.error('PUT /api/overrides error:', err);
       return res.status(500).json({ error: 'Failed to save override' });
+    }
+  }
+
+  // ── DELETE: Remove a single override by ID ──
+  if (req.method === 'DELETE') {
+    const { id } = req.query;
+
+    if (!id) {
+      return res.status(400).json({ error: 'Missing override ID (?id=)' });
+    }
+
+    try {
+      const result = await sql`
+        DELETE FROM match_overrides
+        WHERE id = ${id} AND user_id = ${user.id}
+        RETURNING id, comscore_theater, comscore_city
+      `;
+
+      if (result.length === 0) {
+        return res.status(404).json({ error: 'Override not found' });
+      }
+
+      return res.status(200).json({
+        deleted: result[0],
+        message: 'Override removed — venue will return to auto-matching'
+      });
+
+    } catch (err) {
+      console.error(`DELETE /api/overrides?id=${id} error:`, err);
+      return res.status(500).json({ error: 'Failed to delete override' });
     }
   }
 

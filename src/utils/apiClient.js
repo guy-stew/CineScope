@@ -9,6 +9,11 @@
 // Designed as a drop-in replacement so the rest
 // of the app (AppContext, components) needs
 // minimal changes.
+//
+// v2.0.1: Uses query params (?id=) instead of
+// path params (/id) to consolidate Vercel
+// serverless functions under the Hobby plan
+// 12-function limit.
 // ─────────────────────────────────────────────
 
 const API_BASE = '/api';
@@ -65,7 +70,7 @@ export async function getFilms(getToken) {
  * @returns {{ film, revenues }}
  */
 export async function getFilm(filmId, getToken) {
-  return apiFetch(`/films/${filmId}`, {}, getToken);
+  return apiFetch(`/films?id=${filmId}`, {}, getToken);
 }
 
 /**
@@ -87,7 +92,7 @@ export async function saveFilm(filmData, getToken) {
  * @param {Function} getToken
  */
 export async function deleteFilm(filmId, getToken) {
-  return apiFetch(`/films/${filmId}`, { method: 'DELETE' }, getToken);
+  return apiFetch(`/films?id=${filmId}`, { method: 'DELETE' }, getToken);
 }
 
 /**
@@ -131,7 +136,7 @@ export async function saveOverride(override, getToken) {
  * @param {Function} getToken
  */
 export async function deleteOverride(overrideId, getToken) {
-  return apiFetch(`/overrides/${overrideId}`, { method: 'DELETE' }, getToken);
+  return apiFetch(`/overrides?id=${overrideId}`, { method: 'DELETE' }, getToken);
 }
 
 
