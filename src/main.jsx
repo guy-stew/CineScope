@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/react'
+import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react'
 import App from './App'
 
 // Bootstrap CSS
