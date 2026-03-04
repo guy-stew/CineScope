@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { ClerkProvider, SignedIn, SignedOut, SignIn } from '@clerk/react'
+import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/react'
 import App from './App'
 
 // Bootstrap CSS
@@ -21,15 +21,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <App />
       </SignedIn>
       <SignedOut>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '100vh',
-          background: '#1A365D'
-        }}>
-          <SignIn />
-        </div>
+        <RedirectToSignIn />
       </SignedOut>
     </ClerkProvider>
   </React.StrictMode>
