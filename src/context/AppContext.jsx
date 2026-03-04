@@ -97,9 +97,9 @@ function appFilmToCloud(parsedResult, confirmedTitle) {
       comscoreCircuit: v.circuit || '',
       revenue: v.revenue || 0,
       screensAggregated: v.screensAggregated || v.screens || 1,
-      // venue matching fields left null — matching runs client-side
-      venueName: null,
-      venueCity: null,
+      // Use Comscore names initially — matching may update later
+      venueName: v.theater || '',
+      venueCity: v.city || '',
       matchConfidence: null,
       matchMethod: null,
     })),
