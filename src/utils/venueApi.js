@@ -4,8 +4,8 @@
  * Additions for /api/venues and /api/geocode endpoints.
  * Same auth pattern as existing apiClient.js methods.
  *
- * INTEGRATION: Copy these exports into your existing apiClient.js,
- * or import this file separately alongside apiClient.
+ * INTEGRATION: Keep as separate file (VenueManager imports directly)
+ * or merge into apiClient.js if preferred.
  */
 
 const API_BASE = '/api'
@@ -75,6 +75,18 @@ export async function updateVenue(id, data, getToken) {
 export async function toggleVenueStatus(id, getToken) {
   return authFetch(`${API_BASE}/venues/${id}/status`, getToken, {
     method: 'PATCH',
+  })
+}
+
+/**
+ * Bulk import venues from spreadsheet data.
+ * Accepts an array of venue objects.
+ * Returns { imported: N, skipped: N, errors: [...] }
+ */
+export async function importVenues(venues, getToken) {
+  return authFetch(`${API_BASE}/venues/import`, getToken, {
+    method: 'POST',
+    body: JSON.stringify({ venues }),
   })
 }
 

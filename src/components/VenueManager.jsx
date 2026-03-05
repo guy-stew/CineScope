@@ -1,13 +1,14 @@
 /**
  * CineScope — Venue Manager Modal
  *
- * Full-screen modal for browsing, adding, and editing venues.
+ * Full-screen modal for browsing, adding, editing, and importing venues.
  * Accessed via the storefront icon in the header bar.
  *
  * Internal view states:
- *   'list'  — searchable/sortable venue table with pagination
- *   'add'   — blank VenueForm for creating a new venue
- *   'edit'  — VenueForm pre-filled with selected venue data
+ *   'list'   — searchable/sortable venue table with pagination
+ *   'add'    — blank VenueForm for creating a new venue
+ *   'edit'   — VenueForm pre-filled with selected venue data
+ *   'import' — VenueImport for spreadsheet upload
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
@@ -16,6 +17,7 @@ import { useAuth } from '@clerk/clerk-react'
 import { useTheme } from '../context/ThemeContext'
 import Icon from './Icon'
 import VenueForm from './VenueForm'
+import VenueImport from './VenueImport'
 import * as venueApi from '../utils/venueApi'
 
 const PAGE_SIZE = 25
@@ -36,7 +38,7 @@ export default function VenueManager({ show, onHide }) {
   const { theme } = useTheme()
 
   // ── View state ──
-  const [view, setView] = useState('list') // 'list' | 'add' | 'edit'
+  const [view, setView] = useState('list') // 'list' | 'add' | 'edit' | 'import'
   const [editVenue, setEditVenue] = useState(null)
 
   // ── Venue data ──
@@ -172,6 +174,10 @@ export default function VenueManager({ show, onHide }) {
     setView('add')
   }
 
+  const handleImport = () => {
+    setView('import')
+  }
+
   const handleToggleStatus = async (venue, e) => {
     e.stopPropagation()
     try {
@@ -202,6 +208,14 @@ export default function VenueManager({ show, onHide }) {
     setEditVenue(null)
   }
 
+  const handleImportComplete = async (result) => {
+    await loadVenues()
+    setView('list')
+    const count = result?.imported ?? 0
+    setSaveMessage(`${count} venue${count !== 1 ? 's' : ''} imported successfully`)
+    setTimeout(() => setSaveMessage(null), 5000)
+  }
+
   const SortIcon = ({ field }) => {
     if (sortField !== field) return <Icon name="unfold_more" size={14} style={{ opacity: 0.3 }} />
     return <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} size={14} />
@@ -211,6 +225,13 @@ export default function VenueManager({ show, onHide }) {
   // ═══════════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════════
+
+  const viewTitle = {
+    list: 'Venue Manager',
+    add: 'Add New Venue',
+    edit: `Edit: ${editVenue?.name || 'Venue'}`,
+    import: 'Import Venues',
+  }
 
   return (
     <Modal
@@ -239,11 +260,7 @@ export default function VenueManager({ show, onHide }) {
             </Button>
           )}
           <Icon name="storefront" size={22} />
-          <span>
-            {view === 'list' && 'Venue Manager'}
-            {view === 'add' && 'Add New Venue'}
-            {view === 'edit' && `Edit: ${editVenue?.name || 'Venue'}`}
-          </span>
+          <span>{viewTitle[view]}</span>
           {view === 'list' && (
             <Badge bg="secondary" className="ms-2 fw-normal" style={{ fontSize: '0.7rem' }}>
               {venues.length} venues
@@ -335,17 +352,10 @@ export default function VenueManager({ show, onHide }) {
                 </Badge>
               )}
 
-              {/* Import button (Stage 3 — placeholder) */}
-              <OverlayTrigger
-                placement="bottom"
-                overlay={<Tooltip>Bulk import from spreadsheet (coming soon)</Tooltip>}
-              >
-                <span>
-                  <Button size="sm" variant="outline-secondary" disabled>
-                    <Icon name="upload_file" size={16} className="me-1" /> Import
-                  </Button>
-                </span>
-              </OverlayTrigger>
+              {/* Import button — NOW ENABLED */}
+              <Button size="sm" variant="outline-primary" onClick={handleImport}>
+                <Icon name="upload_file" size={16} className="me-1" /> Import
+              </Button>
 
               {/* Add venue button */}
               <Button size="sm" variant="success" onClick={handleAdd}>
@@ -565,6 +575,15 @@ export default function VenueManager({ show, onHide }) {
           <VenueForm
             venue={editVenue}
             onSave={handleFormSave}
+            onCancel={handleFormCancel}
+          />
+        )}
+
+        {/* ── IMPORT VIEW ── */}
+        {view === 'import' && (
+          <VenueImport
+            existingVenues={venues}
+            onImportComplete={handleImportComplete}
             onCancel={handleFormCancel}
           />
         )}
