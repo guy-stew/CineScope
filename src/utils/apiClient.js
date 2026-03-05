@@ -14,6 +14,10 @@
 // path params (/id) to consolidate Vercel
 // serverless functions under the Hobby plan
 // 12-function limit.
+//
+// v2.1.0: Added venue contact methods
+// (getContact, saveContact, deleteContact,
+// listChainContacts) for Feature 1.
 // ─────────────────────────────────────────────
 
 const API_BASE = '/api';
@@ -197,4 +201,74 @@ export async function generateAIReport(payload, getToken) {
   }
 
   return res;
+}
+
+
+// ═══════════════════════════════════════════════
+// VENUE CONTACTS
+// ═══════════════════════════════════════════════
+
+/**
+ * Resolve the contact for a specific venue.
+ * Checks for venue-specific override first, falls back to chain default.
+ *
+ * @param {string} venueName - CineScope venue name
+ * @param {string} venueCity - CineScope venue city
+ * @param {string} chain     - Chain name (e.g. 'Odeon', 'Independent')
+ * @param {Function} getToken
+ * @returns {{ contact: object|null, resolved_scope: string|null }}
+ */
+export async function getContact(venueName, venueCity, chain, getToken) {
+  const params = new URLSearchParams({
+    venue_name: venueName,
+    venue_city: venueCity,
+    chain: chain,
+  });
+  return apiFetch(`/contacts?${params}`, {}, getToken);
+}
+
+/**
+ * Save (upsert) a contact record.
+ * For chain-level: scope='chain', chain_name required.
+ * For venue-level: scope='venue', chain_name + venue_name + venue_city required.
+ *
+ * @param {Object} contactData - { scope, chain_name, venue_name?, venue_city?,
+ *                                 manager_name?, booking_contact_name?,
+ *                                 booking_contact_email?, notes? }
+ * @param {Function} getToken
+ * @returns {{ contact: object }}
+ */
+export async function saveContact(contactData, getToken) {
+  return apiFetch('/contacts', {
+    method: 'PUT',
+    body: JSON.stringify(contactData),
+  }, getToken);
+}
+
+/**
+ * Delete a venue-specific contact override (reverts to chain default).
+ * Only works for scope='venue' records.
+ *
+ * @param {string} contactId - UUID of the venue_contacts record to delete
+ * @param {Function} getToken
+ * @returns {{ deleted: boolean, id: string }}
+ */
+export async function deleteContact(contactId, getToken) {
+  return apiFetch(`/contacts?id=${contactId}`, { method: 'DELETE' }, getToken);
+}
+
+/**
+ * List all contacts for a specific chain.
+ * Useful for a future contacts management screen.
+ *
+ * @param {string} chain - Chain name (e.g. 'Odeon')
+ * @param {Function} getToken
+ * @returns {{ contacts: object[] }}
+ */
+export async function listChainContacts(chain, getToken) {
+  const params = new URLSearchParams({
+    chain: chain,
+    list: 'true',
+  });
+  return apiFetch(`/contacts?${params}`, {}, getToken);
 }
