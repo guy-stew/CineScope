@@ -51,6 +51,7 @@ function cloudFilmToApp(cloudFilm, cloudRevenues) {
     filmInfo: {
       title: film.title,
       year: film.year || null,
+      dateFrom: film.date_from || null, // For chronological sorting in popup
       dateRange: film.date_from && film.date_to
         ? `${film.date_from} — ${film.date_to}`
         : '',
@@ -481,29 +482,59 @@ export function AppProvider({ children }) {
   const venues = matchResult.venues
   const matchDetails = matchResult.details
 
-  // Multi-film venue lookup (for popups showing all films)
+  // Multi-film venue lookup (for enhanced popup: per-film grades + chronological order)
   const venueFilmData = useMemo(() => {
     const lookup = new Map()
 
     for (const film of importedFilms) {
       const { matched } = matchVenues(film.comscoreVenues, baseVenues, overrides)
 
-      for (const venue of matched) {
+      // Deduplicate matched venues (same logic as main matchResult)
+      const venueMap = new Map()
+      for (const v of matched) {
+        const key = `${v.name}|${v.city}`.toLowerCase()
+        if (!venueMap.has(key)) {
+          venueMap.set(key, { ...v, _revenues: [v.revenue || 0] })
+        } else {
+          venueMap.get(key)._revenues.push(v.revenue || 0)
+        }
+      }
+      const deduped = Array.from(venueMap.values()).map(({ _revenues, ...venue }) => {
+        if (_revenues.length > 1) {
+          venue.revenue = Math.round(_revenues.reduce((a, b) => a + b, 0))
+        }
+        return venue
+      })
+
+      // Calculate grades for this film's venues
+      const graded = calculateGrades(deduped, gradeSettings)
+
+      // Build lookup entries with grade, filmId, and date
+      for (const venue of graded) {
         const key = `${venue.name}|${venue.city}`.toLowerCase()
         if (!lookup.has(key)) lookup.set(key, [])
         lookup.get(key).push({
+          filmId: film.id,
           filmTitle: film.filmInfo.title,
+          dateFrom: film.filmInfo.dateFrom || null,
           revenue: venue.revenue,
+          grade: venue.grade || 'E',
         })
       }
     }
 
+    // Sort chronologically by dateFrom (fallback: alphabetical by title)
     for (const [, films] of lookup) {
-      films.sort((a, b) => a.filmTitle.localeCompare(b.filmTitle))
+      films.sort((a, b) => {
+        if (!a.dateFrom && !b.dateFrom) return a.filmTitle.localeCompare(b.filmTitle)
+        if (!a.dateFrom) return 1
+        if (!b.dateFrom) return -1
+        return a.dateFrom.localeCompare(b.dateFrom)
+      })
     }
 
     return lookup
-  }, [importedFilms, baseVenues, overrides])
+  }, [importedFilms, baseVenues, overrides, gradeSettings])
 
   // Filtered venues
   const filteredVenues = useMemo(() => {

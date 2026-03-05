@@ -4,9 +4,9 @@ import MarkerClusterGroup from 'react-leaflet-cluster'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import { getGradeColor, GRADES } from '../utils/grades'
-import { formatRevenue } from '../utils/formatRevenue'
 import PopulationHeatLayer from './PopulationHeatLayer'
 import PopulationZonesLayer from './PopulationZonesLayer'
+import VenuePopup from './VenuePopup'
 
 const UK_CENTER = [54.0, -2.5]
 const DEFAULT_ZOOM = 6
@@ -63,7 +63,7 @@ function MapLegend({ hasGrades }) {
 }
 
 export default function MapView() {
-  const { filteredVenues, selectedFilm, setSelectedVenue, populationMode, importedFilms, venueFilmData, revenueFormat } = useApp()
+  const { filteredVenues, selectedFilm, setSelectedVenue, populationMode } = useApp()
   const { theme } = useTheme()
 
   const mappableVenues = useMemo(() => {
@@ -112,83 +112,8 @@ export default function MapView() {
                   click: () => setSelectedVenue(venue),
                 }}
               >
-                <Popup>
-                  <div className="venue-popup">
-                    <div className="popup-header">
-                      <strong>{venue.name}</strong>
-                      {grade && grade !== 'E' && (
-                        <span
-                          className="popup-grade"
-                          style={{
-                            backgroundColor: color,
-                            color: '#fff',
-                          }}
-                        >
-                          {grade}
-                        </span>
-                      )}
-                    </div>
-                    <div className="popup-details">
-                      <div>{venue.city}{venue.country === 'Ireland' ? ', Ireland' : ''}</div>
-                      <div className="text-muted">{venue.chain} — {venue.category}</div>
-
-                      {/* Multi-film revenue display */}
-                      {(() => {
-                        const venueKey = `${venue.name}|${venue.city}`.toLowerCase()
-                        const filmEntries = venueFilmData.get(venueKey)
-                        const hasMultipleFilms = filmEntries && filmEntries.length > 1
-
-                        if (hasMultipleFilms) {
-                          // Show overall average then alphabetical film list
-                          const avgRevenue = filmEntries.reduce((s, f) => s + f.revenue, 0) / filmEntries.length
-                          return (
-                            <div className="popup-multi-film mt-1">
-                              <div className="popup-revenue" style={{ fontWeight: 700 }}>
-                                Avg: {formatRevenue(avgRevenue, revenueFormat)}
-                                <span style={{ fontSize: '0.75em', color: '#666', marginLeft: 4 }}>
-                                  ({filmEntries.length} films)
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', marginTop: 4, borderTop: '1px solid #ddd', paddingTop: 4 }}>
-                                {filmEntries.map((f, i) => (
-                                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 1 }}>
-                                    <span style={{ color: '#555' }}>{f.filmTitle}</span>
-                                    <span style={{ fontWeight: 600 }}>{formatRevenue(f.revenue, revenueFormat)}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )
-                        }
-
-                        // Single film or no film — show simple revenue
-                        if (venue.revenue != null) {
-                          return (
-                            <div className="popup-revenue">
-                              {formatRevenue(venue.revenue, revenueFormat)}
-                              {venue.wasAggregated && (
-                                <span
-                                  className="ms-1"
-                                  title={`Combined from ${venue.screenEntries} screen entries`}
-                                  style={{ fontSize: '0.75em', cursor: 'help' }}
-                                >
-                                  🖥️×{venue.screenEntries}
-                                </span>
-                              )}
-                            </div>
-                          )
-                        }
-
-                        return null
-                      })()}
-
-                      {venue.address && (
-                        <div className="popup-address text-muted mt-1" style={{ fontSize: '0.8em' }}>
-                          {venue.address}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                <Popup maxWidth={340} minWidth={300}>
+                  <VenuePopup venue={venue} />
                 </Popup>
               </CircleMarker>
             )
