@@ -9,8 +9,8 @@
 //   DELETE ?id=X                              → Remove a venue-specific override
 // ─────────────────────────────────────────────────────────
 
-import { verifyAuth } from '../_lib/auth.js';
-import { query } from '../_lib/db.js';
+import { authenticate } from '../_lib/auth.js';
+import { getDb } from '../_lib/db.js';
 
 export default async function handler(req, res) {
   // ── CORS preflight ──
@@ -22,13 +22,11 @@ export default async function handler(req, res) {
   }
 
   // ── Auth ──
-  let userId;
-  try {
-    const auth = await verifyAuth(req);
-    userId = auth.userId;
-  } catch (err) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  const user = await authenticate(req, res);
+  if (!user) return; // 401 already sent by authenticate()
+
+  const sql = getDb();
+  const userId = user.id;
 
   try {
     // ═══════════════════════════════════════════════════
@@ -39,13 +37,12 @@ export default async function handler(req, res) {
 
       // ── List all contacts for a chain ──
       if (list === 'true' && chain) {
-        const result = await query(
-          `SELECT * FROM venue_contacts
-           WHERE user_id = $1 AND chain_name = $2
-           ORDER BY scope ASC, venue_name ASC`,
-          [userId, chain]
-        );
-        return res.status(200).json({ contacts: result.rows });
+        const rows = await sql`
+          SELECT * FROM venue_contacts
+          WHERE user_id = ${userId} AND chain_name = ${chain}
+          ORDER BY scope ASC, venue_name ASC
+        `;
+        return res.status(200).json({ contacts: rows });
       }
 
       // ── Resolve single venue contact ──
@@ -56,41 +53,37 @@ export default async function handler(req, res) {
       // Step 1: Check for venue-specific override
       let contact = null;
       if (venue_name && venue_city) {
-        const venueResult = await query(
-          `SELECT * FROM venue_contacts
-           WHERE user_id = $1
-             AND scope = 'venue'
-             AND chain_name = $2
-             AND venue_name = $3
-             AND venue_city = $4
-           LIMIT 1`,
-          [userId, chain, venue_name, venue_city]
-        );
-        if (venueResult.rows.length > 0) {
-          contact = venueResult.rows[0];
+        const venueRows = await sql`
+          SELECT * FROM venue_contacts
+          WHERE user_id = ${userId}
+            AND scope = 'venue'
+            AND chain_name = ${chain}
+            AND venue_name = ${venue_name}
+            AND venue_city = ${venue_city}
+          LIMIT 1
+        `;
+        if (venueRows.length > 0) {
+          contact = venueRows[0];
         }
       }
 
       // Step 2: Fall back to chain default
       if (!contact) {
-        const chainResult = await query(
-          `SELECT * FROM venue_contacts
-           WHERE user_id = $1
-             AND scope = 'chain'
-             AND chain_name = $2
-           LIMIT 1`,
-          [userId, chain]
-        );
-        if (chainResult.rows.length > 0) {
-          contact = chainResult.rows[0];
+        const chainRows = await sql`
+          SELECT * FROM venue_contacts
+          WHERE user_id = ${userId}
+            AND scope = 'chain'
+            AND chain_name = ${chain}
+          LIMIT 1
+        `;
+        if (chainRows.length > 0) {
+          contact = chainRows[0];
         }
       }
 
       // Return resolved contact (or null if none found)
       return res.status(200).json({
         contact: contact || null,
-        // Tell the frontend which level was resolved so it can show
-        // the "Custom contact" badge / "Reset to chain default" button
         resolved_scope: contact ? contact.scope : null
       });
     }
@@ -121,27 +114,52 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'venue_name and venue_city required for scope="venue"' });
       }
 
-      // Upsert using the unique constraint
-      // COALESCE matches the constraint definition for NULL handling
-      const result = await query(
-        `INSERT INTO venue_contacts (
+      // Upsert: try update first, then insert if no rows affected
+      // This avoids ON CONFLICT issues with the unique index + COALESCE
+      const vn = venue_name || '';
+      const vc = venue_city || '';
+
+      const existing = await sql`
+        SELECT id FROM venue_contacts
+        WHERE user_id = ${userId}
+          AND scope = ${scope}
+          AND chain_name = ${chain_name}
+          AND COALESCE(venue_name, '') = ${vn}
+          AND COALESCE(venue_city, '') = ${vc}
+        LIMIT 1
+      `;
+
+      let contact;
+      if (existing.length > 0) {
+        // Update existing record
+        const updated = await sql`
+          UPDATE venue_contacts SET
+            manager_name = ${manager_name},
+            booking_contact_name = ${booking_contact_name},
+            booking_contact_email = ${booking_contact_email},
+            notes = ${notes},
+            updated_at = NOW()
+          WHERE id = ${existing[0].id}
+          RETURNING *
+        `;
+        contact = updated[0];
+      } else {
+        // Insert new record
+        const inserted = await sql`
+          INSERT INTO venue_contacts (
             user_id, scope, chain_name, venue_name, venue_city,
             manager_name, booking_contact_name, booking_contact_email, notes
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         ON CONFLICT ON CONSTRAINT uq_contacts_scope
-         DO UPDATE SET
-            manager_name = EXCLUDED.manager_name,
-            booking_contact_name = EXCLUDED.booking_contact_name,
-            booking_contact_email = EXCLUDED.booking_contact_email,
-            notes = EXCLUDED.notes,
-            updated_at = NOW()
-         RETURNING *`,
-        [userId, scope, chain_name, venue_name, venue_city,
-         manager_name, booking_contact_name, booking_contact_email, notes]
-      );
+          )
+          VALUES (
+            ${userId}, ${scope}, ${chain_name}, ${venue_name}, ${venue_city},
+            ${manager_name}, ${booking_contact_name}, ${booking_contact_email}, ${notes}
+          )
+          RETURNING *
+        `;
+        contact = inserted[0];
+      }
 
-      return res.status(200).json({ contact: result.rows[0] });
+      return res.status(200).json({ contact });
     }
 
     // ═══════════════════════════════════════════════════
@@ -155,20 +173,19 @@ export default async function handler(req, res) {
       }
 
       // Only allow deleting own records, and only venue-level overrides
-      const result = await query(
-        `DELETE FROM venue_contacts
-         WHERE id = $1 AND user_id = $2 AND scope = 'venue'
-         RETURNING id`,
-        [id, userId]
-      );
+      const deleted = await sql`
+        DELETE FROM venue_contacts
+        WHERE id = ${id} AND user_id = ${userId} AND scope = 'venue'
+        RETURNING id
+      `;
 
-      if (result.rows.length === 0) {
+      if (deleted.length === 0) {
         return res.status(404).json({
           error: 'Contact not found, not owned by you, or is a chain-level record (use PUT to clear chain contacts)'
         });
       }
 
-      return res.status(200).json({ deleted: true, id: result.rows[0].id });
+      return res.status(200).json({ deleted: true, id: deleted[0].id });
     }
 
     // ── Method not allowed ──
