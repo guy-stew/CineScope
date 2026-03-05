@@ -428,7 +428,44 @@ export function AppProvider({ children }) {
       selectedFilm.comscoreVenues, baseVenues, overrides
     )
 
-    const graded = calculateGrades(matched, gradeSettings)
+    // ── Deduplicate matched venues by base venue identity ──
+    // Multiple Comscore entries (from different films with slightly different
+    // naming, or residual multi-screen variants) can all match to the same
+    // base venue.  Merge them into ONE entry per physical cinema so we get
+    // one map pin and one table row per venue.
+    const deduped = (() => {
+      const venueMap = new Map()
+      for (const v of matched) {
+        const key = `${v.name}|${v.city}`.toLowerCase()
+        if (!venueMap.has(key)) {
+          // First occurrence — clone and start tracking revenue entries
+          venueMap.set(key, { ...v, _revenues: [v.revenue || 0] })
+        } else {
+          // Duplicate — accumulate revenue
+          const existing = venueMap.get(key)
+          existing._revenues.push(v.revenue || 0)
+          // Preserve aggregation flag if any entry was aggregated
+          if (v.wasAggregated) existing.wasAggregated = true
+          if (v.screenEntries) {
+            existing.screenEntries = (existing.screenEntries || 0) + v.screenEntries
+          }
+        }
+      }
+
+      return Array.from(venueMap.values()).map(({ _revenues, ...venue }) => {
+        if (_revenues.length > 1) {
+          // "All Films" mode: each entry is already an average for its Comscore key,
+          // so average again across the duplicate matches to get the true per-venue average.
+          // Single film mode: sum (handles any residual multi-screen leakage).
+          venue.revenue = selectedFilmId === 'all-films'
+            ? Math.round(_revenues.reduce((a, b) => a + b, 0) / _revenues.length)
+            : Math.round(_revenues.reduce((a, b) => a + b, 0))
+        }
+        return venue
+      })
+    })()
+
+    const graded = calculateGrades(deduped, gradeSettings)
 
     const matchedKeys = new Set(graded.map(v => `${v.name}|${v.city}`.toLowerCase()))
     const eGradeVenues = baseVenues
@@ -439,7 +476,7 @@ export function AppProvider({ children }) {
       venues: [...graded, ...eGradeVenues],
       details,
     }
-  }, [baseVenues, selectedFilm, gradeSettings, overrides])
+  }, [baseVenues, selectedFilm, selectedFilmId, gradeSettings, overrides])
 
   const venues = matchResult.venues
   const matchDetails = matchResult.details
