@@ -1,11 +1,17 @@
 /**
- * CineScope — Venue Matcher (v2.0 cloud)
+ * CineScope — Venue Matcher (v2.1 cloud + comscore_name)
  *
- * Matches Comscore theater names to geocoded Deluxe venues using:
+ * Matches Comscore theater names to geocoded venues using:
+ *  - comscore_name as primary match target (falls back to display name)
  *  - Chain-protection rules (cross-chain mismatches blocked)
  *  - Token-based fuzzy matching with city bonuses
  *  - Detailed match metadata for override panel
  *  - Manual override support (loaded from cloud, passed as parameter)
+ *
+ * v2.1 changes:
+ *   - Uses venue.comscore_name as primary match target (from venues table)
+ *   - Falls back to venue.name if comscore_name not set
+ *   - Exact match on comscore_name scores 100 (highest priority)
  *
  * v2.0 changes:
  *   - Removed localStorage for overrides (now stored in Neon Postgres)
@@ -26,6 +32,7 @@ export const CONFIDENCE = {
 function getConfidence(score, method) {
   if (method === 'manual_override')  return CONFIDENCE.HIGH
   if (method === 'manual_dismiss')   return CONFIDENCE.LOW
+  if (method === 'exact_comscore')   return CONFIDENCE.HIGH
   if (method === 'exact_name')       return CONFIDENCE.HIGH
   if (score >= CONFIDENCE.HIGH.minScore)   return CONFIDENCE.HIGH
   if (score >= CONFIDENCE.MEDIUM.minScore) return CONFIDENCE.MEDIUM
@@ -90,7 +97,7 @@ function chainsCompatible(comscoreCircuit, venueChain) {
  * Match Comscore venues to geocoded venues.
  *
  * @param {Array} comscoreVenues — Parsed Comscore data [{ theater, city, circuit, revenue, ... }]
- * @param {Array} geocodedVenues — Geocoded venues [{ name, city, chain, ... }]
+ * @param {Array} geocodedVenues — Geocoded venues [{ name, comscore_name, city, chain, ... }]
  * @param {Object} overrides — Override lookup: { "theater|city": { action, venueName?, venueCity? } }
  * @returns {{ matched, unmatched, matchDetails }}
  */
@@ -198,6 +205,7 @@ function autoMatch(cs, venues) {
 
   for (const venue of venues) {
     const vName = (venue.name || '').trim()
+    const vComscoreName = (venue.comscore_name || vName).trim() // ← NEW: use comscore_name first
     const vCity = (venue.city || '').trim().toLowerCase()
     const vChain = venue.chain || ''
 
@@ -208,15 +216,28 @@ function autoMatch(cs, venues) {
     let score = 0
     let method = 'none'
 
-    // Method 1: Exact name match
-    if (csName.toLowerCase() === vName.toLowerCase()) {
+    // Method 0 (NEW): Exact match on comscore_name — highest priority
+    if (csName.toLowerCase() === vComscoreName.toLowerCase()) {
+      score = 100
+      method = vComscoreName !== vName ? 'exact_comscore' : 'exact_name'
+    }
+    // Method 1: Exact match on display name (if different from comscore_name)
+    else if (csName.toLowerCase() === vName.toLowerCase()) {
       score = 100
       method = 'exact_name'
     } else {
-      // Method 2: Token-based fuzzy match
+      // Method 2: Token-based fuzzy match (try against both comscore_name and name)
       const csTokens = tokenize(csName)
-      const vTokens = tokenize(vName)
-      const tokenScore = tokenOverlapScore(csTokens, vTokens)
+
+      // Score against comscore_name first, then display name, take best
+      const comscoreTokens = tokenize(vComscoreName)
+      const nameTokens = tokenize(vName)
+
+      const comscoreTokenScore = tokenOverlapScore(csTokens, comscoreTokens)
+      const nameTokenScore = tokenOverlapScore(csTokens, nameTokens)
+
+      // Use whichever gives the better score
+      const tokenScore = Math.max(comscoreTokenScore, nameTokenScore)
 
       if (tokenScore > 0) {
         score = tokenScore

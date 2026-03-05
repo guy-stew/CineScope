@@ -11,6 +11,10 @@ import VenuePopup from './VenuePopup'
 const UK_CENTER = [54.0, -2.5]
 const DEFAULT_ZOOM = 6
 
+// ── Closed venue styling ──
+const CLOSED_COLOR = '#999'
+const CLOSED_OPACITY = 0.45
+
 function FitBounds({ venues }) {
   const map = useMap()
   useEffect(() => {
@@ -44,20 +48,33 @@ function ThemeTiles() {
   )
 }
 
-function MapLegend({ hasGrades }) {
+function MapLegend({ hasGrades, hasClosedVenues }) {
   const { theme } = useTheme()
 
-  if (!hasGrades) return null
+  if (!hasGrades && !hasClosedVenues) return null
 
   return (
     <div className="map-legend" style={{ background: `${theme.surface}ee` }}>
-      <div className="legend-title" style={{ color: theme.textMuted }}>Grade</div>
-      {Object.entries(GRADES).map(([key, grade]) => (
-        <div key={key} className="legend-item">
-          <span className="legend-dot" style={{ backgroundColor: grade.color }} />
-          <span style={{ color: theme.text }}>{key} — {grade.name}</span>
+      {hasGrades && (
+        <>
+          <div className="legend-title" style={{ color: theme.textMuted }}>Grade</div>
+          {Object.entries(GRADES).map(([key, grade]) => (
+            <div key={key} className="legend-item">
+              <span className="legend-dot" style={{ backgroundColor: grade.color }} />
+              <span style={{ color: theme.text }}>{key} — {grade.name}</span>
+            </div>
+          ))}
+        </>
+      )}
+      {hasClosedVenues && (
+        <div className="legend-item" style={{ marginTop: hasGrades ? 4 : 0 }}>
+          <span
+            className="legend-dot"
+            style={{ backgroundColor: CLOSED_COLOR, opacity: CLOSED_OPACITY }}
+          />
+          <span style={{ color: theme.textMuted }}>Closed</span>
         </div>
-      ))}
+      )}
     </div>
   )
 }
@@ -71,6 +88,9 @@ export default function MapView() {
   }, [filteredVenues])
 
   const hasGrades = !!selectedFilm
+  const hasClosedVenues = useMemo(() => {
+    return mappableVenues.some(v => (v.status || 'open') === 'closed')
+  }, [mappableVenues])
 
   return (
     <div className="map-wrapper h-100 position-relative">
@@ -93,20 +113,31 @@ export default function MapView() {
           showCoverageOnHover={false}
         >
           {mappableVenues.map((venue, idx) => {
+            const isClosed = (venue.status || 'open') === 'closed'
             const grade = venue.grade || null
-            // When no film loaded, use a neutral blue for all markers
-            const color = grade ? getGradeColor(grade) : '#2E75B6'
+
+            // Colour logic:
+            //   Closed → grey
+            //   Has grade → grade colour
+            //   No film loaded → neutral blue
+            const color = isClosed
+              ? CLOSED_COLOR
+              : grade
+                ? getGradeColor(grade)
+                : '#2E75B6'
+
+            const fillOpacity = isClosed ? CLOSED_OPACITY : 0.85
 
             return (
               <CircleMarker
-                key={`${venue.name}-${idx}`}
+                key={`${venue.name}-${venue.city}-${idx}`}
                 center={[venue.lat, venue.lng]}
-                radius={8}
+                radius={isClosed ? 6 : 8}
                 pathOptions={{
-                  color: '#fff',
-                  weight: 2,
+                  color: isClosed ? '#777' : '#fff',
+                  weight: isClosed ? 1 : 2,
                   fillColor: color,
-                  fillOpacity: 0.85,
+                  fillOpacity,
                 }}
                 eventHandlers={{
                   click: () => setSelectedVenue(venue),
@@ -121,7 +152,7 @@ export default function MapView() {
         </MarkerClusterGroup>
       </MapContainer>
 
-      <MapLegend hasGrades={hasGrades} />
+      <MapLegend hasGrades={hasGrades} hasClosedVenues={hasClosedVenues} />
 
       {populationMode !== 'off' && (
         <div className="population-legend" style={{ background: `${theme.surface}ee` }}>

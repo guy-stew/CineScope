@@ -1,9 +1,15 @@
 /**
- * CineScope — App Context (v2.0 cloud)
+ * CineScope — App Context (v2.1 cloud + venue management)
  *
  * Central state management for the entire application.
  * All persistent data now loads from / saves to the cloud backend
  * (Neon Postgres via Vercel serverless API), authenticated via Clerk.
+ *
+ * v2.1 changes:
+ *   - Venues now loaded from /api/venues instead of static JSON
+ *   - Added refreshVenues() for VenueManager to trigger map updates
+ *   - baseVenues state is mutable (loaded from API, refreshable)
+ *   - Closed venues filtered from map display (unless grade filter overrides)
  *
  * v2.0 changes:
  *   - Replaced IndexedDB (filmStorage.js) with apiClient cloud calls
@@ -16,11 +22,11 @@
 
 import React, { createContext, useContext, useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useAuth } from '@clerk/clerk-react'
-import venueData from '../data/venues.json'
 import { calculateGrades, DEFAULT_GRADE_SETTINGS } from '../utils/grades'
 import { parseComscoreFile } from '../utils/comscoreParser'
 import { matchVenues } from '../utils/venueMatcher'
 import * as api from '../utils/apiClient'
+import * as venueApi from '../utils/venueApi'
 
 const AppContext = createContext(null)
 
@@ -130,6 +136,32 @@ function parseCloudSettings(raw) {
 }
 
 
+/**
+ * Normalise a cloud venue record into the shape the map/matcher expects.
+ * Cloud venue has: { id, name, comscore_name, city, country, chain, category, lat, lng, status, ... }
+ * App expects:     { name, city, country, chain, category, lat, lng, address, placeId, comscore_name, status, ... }
+ */
+function normaliseCloudVenue(v) {
+  return {
+    id: v.id,
+    name: v.name,
+    comscore_name: v.comscore_name || v.name,
+    city: v.city,
+    country: v.country || 'United Kingdom',
+    chain: v.chain || '',
+    category: v.category || 'Independent',
+    lat: v.lat != null ? parseFloat(v.lat) : null,
+    lng: v.lng != null ? parseFloat(v.lng) : null,
+    address: v.address || '',
+    postcode: v.postcode || '',
+    placeId: v.place_id || '',
+    status: v.status || 'open',
+    source: v.source || 'seed',
+    notes: v.notes || '',
+  }
+}
+
+
 // ═══════════════════════════════════════════════════════════════
 // AppProvider
 // ═══════════════════════════════════════════════════════════════
@@ -143,8 +175,8 @@ export function AppProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
 
-  // ── Base venue data (geocoded venues — never changes) ──
-  const [baseVenues] = useState(venueData.venues)
+  // ── Base venue data (now loaded from cloud, refreshable) ──
+  const [baseVenues, setBaseVenues] = useState([])
 
   // ── Films (from cloud) ──
   const [importedFilms, setImportedFilms] = useState([])
@@ -239,9 +271,7 @@ export function AppProvider({ children }) {
       if (existing?.id) {
         await api.deleteOverride(existing.id, getTokenRef.current)
       } else {
-        // If we don't have the ID, save a fresh "assign" then delete
-        // Or we can just remove from local state. The next full load will reconcile.
-        // For safety, let's re-fetch overrides
+        // If we don't have the ID, re-fetch overrides to reconcile
         const { lookup } = await api.getOverrides(getTokenRef.current)
         setOverrides(lookup)
         return
@@ -318,11 +348,17 @@ export function AppProvider({ children }) {
         setPopulationModeLocal(settings.populationMode)
         setHeatmapIntensityLocal(settings.heatmapIntensity)
 
-        // 2. Load film list (lightweight — no revenue data)
+        // 2. Load venues from cloud (replaces static JSON)
+        const venueData = await venueApi.getVenues(getTokenRef.current)
+        if (cancelled) return
+        const cloudVenues = (venueData.venues || venueData || []).map(normaliseCloudVenue)
+        setBaseVenues(cloudVenues)
+
+        // 3. Load film list (lightweight — no revenue data)
         const filmList = await api.getFilms(getTokenRef.current)
         if (cancelled) return
 
-        // 3. Load full revenue data for each film (parallel)
+        // 4. Load full revenue data for each film (parallel)
         const fullFilms = await Promise.all(
           filmList.map(async (f) => {
             const { film, revenues } = await api.getFilm(f.id, getTokenRef.current)
@@ -333,7 +369,7 @@ export function AppProvider({ children }) {
 
         setImportedFilms(fullFilms)
 
-        // 4. Validate selected film still exists
+        // 5. Validate selected film still exists
         if (settings.selectedFilmId && settings.selectedFilmId !== 'all-films') {
           const exists = fullFilms.some(f => f.id === settings.selectedFilmId)
           if (!exists) {
@@ -341,7 +377,7 @@ export function AppProvider({ children }) {
           }
         }
 
-        // 5. Load match overrides
+        // 6. Load match overrides
         const { lookup } = await api.getOverrides(getTokenRef.current)
         if (cancelled) return
         setOverrides(lookup)
@@ -359,6 +395,18 @@ export function AppProvider({ children }) {
     loadCloudData()
     return () => { cancelled = true }
   }, [authLoaded])
+
+
+  // ── Refresh venues (called by VenueManager after add/edit/import) ──
+  const refreshVenues = useCallback(async () => {
+    try {
+      const venueData = await venueApi.getVenues(getTokenRef.current)
+      const cloudVenues = (venueData.venues || venueData || []).map(normaliseCloudVenue)
+      setBaseVenues(cloudVenues)
+    } catch (err) {
+      console.error('CineScope: Failed to refresh venues', err)
+    }
+  }, [])
 
 
   // ═══════════════════════════════════════════════════════════════
@@ -416,36 +464,36 @@ export function AppProvider({ children }) {
     }
   }, [selectedFilmId, importedFilms])
 
-  // Run venue matching (now takes overrides as parameter)
+  // ── Only open venues for matching (closed venues excluded from active grading) ──
+  const activeVenues = useMemo(() => {
+    return baseVenues.filter(v => (v.status || 'open') === 'open')
+  }, [baseVenues])
+
+  // Run venue matching (now against active venues, with comscore_name support)
   const matchResult = useMemo(() => {
     if (!selectedFilm) {
+      // No film: show all venues (including closed, marked as such)
       return {
         venues: baseVenues.map(v => ({ ...v, grade: null, revenue: null })),
         details: [],
       }
     }
 
+    // Match only against open venues
     const { matched, unmatched, matchDetails: details } = matchVenues(
-      selectedFilm.comscoreVenues, baseVenues, overrides
+      selectedFilm.comscoreVenues, activeVenues, overrides
     )
 
     // ── Deduplicate matched venues by base venue identity ──
-    // Multiple Comscore entries (from different films with slightly different
-    // naming, or residual multi-screen variants) can all match to the same
-    // base venue.  Merge them into ONE entry per physical cinema so we get
-    // one map pin and one table row per venue.
     const deduped = (() => {
       const venueMap = new Map()
       for (const v of matched) {
         const key = `${v.name}|${v.city}`.toLowerCase()
         if (!venueMap.has(key)) {
-          // First occurrence — clone and start tracking revenue entries
           venueMap.set(key, { ...v, _revenues: [v.revenue || 0] })
         } else {
-          // Duplicate — accumulate revenue
           const existing = venueMap.get(key)
           existing._revenues.push(v.revenue || 0)
-          // Preserve aggregation flag if any entry was aggregated
           if (v.wasAggregated) existing.wasAggregated = true
           if (v.screenEntries) {
             existing.screenEntries = (existing.screenEntries || 0) + v.screenEntries
@@ -455,9 +503,6 @@ export function AppProvider({ children }) {
 
       return Array.from(venueMap.values()).map(({ _revenues, ...venue }) => {
         if (_revenues.length > 1) {
-          // "All Films" mode: each entry is already an average for its Comscore key,
-          // so average again across the duplicate matches to get the true per-venue average.
-          // Single film mode: sum (handles any residual multi-screen leakage).
           venue.revenue = selectedFilmId === 'all-films'
             ? Math.round(_revenues.reduce((a, b) => a + b, 0) / _revenues.length)
             : Math.round(_revenues.reduce((a, b) => a + b, 0))
@@ -468,16 +513,22 @@ export function AppProvider({ children }) {
 
     const graded = calculateGrades(deduped, gradeSettings)
 
+    // Unmatched open venues get grade E
     const matchedKeys = new Set(graded.map(v => `${v.name}|${v.city}`.toLowerCase()))
-    const eGradeVenues = baseVenues
+    const eGradeVenues = activeVenues
       .filter(v => !matchedKeys.has(`${v.name}|${v.city}`.toLowerCase()))
       .map(v => ({ ...v, grade: 'E', revenue: null }))
 
+    // Closed venues: include with null grade + closed status (visible as grey markers)
+    const closedVenues = baseVenues
+      .filter(v => (v.status || 'open') === 'closed')
+      .map(v => ({ ...v, grade: null, revenue: null }))
+
     return {
-      venues: [...graded, ...eGradeVenues],
+      venues: [...graded, ...eGradeVenues, ...closedVenues],
       details,
     }
-  }, [baseVenues, selectedFilm, selectedFilmId, gradeSettings, overrides])
+  }, [baseVenues, activeVenues, selectedFilm, selectedFilmId, gradeSettings, overrides])
 
   const venues = matchResult.venues
   const matchDetails = matchResult.details
@@ -487,9 +538,9 @@ export function AppProvider({ children }) {
     const lookup = new Map()
 
     for (const film of importedFilms) {
-      const { matched } = matchVenues(film.comscoreVenues, baseVenues, overrides)
+      const { matched } = matchVenues(film.comscoreVenues, activeVenues, overrides)
 
-      // Deduplicate matched venues (same logic as main matchResult)
+      // Deduplicate matched venues
       const venueMap = new Map()
       for (const v of matched) {
         const key = `${v.name}|${v.city}`.toLowerCase()
@@ -534,7 +585,7 @@ export function AppProvider({ children }) {
     }
 
     return lookup
-  }, [importedFilms, baseVenues, overrides, gradeSettings])
+  }, [importedFilms, activeVenues, overrides, gradeSettings])
 
   // Filtered venues
   const filteredVenues = useMemo(() => {
@@ -545,7 +596,13 @@ export function AppProvider({ children }) {
     }
 
     if (selectedFilm && gradeFilter.length === 0) {
-      result = result.filter(v => v.grade !== 'E')
+      // Hide grade E venues and closed venues without revenue
+      result = result.filter(v => {
+        if (v.grade === 'E') return false
+        // Closed venues with no grade and no revenue: hide when a film is selected
+        if ((v.status || 'open') === 'closed' && v.grade == null && v.revenue == null) return false
+        return true
+      })
     }
 
     if (chainFilter) {
@@ -679,11 +736,8 @@ export function AppProvider({ children }) {
     }
   }, [])
 
-  // Rerun matching (called after override changes — now the `overrides` dependency handles it,
-  // but we keep this for backwards compatibility with MatchReviewPanel)
+  // Rerun matching (called after override changes)
   const rerunMatching = useCallback(() => {
-    // overrides state change already triggers useMemo re-run,
-    // but this provides an explicit signal for edge cases
     setOverrides(prev => ({ ...prev }))
   }, [])
 
@@ -701,6 +755,7 @@ export function AppProvider({ children }) {
     venues,
     baseVenues,
     filteredVenues,
+    refreshVenues,  // ← NEW: for VenueManager to trigger map updates
 
     // Film management
     importedFilms,

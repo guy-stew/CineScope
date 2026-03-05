@@ -14,6 +14,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Modal, Form, Button, Badge, Spinner, Table, InputGroup, OverlayTrigger, Tooltip } from 'react-bootstrap'
 import { useAuth } from '@clerk/clerk-react'
+import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import Icon from './Icon'
 import VenueForm from './VenueForm'
@@ -35,6 +36,7 @@ const CATEGORY_LABELS = {
 
 export default function VenueManager({ show, onHide }) {
   const { getToken } = useAuth()
+  const { refreshVenues } = useApp()
   const { theme } = useTheme()
 
   // ── View state ──
@@ -188,6 +190,8 @@ export default function VenueManager({ show, onHide }) {
           ? { ...v, status: v.status === 'open' ? 'closed' : 'open' }
           : v
       ))
+      // Refresh map venues
+      refreshVenues()
     } catch (err) {
       console.error('Failed to toggle status:', err)
     }
@@ -196,6 +200,8 @@ export default function VenueManager({ show, onHide }) {
   const handleFormSave = async (savedVenue) => {
     // Reload the full list to pick up the new/updated venue
     await loadVenues()
+    // Also refresh AppContext venues so the map updates
+    await refreshVenues()
     setView('list')
     setEditVenue(null)
     const action = savedVenue._isNew ? 'added' : 'updated'
@@ -210,6 +216,8 @@ export default function VenueManager({ show, onHide }) {
 
   const handleImportComplete = async (result) => {
     await loadVenues()
+    // Also refresh AppContext venues so the map updates
+    await refreshVenues()
     setView('list')
     const count = result?.imported ?? 0
     setSaveMessage(`${count} venue${count !== 1 ? 's' : ''} imported successfully`)

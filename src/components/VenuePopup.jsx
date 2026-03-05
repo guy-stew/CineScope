@@ -236,6 +236,17 @@ export default function VenuePopup({ venue }) {
       color: '#777',
       marginTop: 2,
     },
+    closedBadge: {
+      display: 'inline-block',
+      marginTop: 4,
+      padding: '1px 8px',
+      borderRadius: 3,
+      fontSize: '0.65rem',
+      fontWeight: 700,
+      letterSpacing: '0.05em',
+      background: '#e74c3c',
+      color: '#fff',
+    },
     gradeBadge: {
       width: 36,
       height: 36,
@@ -449,6 +460,9 @@ export default function VenuePopup({ venue }) {
             {venue.country === 'Ireland' ? ', Ireland' : ''}
             {' | '}{venue.chain} | {venue.category}
           </div>
+          {(venue.status || 'open') === 'closed' && (
+            <div style={s.closedBadge}>CLOSED</div>
+          )}
         </div>
         {grade && grade !== 'E' && selectedFilm && (
           <div style={s.gradeBadge}>{grade}</div>
