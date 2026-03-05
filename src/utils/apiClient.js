@@ -272,3 +272,110 @@ export async function listChainContacts(chain, getToken) {
   });
   return apiFetch(`/contacts?${params}`, {}, getToken);
 }
+
+// ═══════════════════════════════════════════════
+// VENUES
+// ═══════════════════════════════════════════════
+// Added in v2.2.0 for Venue Management feature.
+// Append this entire section to the bottom of
+// src/utils/apiClient.js (before the final line
+// if there is one, or just at the end).
+// ═══════════════════════════════════════════════
+
+/**
+ * Get all venues for the current user.
+ * Called on app startup to replace the static JSON fetch.
+ * @param {Function} getToken - Clerk getToken function
+ * @returns {Array} venues
+ */
+export async function getVenues(getToken) {
+  const data = await apiFetch('/venues', {}, getToken);
+  return data.venues;
+}
+
+/**
+ * Get a single venue by ID.
+ * @param {number} venueId
+ * @param {Function} getToken
+ * @returns {{ venue }}
+ */
+export async function getVenue(venueId, getToken) {
+  return apiFetch(`/venues?id=${venueId}`, {}, getToken);
+}
+
+/**
+ * Search venues by name, city, or chain.
+ * @param {string} searchTerm
+ * @param {Function} getToken
+ * @returns {Array} venues
+ */
+export async function searchVenues(searchTerm, getToken) {
+  const data = await apiFetch(`/venues?search=${encodeURIComponent(searchTerm)}`, {}, getToken);
+  return data.venues;
+}
+
+/**
+ * Add a single new venue.
+ * @param {Object} venueData - { name, comscoreName, city, country, chain?,
+ *                               category, lat?, lng?, address?, postcode?,
+ *                               placeId?, status?, notes? }
+ * @param {Function} getToken
+ * @returns {{ venue }} - the created venue record
+ */
+export async function addVenue(venueData, getToken) {
+  return apiFetch('/venues', {
+    method: 'POST',
+    body: JSON.stringify(venueData),
+  }, getToken);
+}
+
+/**
+ * Update an existing venue (partial update — only send changed fields).
+ * @param {number} venueId
+ * @param {Object} updates - only the fields that changed
+ * @param {Function} getToken
+ * @returns {{ venue }} - the updated venue record
+ */
+export async function updateVenue(venueId, updates, getToken) {
+  return apiFetch(`/venues?id=${venueId}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  }, getToken);
+}
+
+/**
+ * Toggle a venue's status between open and closed.
+ * @param {number} venueId
+ * @param {string} status - 'open' or 'closed'
+ * @param {Function} getToken
+ * @returns {{ venue }} - { id, name, city, status }
+ */
+export async function setVenueStatus(venueId, status, getToken) {
+  return apiFetch(`/venues?id=${venueId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  }, getToken);
+}
+
+/**
+ * Delete a venue.
+ * @param {number} venueId
+ * @param {Function} getToken
+ * @returns {{ deleted, message }}
+ */
+export async function deleteVenue(venueId, getToken) {
+  return apiFetch(`/venues?id=${venueId}`, { method: 'DELETE' }, getToken);
+}
+
+/**
+ * Bulk import venues from a spreadsheet.
+ * @param {Array} venues - Array of venue objects from the parsed spreadsheet
+ * @param {Function} getToken
+ * @returns {{ inserted, total, duplicates?, validationErrors?, message }}
+ */
+export async function importVenues(venues, getToken) {
+  return apiFetch('/venues?bulk=true', {
+    method: 'POST',
+    body: JSON.stringify({ venues }),
+  }, getToken);
+}
