@@ -127,6 +127,7 @@ export default function AnalyticsPanel() {
           style={{ background: theme.surfaceAlt, borderColor: theme.border }}
         >
           <strong style={{ color: theme.text, fontSize: '0.9rem' }}>Venues</strong>
+          <Badge bg="secondary">{displayVenues.length}</Badge>
         </Card.Header>
         <div className="table-responsive" style={{ maxHeight: 'calc(100vh - 380px)' }}>
           <Table

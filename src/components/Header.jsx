@@ -312,7 +312,6 @@ export default function Header() {
           </OverlayTrigger>
 
           {/* Venue count */}
-          <Badge bg="info">{filteredVenues.length} venues</Badge>
         </Nav>
       </Navbar.Collapse>
     </Navbar>

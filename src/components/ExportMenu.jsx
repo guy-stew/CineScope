@@ -161,7 +161,7 @@ export default function ExportMenu() {
     <>
       <Dropdown align="end">
         <Dropdown.Toggle
-          variant={theme === 'dark' ? 'outline-light' : 'outline-secondary'}
+          variant="outline-light"
           size="sm"
           className="d-flex align-items-center gap-1"
         >
