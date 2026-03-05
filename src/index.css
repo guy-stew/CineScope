@@ -190,6 +190,12 @@ body {
   color: #2E75B6 !important;
 }
 
+/* Dark mode: search input placeholder needs visible contrast */
+.analytics-panel .form-control::placeholder {
+  color: var(--cs-text-muted);
+  opacity: 0.8;
+}
+
 /* ── Scrollbar ───────────────────────────────────────────── */
 
 .analytics-col::-webkit-scrollbar {

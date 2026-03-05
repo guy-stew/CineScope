@@ -50,8 +50,8 @@ export default function GradeSummary() {
               className="grade-card flex-fill text-center"
               style={{
                 borderTop: `4px solid ${info.color}`,
-                backgroundColor: isActive ? info.bgColor : theme.cardBg,
-                border: isActive ? 'none' : `1px solid ${theme.border}`,
+                backgroundColor: isActive ? info.color : theme.cardBg,
+                border: isActive ? `2px solid ${info.color}` : `1px solid ${theme.border}`,
                 borderTopColor: info.color,
                 cursor: 'pointer',
                 borderRadius: 6,
@@ -61,9 +61,9 @@ export default function GradeSummary() {
               onClick={() => handleClick(grade)}
               title={info.description}
             >
-              <div style={{ fontWeight: 800, fontSize: '0.85rem', color: theme.textMuted }}>{grade}</div>
-              <div style={{ fontWeight: 700, fontSize: '1.3rem', color: theme.text, lineHeight: 1.2 }}>{count}</div>
-              <div style={{ fontSize: '0.7rem', color: theme.textMuted }}>{pct}%</div>
+              <div style={{ fontWeight: 800, fontSize: '0.85rem', color: isActive ? '#fff' : theme.textMuted }}>{grade}</div>
+              <div style={{ fontWeight: 700, fontSize: '1.3rem', color: isActive ? '#fff' : theme.text, lineHeight: 1.2 }}>{count}</div>
+              <div style={{ fontSize: '0.7rem', color: isActive ? 'rgba(255,255,255,0.85)' : theme.textMuted }}>{pct}%</div>
             </div>
           )
         })}

@@ -401,11 +401,14 @@ export default function SettingsPanel() {
                   <div
                     key={grade}
                     className="flex-fill text-center py-1 rounded"
-                    style={{ backgroundColor: GRADES[grade].bgColor }}
+                    style={{
+                      backgroundColor: GRADES[grade].color,
+                      opacity: 0.9,
+                    }}
                   >
-                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: GRADES[grade].color }}>{grade}</div>
-                    <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#333' }}>{previewCounts[grade]}</div>
-                    <div style={{ fontSize: '0.7rem', color: '#666' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: '#fff' }}>{grade}</div>
+                    <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#fff' }}>{previewCounts[grade]}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.8)' }}>
                       {revenues.length > 0 ? Math.round((previewCounts[grade] / revenues.length) * 100) : 0}%
                     </div>
                   </div>
