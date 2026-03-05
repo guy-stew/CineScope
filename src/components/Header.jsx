@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import ExportMenu from './ExportMenu'
 import Icon from './Icon'
+import VenueManager from './VenueManager'
 
 export default function Header() {
   const {
@@ -26,6 +27,9 @@ export default function Header() {
   const { themeName, toggleTheme } = useTheme()
   const fileInputRef = useRef(null)
   const [localIntensity, setLocalIntensity] = useState(heatmapIntensity)
+
+  // ── Venue Manager state (local to Header) ──
+  const [showVenueManager, setShowVenueManager] = useState(false)
 
   const handleFileClick = () => fileInputRef.current?.click()
 
@@ -61,260 +65,284 @@ export default function Header() {
   }
 
   return (
-    <Navbar variant="dark" expand="lg" className="px-3 py-2 app-header">
-      {/* Brand */}
-      <Navbar.Brand className="d-flex align-items-center me-3">
-        <span className="me-2" style={{ fontSize: '1.3rem' }}><Icon name="movie" size={24} /></span>
-        <span className="fw-bold">CineScope</span>
-        <Badge bg="secondary" className="ms-2 fw-normal" style={{ fontSize: '0.6rem' }}>v1.6</Badge>
-      </Navbar.Brand>
+    <>
+      <Navbar variant="dark" expand="lg" className="px-3 py-2 app-header">
+        {/* Brand */}
+        <Navbar.Brand className="d-flex align-items-center me-3">
+          <span className="me-2" style={{ fontSize: '1.3rem' }}><Icon name="movie" size={24} /></span>
+          <span className="fw-bold">CineScope</span>
+          <Badge bg="secondary" className="ms-2 fw-normal" style={{ fontSize: '0.6rem' }}>v1.6</Badge>
+        </Navbar.Brand>
 
-      <Navbar.Toggle aria-controls="header-nav" />
-      <Navbar.Collapse id="header-nav">
-        <Nav className="me-auto d-flex align-items-center gap-2 flex-wrap">
+        <Navbar.Toggle aria-controls="header-nav" />
+        <Navbar.Collapse id="header-nav">
+          <Nav className="me-auto d-flex align-items-center gap-2 flex-wrap">
 
-          {/* Film selector with search + year grouping */}
-          <FilmSelector
-            importedFilms={importedFilms}
-            selectedFilmId={selectedFilmId}
-            onSelect={handleFilmSelect}
-            onRemoveFilm={removeFilm}
-            onClearAll={clearAllFilmsData}
-          />
+            {/* Film selector with search + year grouping */}
+            <FilmSelector
+              importedFilms={importedFilms}
+              selectedFilmId={selectedFilmId}
+              onSelect={handleFilmSelect}
+              onRemoveFilm={removeFilm}
+              onClearAll={clearAllFilmsData}
+            />
 
-          {/* Chain filter */}
-          <Form.Select
-            size="sm"
-            value={chainFilter}
-            onChange={e => setChainFilter(e.target.value)}
-            className="header-select"
-            style={{ width: 160 }}
-          >
-            <option value="">All Chains</option>
-            {availableChains.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </Form.Select>
-
-          {/* Category filter */}
-          <Form.Select
-            size="sm"
-            value={categoryFilter}
-            onChange={e => setCategoryFilter(e.target.value)}
-            className="header-select"
-            style={{ width: 150 }}
-          >
-            <option value="">All Categories</option>
-            {availableCategories.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </Form.Select>
-
-          {/* Grade quick-filters — individual toggle buttons, synced with sidebar */}
-          {selectedFilm && (
-            <div className="d-flex gap-1 ms-1">
-              {['A', 'B', 'C', 'D'].map(grade => {
-                const isActive = gradeFilter.includes(grade)
-                const gradeInfo = {
-                  A: { color: '#27ae60', variant: 'success' },
-                  B: { color: '#f1c40f', variant: 'warning' },
-                  C: { color: '#e67e22', variant: 'warning' },
-                  D: { color: '#e74c3c', variant: 'danger' },
-                }[grade]
-
-                return (
-                  <Button
-                    key={grade}
-                    size="sm"
-                    style={isActive ? {
-                      backgroundColor: gradeInfo.color,
-                      borderColor: gradeInfo.color,
-                      color: '#fff',
-                    } : {
-                      backgroundColor: 'transparent',
-                      borderColor: gradeInfo.color,
-                      color: gradeInfo.color,
-                    }}
-                    onClick={() => toggleGradeFilter(grade)}
-                  >
-                    {grade}
-                  </Button>
-                )
-              })}
-            </div>
-          )}
-        </Nav>
-
-        <Nav className="d-flex align-items-center gap-2">
-          {/* Import status */}
-          {importStatus?.loading && (
-            <Spinner animation="border" size="sm" variant="light" />
-          )}
-          {importStatus?.success && (
-            <Badge bg="success" className="text-truncate" style={{ maxWidth: 200 }}>
-              <Icon name="check_circle" size={14} className="me-1" /> {importStatus.success}
-            </Badge>
-          )}
-          {importStatus?.error && (
-            <Badge bg="danger" className="text-truncate" style={{ maxWidth: 200 }}>
-              <Icon name="error" size={14} className="me-1" /> {importStatus.error}
-            </Badge>
-          )}
-
-          {/* File upload */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept=".csv,.xls,.xlsx"
-            className="d-none"
-          />
-          <Button size="sm" variant="outline-light" onClick={handleFileClick}>
-            <Icon name="upload_file" size={16} className="me-1" /> Import
-          </Button>
-
-          {/* Population layer toggle */}
-          <Dropdown>
-            <OverlayTrigger
-              placement="bottom"
-              overlay={<Tooltip>Population density layer</Tooltip>}
+            {/* Chain filter */}
+            <Form.Select
+              size="sm"
+              value={chainFilter}
+              onChange={e => setChainFilter(e.target.value)}
+              className="header-select"
+              style={{ width: 160 }}
             >
-              <Dropdown.Toggle
-                size="sm"
-                variant={populationMode !== 'off' ? 'info' : 'outline-light'}
-                id="pop-toggle"
-                className="d-flex align-items-center gap-1"
-              >
-                <Icon name="groups" size={16} />
-                <span style={{ fontSize: '0.78rem' }}>
-                  {populationMode === 'off' ? 'Population' : populationMode === 'heatmap' ? 'Heat Map' : 'Area Zones'}
-                </span>
-              </Dropdown.Toggle>
-            </OverlayTrigger>
-            <Dropdown.Menu style={{ minWidth: 220, fontSize: '0.85rem' }}>
-              <Dropdown.Header style={{ fontSize: '0.72rem', fontWeight: 700 }}>
-                Population Overlay
-              </Dropdown.Header>
-              {[
-                { key: 'off', label: 'Off', icon: 'visibility_off' },
-                { key: 'heatmap', label: 'Heat Map', icon: 'local_fire_department' },
-                { key: 'zones', label: 'Area Zones', icon: 'map' },
-              ].map(({ key, label, icon }) => (
-                <Dropdown.Item
-                  key={key}
-                  active={populationMode === key}
-                  onClick={() => updatePopulationMode(key)}
-                >
-                  <Icon name={icon} size={16} className="me-2" />
-                  {label}
-                </Dropdown.Item>
+              <option value="">All Chains</option>
+              {availableChains.map(c => (
+                <option key={c} value={c}>{c}</option>
               ))}
-              {(populationMode === 'heatmap' || populationMode === 'zones') && (
-                <>
-                  <Dropdown.Divider />
-                  <div className="px-3 py-1">
-                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#888', marginBottom: 4 }}>
-                      Intensity
+            </Form.Select>
+
+            {/* Category filter */}
+            <Form.Select
+              size="sm"
+              value={categoryFilter}
+              onChange={e => setCategoryFilter(e.target.value)}
+              className="header-select"
+              style={{ width: 150 }}
+            >
+              <option value="">All Categories</option>
+              {availableCategories.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </Form.Select>
+
+            {/* Grade quick-filters — individual toggle buttons, synced with sidebar */}
+            {selectedFilm && (
+              <div className="d-flex gap-1 ms-1">
+                {['A', 'B', 'C', 'D'].map(grade => {
+                  const isActive = gradeFilter.includes(grade)
+                  const gradeInfo = {
+                    A: { color: '#27ae60', variant: 'success' },
+                    B: { color: '#f1c40f', variant: 'warning' },
+                    C: { color: '#e67e22', variant: 'warning' },
+                    D: { color: '#e74c3c', variant: 'danger' },
+                  }[grade]
+
+                  return (
+                    <Button
+                      key={grade}
+                      size="sm"
+                      style={isActive ? {
+                        backgroundColor: gradeInfo.color,
+                        borderColor: gradeInfo.color,
+                        color: '#fff',
+                      } : {
+                        backgroundColor: 'transparent',
+                        borderColor: gradeInfo.color,
+                        color: gradeInfo.color,
+                      }}
+                      onClick={() => toggleGradeFilter(grade)}
+                    >
+                      {grade}
+                    </Button>
+                  )
+                })}
+              </div>
+            )}
+          </Nav>
+
+          <Nav className="d-flex align-items-center gap-2">
+            {/* Import status */}
+            {importStatus?.loading && (
+              <Spinner animation="border" size="sm" variant="light" />
+            )}
+            {importStatus?.success && (
+              <Badge bg="success" className="text-truncate" style={{ maxWidth: 200 }}>
+                <Icon name="check_circle" size={14} className="me-1" /> {importStatus.success}
+              </Badge>
+            )}
+            {importStatus?.error && (
+              <Badge bg="danger" className="text-truncate" style={{ maxWidth: 200 }}>
+                <Icon name="error" size={14} className="me-1" /> {importStatus.error}
+              </Badge>
+            )}
+
+            {/* File upload */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept=".csv,.xls,.xlsx"
+              className="d-none"
+            />
+            <Button size="sm" variant="outline-light" onClick={handleFileClick}>
+              <Icon name="upload_file" size={16} className="me-1" /> Import
+            </Button>
+
+            {/* Population layer toggle */}
+            <Dropdown>
+              <OverlayTrigger
+                placement="bottom"
+                overlay={<Tooltip>Population density layer</Tooltip>}
+              >
+                <Dropdown.Toggle
+                  size="sm"
+                  variant={populationMode !== 'off' ? 'info' : 'outline-light'}
+                  id="pop-toggle"
+                  className="d-flex align-items-center gap-1"
+                >
+                  <Icon name="groups" size={16} />
+                  <span style={{ fontSize: '0.78rem' }}>
+                    {populationMode === 'off' ? 'Population' : populationMode === 'heatmap' ? 'Heat Map' : 'Area Zones'}
+                  </span>
+                </Dropdown.Toggle>
+              </OverlayTrigger>
+              <Dropdown.Menu style={{ minWidth: 220, fontSize: '0.85rem' }}>
+                <Dropdown.Header style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                  Population Overlay
+                </Dropdown.Header>
+                {[
+                  { key: 'off', label: 'Off', icon: 'visibility_off' },
+                  { key: 'heatmap', label: 'Heat Map', icon: 'local_fire_department' },
+                  { key: 'zones', label: 'Area Zones', icon: 'map' },
+                ].map(({ key, label, icon }) => (
+                  <Dropdown.Item
+                    key={key}
+                    active={populationMode === key}
+                    onClick={() => updatePopulationMode(key)}
+                  >
+                    <Icon name={icon} size={16} className="me-2" />
+                    {label}
+                  </Dropdown.Item>
+                ))}
+                {(populationMode === 'heatmap' || populationMode === 'zones') && (
+                  <>
+                    <Dropdown.Divider />
+                    <div className="px-3 py-1">
+                      <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#888', marginBottom: 4 }}>
+                        Intensity
+                      </div>
+                      <Form.Range
+                        min={0.1}
+                        max={1.0}
+                        step={0.05}
+                        value={localIntensity}
+                        onChange={e => setLocalIntensity(parseFloat(e.target.value))}
+                        onPointerUp={e => updateHeatmapIntensity(parseFloat(e.target.value))}
+                        onTouchEnd={e => updateHeatmapIntensity(parseFloat(e.target.value))}
+                      />
                     </div>
-                    <Form.Range
-                      min={0.1}
-                      max={1.0}
-                      step={0.05}
-                      value={localIntensity}
-                      onChange={e => setLocalIntensity(parseFloat(e.target.value))}
-                      onPointerUp={e => updateHeatmapIntensity(parseFloat(e.target.value))}
-                      onTouchEnd={e => updateHeatmapIntensity(parseFloat(e.target.value))}
-                    />
-                  </div>
-                </>
-              )}
-            </Dropdown.Menu>
-          </Dropdown>
+                  </>
+                )}
+              </Dropdown.Menu>
+            </Dropdown>
 
-          {/* Export menu */}
-          <ExportMenu />
+            {/* Export menu */}
+            <ExportMenu />
 
-          {/* Trend analysis button — only when 2+ films imported */}
-          {importedFilms.length >= 2 && (
+            {/* Trend analysis button — only when 2+ films imported */}
+            {importedFilms.length >= 2 && (
+              <OverlayTrigger
+                placement="bottom"
+                overlay={<Tooltip>Trend analysis across {importedFilms.length} films</Tooltip>}
+              >
+                <Button
+                  size="sm"
+                  variant="outline-light"
+                  onClick={() => setShowTrends(true)}
+                  className="d-flex align-items-center gap-1"
+                >
+                  <Icon name="insights" size={16} />
+                  <span style={{ fontSize: '0.78rem' }}>Trends</span>
+                </Button>
+              </OverlayTrigger>
+            )}
+
+            {/* Match review button — only when film loaded */}
+            {selectedFilm && matchDetails.length > 0 && (() => {
+              const reviewCount = matchDetails.filter(m => m.confidence.key === 'medium' || m.confidence.key === 'low').length
+              return (
+                <OverlayTrigger
+                  placement="bottom"
+                  overlay={<Tooltip>Review venue matching ({reviewCount > 0 ? `${reviewCount} need attention` : 'all good'})</Tooltip>}
+                >
+                  <Button
+                    size="sm"
+                    variant={reviewCount > 0 ? 'outline-warning' : 'outline-light'}
+                    onClick={() => setShowMatchReview(true)}
+                    className="position-relative"
+                  >
+                    <Icon name="link" size={18} />
+                    {reviewCount > 0 && (
+                      <Badge
+                        bg="danger"
+                        pill
+                        className="position-absolute"
+                        style={{ top: -4, right: -6, fontSize: '0.6rem' }}
+                      >
+                        {reviewCount}
+                      </Badge>
+                    )}
+                  </Button>
+                </OverlayTrigger>
+              )
+            })()}
+
+            {/* ▼▼▼ NEW: Venue Manager button ▼▼▼ */}
             <OverlayTrigger
               placement="bottom"
-              overlay={<Tooltip>Trend analysis across {importedFilms.length} films</Tooltip>}
+              overlay={<Tooltip>Manage venues (add, edit, import)</Tooltip>}
             >
               <Button
                 size="sm"
                 variant="outline-light"
-                onClick={() => setShowTrends(true)}
-                className="d-flex align-items-center gap-1"
+                onClick={() => setShowVenueManager(true)}
               >
-                <Icon name="insights" size={16} />
-                <span style={{ fontSize: '0.78rem' }}>Trends</span>
+                <Icon name="storefront" size={18} />
               </Button>
             </OverlayTrigger>
-          )}
+            {/* ▲▲▲ END NEW ▲▲▲ */}
 
-          {/* Match review button — only when film loaded */}
-          {selectedFilm && matchDetails.length > 0 && (() => {
-            const reviewCount = matchDetails.filter(m => m.confidence.key === 'medium' || m.confidence.key === 'low').length
-            return (
-              <OverlayTrigger
-                placement="bottom"
-                overlay={<Tooltip>Review venue matching ({reviewCount > 0 ? `${reviewCount} need attention` : 'all good'})</Tooltip>}
+            {/* Settings */}
+            <OverlayTrigger
+              placement="bottom"
+              overlay={<Tooltip>Grade boundary settings</Tooltip>}
+            >
+              <Button
+                size="sm"
+                variant="outline-light"
+                onClick={() => setShowSettings(true)}
               >
-                <Button
-                  size="sm"
-                  variant={reviewCount > 0 ? 'outline-warning' : 'outline-light'}
-                  onClick={() => setShowMatchReview(true)}
-                  className="position-relative"
-                >
-                  <Icon name="link" size={18} />
-                  {reviewCount > 0 && (
-                    <Badge
-                      bg="danger"
-                      pill
-                      className="position-absolute"
-                      style={{ top: -4, right: -6, fontSize: '0.6rem' }}
-                    >
-                      {reviewCount}
-                    </Badge>
-                  )}
-                </Button>
-              </OverlayTrigger>
-            )
-          })()}
+                <Icon name="settings" size={18} />
+              </Button>
+            </OverlayTrigger>
 
-          {/* Settings */}
-          <OverlayTrigger
-            placement="bottom"
-            overlay={<Tooltip>Grade boundary settings</Tooltip>}
-          >
-            <Button
-              size="sm"
-              variant="outline-light"
-              onClick={() => setShowSettings(true)}
+            {/* Theme toggle */}
+            <OverlayTrigger
+              placement="bottom"
+              overlay={<Tooltip>Switch to {themeName === 'light' ? 'dark' : 'light'} theme</Tooltip>}
             >
-              <Icon name="settings" size={18} />
-            </Button>
-          </OverlayTrigger>
+              <Button
+                size="sm"
+                variant="outline-light"
+                onClick={toggleTheme}
+                style={{ minWidth: 36 }}
+              >
+                {themeName === 'light' ? <Icon name="dark_mode" size={18} /> : <Icon name="light_mode" size={18} />}
+              </Button>
+            </OverlayTrigger>
 
-          {/* Theme toggle */}
-          <OverlayTrigger
-            placement="bottom"
-            overlay={<Tooltip>Switch to {themeName === 'light' ? 'dark' : 'light'} theme</Tooltip>}
-          >
-            <Button
-              size="sm"
-              variant="outline-light"
-              onClick={toggleTheme}
-              style={{ minWidth: 36 }}
-            >
-              {themeName === 'light' ? <Icon name="dark_mode" size={18} /> : <Icon name="light_mode" size={18} />}
-            </Button>
-          </OverlayTrigger>
+            {/* Venue count */}
+          </Nav>
+        </Navbar.Collapse>
+      </Navbar>
 
-          {/* Venue count */}
-        </Nav>
-      </Navbar.Collapse>
-    </Navbar>
+      {/* ▼▼▼ NEW: Venue Manager modal (rendered outside Navbar) ▼▼▼ */}
+      <VenueManager
+        show={showVenueManager}
+        onHide={() => setShowVenueManager(false)}
+      />
+      {/* ▲▲▲ END NEW ▲▲▲ */}
+    </>
   )
 }
 
