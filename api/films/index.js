@@ -26,7 +26,7 @@ export default async function handler(req, res) {
       try {
         const filmRows = await sql`
           SELECT id, title, year, date_from, date_to,
-                 venue_count, total_revenue, imported_at
+                 venue_count, total_revenue, catalogue_id, imported_at
           FROM films
           WHERE id = ${id} AND user_id = ${user.id}
         `;
@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     try {
       const films = await sql`
         SELECT id, title, year, date_from, date_to,
-               venue_count, total_revenue, imported_at
+               venue_count, total_revenue, catalogue_id, imported_at
         FROM films
         WHERE user_id = ${user.id}
         ORDER BY imported_at DESC
@@ -72,7 +72,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const { title, year, dateFrom, dateTo, revenues } = req.body;
+      const { title, year, dateFrom, dateTo, revenues, catalogueId } = req.body;
 
       if (!title || !revenues || !Array.isArray(revenues)) {
         return res.status(400).json({ error: 'Missing required fields: title, revenues[]' });
@@ -82,10 +82,10 @@ export default async function handler(req, res) {
       const totalRevenue = revenues.reduce((sum, r) => sum + (r.revenue || 0), 0);
 
       const filmRows = await sql`
-        INSERT INTO films (user_id, title, year, date_from, date_to, venue_count, total_revenue)
+        INSERT INTO films (user_id, title, year, date_from, date_to, venue_count, total_revenue, catalogue_id)
         VALUES (${user.id}, ${title}, ${year || null}, ${dateFrom || null}, ${dateTo || null},
-                ${venueCount}, ${totalRevenue})
-        RETURNING id, title, year, date_from, date_to, venue_count, total_revenue, imported_at
+                ${venueCount}, ${totalRevenue}, ${catalogueId || null})
+        RETURNING id, title, year, date_from, date_to, venue_count, total_revenue, catalogue_id, imported_at
       `;
 
       const film = filmRows[0];

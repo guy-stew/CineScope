@@ -79,7 +79,7 @@ function cloudFilmToApp(cloudFilm, cloudRevenues) {
 /**
  * Transform app-format parsed Comscore data into the shape POST /api/films expects.
  */
-function appFilmToCloud(parsedResult, confirmedTitle) {
+function appFilmToCloud(parsedResult, confirmedTitle, catalogueId) {
   const { filmInfo, venues: comscoreVenues, stats } = parsedResult
 
   // Try to extract dateFrom/dateTo from dateRange string
@@ -98,6 +98,7 @@ function appFilmToCloud(parsedResult, confirmedTitle) {
     year: filmInfo.year || null,
     dateFrom,
     dateTo,
+    catalogueId: catalogueId || null,
     revenues: comscoreVenues.map(v => ({
       comscoreTheater: v.theater || '',
       comscoreCity: v.city || '',
@@ -692,14 +693,14 @@ export function AppProvider({ children }) {
   }, [])
 
   // Confirm film name and finalize import → save to cloud
-  const confirmImport = useCallback(async (confirmedTitle) => {
+  const confirmImport = useCallback(async (confirmedTitle, catalogueId) => {
     if (!pendingImport) return
 
     const { result, fileName } = pendingImport
 
     try {
-      // Transform to cloud format and save
-      const cloudData = appFilmToCloud(result, confirmedTitle)
+      // Transform to cloud format and save (now includes catalogueId)
+      const cloudData = appFilmToCloud(result, confirmedTitle, catalogueId)
       const { film: savedFilm } = await api.saveFilm(cloudData, getTokenRef.current)
 
       // Now load the full film data back (to get the server-generated ID and clean data)
