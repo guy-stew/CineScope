@@ -379,3 +379,165 @@ export async function importVenues(venues, getToken) {
     body: JSON.stringify({ venues }),
   }, getToken);
 }
+// ============================================================
+// apiClient.js — NEW METHODS TO ADD
+// Add these methods to the existing apiClient.js file
+// (inside the createApiClient function, alongside getFilms, etc.)
+// ============================================================
+
+  // ─── Film Catalogue ───────────────────────────────────────
+
+  /**
+   * Get all catalogue entries (lightweight, no tmdb_data blob)
+   * Returns { catalogue: [...] } with import_count and total_uk_revenue
+   */
+  async getCatalogue() {
+    const res = await this._fetch('/api/catalogue');
+    if (!res.ok) throw new Error('Failed to load catalogue');
+    return res.json();
+  },
+
+  /**
+   * Get a single catalogue entry with full details + linked imports
+   */
+  async getCatalogueEntry(id) {
+    const res = await this._fetch(`/api/catalogue?id=${id}`);
+    if (!res.ok) throw new Error('Failed to load catalogue entry');
+    return res.json();
+  },
+
+  /**
+   * Create a new catalogue entry
+   * @param {Object} entry - { title, year, status, release_date, synopsis, genres,
+   *   tmdb_id, tmdb_data, poster_path, backdrop_path, certification, runtime,
+   *   tmdb_budget, tmdb_revenue, tmdb_popularity, tmdb_vote_average,
+   *   distribution_cost, production_cost, notes }
+   * @returns The created entry with id
+   */
+  async createCatalogueEntry(entry) {
+    const res = await this._fetch('/api/catalogue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
+    });
+    if (res.status === 409) {
+      const data = await res.json();
+      throw new Error(`DUPLICATE:${data.existing_id}:${data.existing_title}`);
+    }
+    if (!res.ok) throw new Error('Failed to create catalogue entry');
+    return res.json();
+  },
+
+  /**
+   * Update an existing catalogue entry (partial update — only send changed fields)
+   * @param {string} id - Catalogue entry UUID
+   * @param {Object} updates - Only the fields being changed
+   */
+  async updateCatalogueEntry(id, updates) {
+    const res = await this._fetch(`/api/catalogue?id=${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw new Error('Failed to update catalogue entry');
+    return res.json();
+  },
+
+  /**
+   * Delete a catalogue entry (Comscore imports are preserved, just unlinked)
+   */
+  async deleteCatalogueEntry(id) {
+    const res = await this._fetch(`/api/catalogue?id=${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete catalogue entry');
+    return res.json();
+  },
+
+  // ─── TMDB Search & Details ────────────────────────────────
+
+  /**
+   * Search TMDB for movies matching a query string
+   * @param {string} query - Search text (e.g. "Importance of Being Earnest")
+   * @returns { results: [...], total_results: number }
+   */
+  async searchTMDB(query) {
+    const res = await this._fetch(`/api/tmdb?action=search&query=${encodeURIComponent(query)}`);
+    if (!res.ok) throw new Error('TMDB search failed');
+    return res.json();
+  },
+
+  /**
+   * Get full movie details from TMDB by ID
+   * Includes cast, crew, keywords, UK certification, budget, revenue, etc.
+   * @param {number} tmdbId - TMDB movie ID (e.g. 1352026)
+   * @returns Full structured movie data
+   */
+  async getTMDBDetails(tmdbId) {
+    const res = await this._fetch(`/api/tmdb?action=details&id=${tmdbId}`);
+    if (!res.ok) throw new Error('TMDB details fetch failed');
+    return res.json();
+  },
+
+  /**
+   * Convenience: Search TMDB, get details, and create a catalogue entry in one go
+   * Used by the "Add Film" flow when user selects a TMDB result
+   * @param {number} tmdbId - The TMDB movie ID from search results
+   * @param {Object} overrides - Any user-entered overrides (status, costs, notes)
+   * @returns The created catalogue entry
+   */
+  async addFilmFromTMDB(tmdbId, overrides = {}) {
+    // 1. Fetch full details from TMDB
+    const details = await this.getTMDBDetails(tmdbId);
+
+    // 2. Build the catalogue entry from TMDB data + user overrides
+    const entry = {
+      title: details.title,
+      year: details.year,
+      status: overrides.status || (details.status === 'Released' ? 'released' : 'pre_release'),
+      release_date: details.release_date,
+      synopsis: details.overview,
+      genres: details.genres.join(', '),
+      tmdb_id: details.tmdb_id,
+      tmdb_data: details, // Store the full response for future use
+      poster_path: details.poster_path,
+      backdrop_path: details.backdrop_path,
+      certification: details.certification,
+      runtime: details.runtime,
+      tmdb_budget: details.budget,
+      tmdb_revenue: details.revenue,
+      tmdb_popularity: details.popularity,
+      tmdb_vote_average: details.vote_average,
+      distribution_cost: overrides.distribution_cost || null,
+      production_cost: overrides.production_cost || null,
+      notes: overrides.notes || null,
+    };
+
+    // 3. Create the catalogue entry
+    return this.createCatalogueEntry(entry);
+  },
+
+
+// ============================================================
+// TMDB IMAGE URL HELPER (standalone utility — add to the file
+// or export as a named export)
+// ============================================================
+
+/**
+ * Build a full TMDB image URL from a poster/backdrop path
+ * @param {string} path - e.g. "/abc123.jpg"
+ * @param {string} size - "w92" | "w154" | "w185" | "w342" | "w500" | "w780" | "original"
+ * @returns Full URL or null if no path
+ */
+export function tmdbImageUrl(path, size = 'w500') {
+  if (!path) return null;
+  return `https://image.tmdb.org/t/p/${size}${path}`;
+}
+
+// Common sizes:
+//   w92    — tiny thumbnail (grid/list)
+//   w185   — small card
+//   w342   — medium card (good for catalogue grid)
+//   w500   — large card / detail view
+//   w780   — hero banner (backdrop)
+//   original — full resolution
