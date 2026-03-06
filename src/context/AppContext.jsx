@@ -241,22 +241,39 @@ export function AppProvider({ children }) {
   // ── Match overrides (from cloud, kept in state) ──
   const [overrides, setOverrides] = useState({})
 
-  // Save an override to cloud + update local state
+  // Save an override to cloud + update local state (optimistic)
   const cloudSaveOverride = useCallback(async (data) => {
+    const key = `${(data.comscoreTheater || '').toLowerCase()}|${(data.comscoreCity || '').toLowerCase()}`
+    const newEntry = {
+      venueName: data.venueName || null,
+      venueCity: data.venueCity || null,
+      action: data.action,
+    }
+
+    // Optimistic: update local state immediately so UI responds instantly
+    setOverrides(prev => ({
+      ...prev,
+      [key]: newEntry,
+    }))
+
+    // Persist to cloud in background
     try {
-      await api.saveOverride(data, getTokenRef.current)
-      // Update local override lookup
-      const key = `${(data.comscoreTheater || '').toLowerCase()}|${(data.comscoreCity || '').toLowerCase()}`
-      setOverrides(prev => ({
-        ...prev,
-        [key]: {
-          venueName: data.venueName || null,
-          venueCity: data.venueCity || null,
-          action: data.action,
-        },
-      }))
+      const result = await api.saveOverride(data, getTokenRef.current)
+      // Update the local entry with the server-generated ID (needed for delete/undo)
+      if (result?.override?.id) {
+        setOverrides(prev => ({
+          ...prev,
+          [key]: { ...prev[key], id: result.override.id },
+        }))
+      }
     } catch (err) {
       console.error('CineScope: Could not save override to cloud', err)
+      // Rollback optimistic update on failure
+      setOverrides(prev => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
       throw err
     }
   }, [])

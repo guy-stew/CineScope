@@ -29,7 +29,8 @@ export default async function handler(req, res) {
       // to match the current localStorage format
       const lookup = {};
       for (const row of overrides) {
-        const key = `${row.comscore_theater}|${row.comscore_city}`;
+        // Key MUST be lowercase to match makeOverrideKey() in venueMatcher.js
+        const key = `${(row.comscore_theater || '').toLowerCase()}|${(row.comscore_city || '').toLowerCase()}`;
         lookup[key] = {
           id: row.id,
           venueName: row.venue_name,
