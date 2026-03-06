@@ -255,58 +255,38 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
       .slice(0, 15) // Limit results for performance
   }, [search, baseVenues])
 
-  const handleAssign = async (assignVenue) => {
-    setSaving(true)
-    try {
-      await cloudSaveOverride({
-        comscoreTheater: comscore.theater,
-        comscoreCity: comscore.city,
-        action: 'assign',
-        venueName: assignVenue.name,
-        venueCity: assignVenue.city || '',
-      })
-      setShowDropdown(false)
-      setSearch('')
-    } catch (err) {
-      console.error('Failed to save override:', err)
-    } finally {
-      setSaving(false)
-    }
+  const handleAssign = (assignVenue) => {
+    // Fire-and-forget: cloudSaveOverride does optimistic state update + rollback on error
+    cloudSaveOverride({
+      comscoreTheater: comscore.theater,
+      comscoreCity: comscore.city,
+      action: 'assign',
+      venueName: assignVenue.name,
+      venueCity: assignVenue.city || '',
+    }).catch(err => console.error('Failed to save override:', err))
+    setShowDropdown(false)
+    setSearch('')
   }
 
   // Quick accept — confirms the current auto-matched venue as correct
-  const handleAcceptMatch = async () => {
+  const handleAcceptMatch = () => {
     if (!venue) return
-    setSaving(true)
-    try {
-      await cloudSaveOverride({
-        comscoreTheater: comscore.theater,
-        comscoreCity: comscore.city,
-        action: 'assign',
-        venueName: venue.name,
-        venueCity: venue.city || '',
-      })
-    } catch (err) {
-      console.error('Failed to save override:', err)
-    } finally {
-      setSaving(false)
-    }
+    cloudSaveOverride({
+      comscoreTheater: comscore.theater,
+      comscoreCity: comscore.city,
+      action: 'assign',
+      venueName: venue.name,
+      venueCity: venue.city || '',
+    }).catch(err => console.error('Failed to save override:', err))
   }
 
-  const handleDismiss = async () => {
-    setSaving(true)
-    try {
-      await cloudSaveOverride({
-        comscoreTheater: comscore.theater,
-        comscoreCity: comscore.city,
-        action: 'dismiss',
-      })
-      setShowDropdown(false)
-    } catch (err) {
-      console.error('Failed to save override:', err)
-    } finally {
-      setSaving(false)
-    }
+  const handleDismiss = () => {
+    cloudSaveOverride({
+      comscoreTheater: comscore.theater,
+      comscoreCity: comscore.city,
+      action: 'dismiss',
+    }).catch(err => console.error('Failed to save override:', err))
+    setShowDropdown(false)
   }
 
   const handleClearOverride = async () => {
