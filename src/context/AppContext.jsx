@@ -551,57 +551,72 @@ export function AppProvider({ children }) {
   const matchDetails = matchResult.details
 
   // Multi-film venue lookup (for enhanced popup: per-film grades + chronological order)
-  const venueFilmData = useMemo(() => {
-    const lookup = new Map()
+  // Deferred: this is expensive (runs matchVenues for every film) but only needed
+  // when a venue popup opens, so we compute it after the main render completes.
+  const [venueFilmData, setVenueFilmData] = useState(new Map())
 
-    for (const film of importedFilms) {
-      const { matched } = matchVenues(film.comscoreVenues, activeVenues, overrides)
+  useEffect(() => {
+    // Skip if no films loaded yet
+    if (importedFilms.length === 0 || activeVenues.length === 0) {
+      setVenueFilmData(new Map())
+      return
+    }
 
-      // Deduplicate matched venues
-      const venueMap = new Map()
-      for (const v of matched) {
-        const key = `${v.name}|${v.city}`.toLowerCase()
-        if (!venueMap.has(key)) {
-          venueMap.set(key, { ...v, _revenues: [v.revenue || 0] })
-        } else {
-          venueMap.get(key)._revenues.push(v.revenue || 0)
+    // Defer heavy computation so override changes render instantly
+    const timer = setTimeout(() => {
+      const lookup = new Map()
+
+      for (const film of importedFilms) {
+        const { matched } = matchVenues(film.comscoreVenues, activeVenues, overrides)
+
+        // Deduplicate matched venues
+        const venueMap = new Map()
+        for (const v of matched) {
+          const key = `${v.name}|${v.city}`.toLowerCase()
+          if (!venueMap.has(key)) {
+            venueMap.set(key, { ...v, _revenues: [v.revenue || 0] })
+          } else {
+            venueMap.get(key)._revenues.push(v.revenue || 0)
+          }
+        }
+        const deduped = Array.from(venueMap.values()).map(({ _revenues, ...venue }) => {
+          if (_revenues.length > 1) {
+            venue.revenue = Math.round(_revenues.reduce((a, b) => a + b, 0))
+          }
+          return venue
+        })
+
+        // Calculate grades for this film's venues
+        const graded = calculateGrades(deduped, gradeSettings)
+
+        // Build lookup entries with grade, filmId, and date
+        for (const venue of graded) {
+          const key = `${venue.name}|${venue.city}`.toLowerCase()
+          if (!lookup.has(key)) lookup.set(key, [])
+          lookup.get(key).push({
+            filmId: film.id,
+            filmTitle: film.filmInfo.title,
+            dateFrom: film.filmInfo.dateFrom || null,
+            revenue: venue.revenue,
+            grade: venue.grade || 'E',
+          })
         }
       }
-      const deduped = Array.from(venueMap.values()).map(({ _revenues, ...venue }) => {
-        if (_revenues.length > 1) {
-          venue.revenue = Math.round(_revenues.reduce((a, b) => a + b, 0))
-        }
-        return venue
-      })
 
-      // Calculate grades for this film's venues
-      const graded = calculateGrades(deduped, gradeSettings)
-
-      // Build lookup entries with grade, filmId, and date
-      for (const venue of graded) {
-        const key = `${venue.name}|${venue.city}`.toLowerCase()
-        if (!lookup.has(key)) lookup.set(key, [])
-        lookup.get(key).push({
-          filmId: film.id,
-          filmTitle: film.filmInfo.title,
-          dateFrom: film.filmInfo.dateFrom || null,
-          revenue: venue.revenue,
-          grade: venue.grade || 'E',
+      // Sort chronologically by dateFrom (fallback: alphabetical by title)
+      for (const [, films] of lookup) {
+        films.sort((a, b) => {
+          if (!a.dateFrom && !b.dateFrom) return a.filmTitle.localeCompare(b.filmTitle)
+          if (!a.dateFrom) return 1
+          if (!b.dateFrom) return -1
+          return a.dateFrom.localeCompare(b.dateFrom)
         })
       }
-    }
 
-    // Sort chronologically by dateFrom (fallback: alphabetical by title)
-    for (const [, films] of lookup) {
-      films.sort((a, b) => {
-        if (!a.dateFrom && !b.dateFrom) return a.filmTitle.localeCompare(b.filmTitle)
-        if (!a.dateFrom) return 1
-        if (!b.dateFrom) return -1
-        return a.dateFrom.localeCompare(b.dateFrom)
-      })
-    }
+      setVenueFilmData(lookup)
+    }, 50) // Small delay lets the UI render first
 
-    return lookup
+    return () => clearTimeout(timer)
   }, [importedFilms, activeVenues, overrides, gradeSettings])
 
   // Filtered venues
