@@ -448,8 +448,15 @@ export default function VenuePopup({ venue }) {
   )
 
 
+  // ── Stop clicks inside popup from reaching Leaflet's map ───
+  const stopPropagation = useCallback((e) => {
+    e.stopPropagation()
+    if (e.nativeEvent) e.nativeEvent.stopImmediatePropagation()
+  }, [])
+
+
   return (
-    <div style={s.container}>
+    <div style={s.container} onClick={stopPropagation} onMouseDown={stopPropagation}>
 
       {/* ── Header + Grade Badge ── */}
       <div style={s.header}>

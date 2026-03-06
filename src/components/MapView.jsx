@@ -143,7 +143,7 @@ export default function MapView() {
                   click: () => setSelectedVenue(venue),
                 }}
               >
-                <Popup maxWidth={340} minWidth={300}>
+                <Popup maxWidth={340} minWidth={300} closeOnClick={false} autoPan={false}>
                   <VenuePopup venue={venue} />
                 </Popup>
               </CircleMarker>
