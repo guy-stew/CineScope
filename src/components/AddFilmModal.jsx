@@ -4,11 +4,11 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Modal, Button, Form, InputGroup, Badge, Spinner, Row, Col, Alert } from 'react-bootstrap';
-import { useAppContext } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import { tmdbImageUrl } from '../utils/apiClient';
 
 export default function AddFilmModal({ show, onHide, onFilmAdded }) {
-  const { apiClient } = useAppContext();
+  const { apiClient } = useApp();
 
   // ─── State ───
   const [step, setStep] = useState(1); // 1 = search, 2 = review

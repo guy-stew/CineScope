@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Modal, Button, Form, InputGroup, Badge, Spinner, Dropdown } from 'react-bootstrap';
-import { useAppContext } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import { tmdbImageUrl } from '../utils/apiClient';
 import AddFilmModal from './AddFilmModal';
 import FilmDetailView from './FilmDetailView';
@@ -27,7 +27,7 @@ const SORT_OPTIONS = [
 ];
 
 export default function FilmCatalogue({ show, onHide }) {
-  const { apiClient } = useAppContext();
+  const { apiClient } = useApp();
 
   // ─── State ───
   const [catalogue, setCatalogue] = useState([]);

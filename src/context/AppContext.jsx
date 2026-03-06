@@ -775,6 +775,24 @@ export function AppProvider({ children }) {
 
 
   // ═══════════════════════════════════════════════════════════════
+  // API CLIENT WRAPPER (for Film Catalogue & TMDB components)
+  // Pre-binds getToken so components can call apiClient.getCatalogue()
+  // without needing to pass getToken themselves.
+  // ═══════════════════════════════════════════════════════════════
+
+  const apiClient = useMemo(() => ({
+    getCatalogue:        ()                     => api.getCatalogue(getTokenRef.current),
+    getCatalogueEntry:   (id)                   => api.getCatalogueEntry(id, getTokenRef.current),
+    createCatalogueEntry:(entry)                => api.createCatalogueEntry(entry, getTokenRef.current),
+    updateCatalogueEntry:(id, updates)          => api.updateCatalogueEntry(id, updates, getTokenRef.current),
+    deleteCatalogueEntry:(id)                   => api.deleteCatalogueEntry(id, getTokenRef.current),
+    searchTMDB:          (query)                => api.searchTMDB(query, getTokenRef.current),
+    getTMDBDetails:      (tmdbId)               => api.getTMDBDetails(tmdbId, getTokenRef.current),
+    addFilmFromTMDB:     (tmdbId, overrides)    => api.addFilmFromTMDB(tmdbId, overrides, getTokenRef.current),
+  }), []) // getTokenRef is a ref — stable, no deps needed
+
+
+  // ═══════════════════════════════════════════════════════════════
   // CONTEXT VALUE
   // ═══════════════════════════════════════════════════════════════
 
@@ -848,6 +866,9 @@ export function AppProvider({ children }) {
     // Population layer
     populationMode, updatePopulationMode,
     heatmapIntensity, updateHeatmapIntensity,
+
+    // API client wrapper (for Film Catalogue & TMDB components)
+    apiClient,
   }
 
   // ── Show loading screen while cloud data fetches ──

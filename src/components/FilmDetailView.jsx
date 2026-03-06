@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button, Badge, Spinner, Alert, Tabs, Tab, Row, Col, Form, InputGroup, Table } from 'react-bootstrap';
-import { useAppContext } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import { tmdbImageUrl } from '../utils/apiClient';
 
 const STATUS_CONFIG = {
@@ -15,7 +15,7 @@ const STATUS_CONFIG = {
 };
 
 export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated, onFilmDeleted }) {
-  const { apiClient } = useAppContext();
+  const { apiClient } = useApp();
 
   const [film, setFilm] = useState(null);
   const [loading, setLoading] = useState(true);

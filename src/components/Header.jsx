@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext'
 import ExportMenu from './ExportMenu'
 import Icon from './Icon'
 import VenueManager from './VenueManager'
+import FilmCatalogue from './FilmCatalogue'
 
 export default function Header() {
   const {
@@ -30,6 +31,9 @@ export default function Header() {
 
   // ── Venue Manager state (local to Header) ──
   const [showVenueManager, setShowVenueManager] = useState(false)
+
+  // ── Film Catalogue state (local to Header) ──
+  const [showCatalogue, setShowCatalogue] = useState(false)
 
   const handleFileClick = () => fileInputRef.current?.click()
 
@@ -177,6 +181,22 @@ export default function Header() {
             <Button size="sm" variant="outline-light" onClick={handleFileClick}>
               <Icon name="upload_file" size={16} className="me-1" /> Import
             </Button>
+
+            {/* Film Catalogue */}
+            <OverlayTrigger
+              placement="bottom"
+              overlay={<Tooltip>Browse and manage film catalogue</Tooltip>}
+            >
+              <Button
+                size="sm"
+                variant="outline-light"
+                onClick={() => setShowCatalogue(true)}
+                className="d-flex align-items-center gap-1"
+              >
+                <Icon name="movie" size={16} />
+                <span style={{ fontSize: '0.78rem' }}>Catalogue</span>
+              </Button>
+            </OverlayTrigger>
 
             {/* Population layer toggle */}
             <Dropdown>
@@ -342,6 +362,12 @@ export default function Header() {
         onHide={() => setShowVenueManager(false)}
       />
       {/* ▲▲▲ END NEW ▲▲▲ */}
+
+      {/* Film Catalogue overlay */}
+      <FilmCatalogue
+        show={showCatalogue}
+        onHide={() => setShowCatalogue(false)}
+      />
     </>
   )
 }
