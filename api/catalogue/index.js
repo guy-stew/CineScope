@@ -15,14 +15,9 @@ export default async function handler(req, res) {
       .end();
   }
 
-  // Authenticate
-  let userId;
-  try {
-    const auth = await authenticate(req);
-    userId = auth.userId;
-  } catch (err) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  // Authenticate (same pattern as films/index.js)
+  const user = await authenticate(req, res);
+  if (!user) return;
 
   const sql = getDb();
   const { id } = req.query;
@@ -37,7 +32,7 @@ export default async function handler(req, res) {
             (SELECT COUNT(*) FROM films f WHERE f.catalogue_id = fc.id) AS import_count,
             (SELECT COALESCE(SUM(f.total_revenue), 0) FROM films f WHERE f.catalogue_id = fc.id) AS total_uk_revenue
           FROM film_catalogue fc
-          WHERE fc.id = ${id} AND fc.user_id = ${userId}
+          WHERE fc.id = ${id} AND fc.user_id = ${user.id}
         `;
 
         if (rows.length === 0) {
@@ -48,7 +43,7 @@ export default async function handler(req, res) {
         const imports = await sql`
           SELECT id, title, year, date_from, date_to, venue_count, total_revenue, imported_at
           FROM films
-          WHERE catalogue_id = ${id} AND user_id = ${userId}
+          WHERE catalogue_id = ${id} AND user_id = ${user.id}
           ORDER BY date_from DESC
         `;
 
@@ -69,7 +64,7 @@ export default async function handler(req, res) {
             (SELECT COUNT(*) FROM films f WHERE f.catalogue_id = fc.id) AS import_count,
             (SELECT COALESCE(SUM(f.total_revenue), 0) FROM films f WHERE f.catalogue_id = fc.id) AS total_uk_revenue
           FROM film_catalogue fc
-          WHERE fc.user_id = ${userId}
+          WHERE fc.user_id = ${user.id}
           ORDER BY fc.updated_at DESC
         `;
 
@@ -95,7 +90,7 @@ export default async function handler(req, res) {
       if (tmdb_id) {
         const existing = await sql`
           SELECT id, title FROM film_catalogue
-          WHERE user_id = ${userId} AND tmdb_id = ${tmdb_id}
+          WHERE user_id = ${user.id} AND tmdb_id = ${tmdb_id}
         `;
         if (existing.length > 0) {
           return res.status(409).json({
@@ -114,7 +109,7 @@ export default async function handler(req, res) {
           tmdb_popularity, tmdb_vote_average,
           distribution_cost, production_cost, notes
         ) VALUES (
-          ${userId},
+          ${user.id},
           ${title.trim()},
           ${year || null},
           ${status || 'pre_release'},
@@ -149,7 +144,7 @@ export default async function handler(req, res) {
 
       // Verify ownership
       const existing = await sql`
-        SELECT id FROM film_catalogue WHERE id = ${id} AND user_id = ${userId}
+        SELECT id FROM film_catalogue WHERE id = ${id} AND user_id = ${user.id}
       `;
       if (existing.length === 0) {
         return res.status(404).json({ error: 'Catalogue entry not found' });
@@ -196,7 +191,7 @@ export default async function handler(req, res) {
 
       // Add the WHERE clause params
       values.push(id);
-      values.push(userId);
+      values.push(user.id);
 
       const query = `
         UPDATE film_catalogue
@@ -219,7 +214,7 @@ export default async function handler(req, res) {
       // This will SET NULL on films.catalogue_id (cascade rule)
       const rows = await sql`
         DELETE FROM film_catalogue
-        WHERE id = ${id} AND user_id = ${userId}
+        WHERE id = ${id} AND user_id = ${user.id}
         RETURNING id, title
       `;
 

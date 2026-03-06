@@ -28,11 +28,8 @@ export default async function handler(req, res) {
   }
 
   // Authenticate (prevents unauthenticated abuse of our TMDB proxy)
-  try {
-    await authenticate(req);
-  } catch (err) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  const user = await authenticate(req, res);
+  if (!user) return;
 
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) {
