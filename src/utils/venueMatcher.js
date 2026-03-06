@@ -93,6 +93,70 @@ function chainsCompatible(comscoreCircuit, venueChain) {
 
 // ─── Main Matching Function ───────────────────────────────────
 
+// Cache auto-match results: keyed by Comscore venue identity, invalidated when venue list changes.
+// Override changes don't affect auto-match results, so we skip re-running the expensive
+// fuzzy matcher when only overrides have changed.
+let _autoMatchCache = new Map()
+let _autoMatchVenueListId = null // fingerprint of the venue list used to build the cache
+
+function getVenueListId(venues) {
+  // Simple fingerprint: count + first/last name. If venues change, this changes.
+  if (!venues || venues.length === 0) return 'empty'
+  return `${venues.length}|${venues[0]?.name}|${venues[venues.length - 1]?.name}`
+}
+
+/**
+ * Build pre-computed indexes for fast venue matching.
+ * Called once per venue list, reused across all Comscore entries.
+ */
+function buildVenueIndex(venues) {
+  const byExactComscoreName = new Map() // lowercase comscore_name → venue
+  const byExactName = new Map()          // lowercase name → venue
+  const byCityChain = new Map()          // "city|normChain" → [venues]
+  const preTokenized = new Map()         // venue → { nameTokens, comscoreTokens, normChain, lowerCity }
+
+  for (const venue of venues) {
+    const vName = (venue.name || '').trim()
+    const vComscoreName = (venue.comscore_name || vName).trim()
+    const vCity = (venue.city || '').trim().toLowerCase()
+    const vChain = venue.chain || ''
+    const normChain = normaliseChain(vChain)
+
+    // Exact-match lookup by comscore_name (first writer wins — duplicates rare)
+    const lowerCsName = vComscoreName.toLowerCase()
+    if (!byExactComscoreName.has(lowerCsName)) {
+      byExactComscoreName.set(lowerCsName, venue)
+    }
+
+    // Exact-match lookup by display name
+    const lowerName = vName.toLowerCase()
+    if (!byExactName.has(lowerName)) {
+      byExactName.set(lowerName, venue)
+    }
+
+    // City+chain bucket for chain_city fallback
+    if (vCity && normChain) {
+      const ccKey = `${vCity}|${normChain}`
+      if (!byCityChain.has(ccKey)) byCityChain.set(ccKey, [])
+      byCityChain.get(ccKey).push(venue)
+    }
+
+    // Pre-tokenize names (avoids re-tokenizing in the hot loop)
+    preTokenized.set(venue, {
+      nameTokens: tokenize(vName),
+      comscoreTokens: lowerCsName !== lowerName ? tokenize(vComscoreName) : null, // null = same as name
+      normChain,
+      lowerCity: vCity,
+      lowerName,
+      lowerComscoreName: lowerCsName,
+      normVenueStart: vName.toLowerCase().split(/\s+/)[0] || '',
+    })
+  }
+
+  return { byExactComscoreName, byExactName, byCityChain, preTokenized }
+}
+
+
 /**
  * Match Comscore venues to geocoded venues.
  *
@@ -105,6 +169,20 @@ export function matchVenues(comscoreVenues, geocodedVenues, overrides = {}) {
   const matched = []
   const unmatched = []
   const matchDetails = []
+
+  // Build or reuse venue index
+  const venueListId = getVenueListId(geocodedVenues)
+  let index
+  if (venueListId !== _autoMatchVenueListId) {
+    // Venue list changed — rebuild everything
+    index = buildVenueIndex(geocodedVenues)
+    _autoMatchCache = new Map()
+    _autoMatchVenueListId = venueListId
+    // Store index on the cache object for reuse
+    _autoMatchCache._index = index
+  } else {
+    index = _autoMatchCache._index || buildVenueIndex(geocodedVenues)
+  }
 
   for (const cs of comscoreVenues) {
     const overrideKey = makeOverrideKey(cs.theater, cs.city)
@@ -152,8 +230,13 @@ export function matchVenues(comscoreVenues, geocodedVenues, overrides = {}) {
       }
     }
 
-    // Auto-matching: try each method in priority order
-    const result = autoMatch(cs, geocodedVenues)
+    // Auto-matching: use cached result if available
+    const cacheKey = `${cs.theater}|${cs.city}|${cs.circuit}`
+    let result = _autoMatchCache.get(cacheKey)
+    if (result === undefined) {
+      result = autoMatch(cs, geocodedVenues, index)
+      _autoMatchCache.set(cacheKey, result)
+    }
 
     if (result) {
       const enriched = {
@@ -191,81 +274,85 @@ export function matchVenues(comscoreVenues, geocodedVenues, overrides = {}) {
 }
 
 
-// ─── Auto-Match Engine ────────────────────────────────────────
+// ─── Auto-Match Engine (indexed) ────────────────────────────────
 
-function autoMatch(cs, venues) {
+function autoMatch(cs, venues, index) {
   const csName = (cs.theater || '').trim()
+  const csNameLower = csName.toLowerCase()
   const csCity = (cs.city || '').trim().toLowerCase()
   const csCircuit = cs.circuit || ''
+  const normCSCircuit = normaliseChain(csCircuit)
 
+  // ── Fast path: exact match on comscore_name (O(1) lookup) ──
+  const exactCsVenue = index.byExactComscoreName.get(csNameLower)
+  if (exactCsVenue && chainsCompatible(csCircuit, exactCsVenue.chain)) {
+    const vName = (exactCsVenue.name || '').trim()
+    const vComscoreName = (exactCsVenue.comscore_name || vName).trim()
+    return {
+      venue: exactCsVenue,
+      score: 100,
+      method: vComscoreName.toLowerCase() !== vName.toLowerCase() ? 'exact_comscore' : 'exact_name',
+      chainOk: true,
+    }
+  }
+
+  // ── Fast path: exact match on display name (O(1) lookup) ──
+  const exactNameVenue = index.byExactName.get(csNameLower)
+  if (exactNameVenue && exactNameVenue !== exactCsVenue && chainsCompatible(csCircuit, exactNameVenue.chain)) {
+    return {
+      venue: exactNameVenue,
+      score: 100,
+      method: 'exact_name',
+      chainOk: true,
+    }
+  }
+
+  // ── Slow path: fuzzy matching (only for non-exact matches) ──
+  const csTokens = tokenize(csName)
   let bestMatch = null
   let bestScore = 0
   let bestMethod = 'none'
   let bestChainOk = true
 
   for (const venue of venues) {
-    const vName = (venue.name || '').trim()
-    const vComscoreName = (venue.comscore_name || vName).trim() // ← NEW: use comscore_name first
-    const vCity = (venue.city || '').trim().toLowerCase()
-    const vChain = venue.chain || ''
+    const vData = index.preTokenized.get(venue)
+    if (!vData) continue
 
-    // ── Chain protection: skip cross-chain mismatches ──
-    const chainOk = chainsCompatible(csCircuit, vChain)
-    if (!chainOk) continue
+    // Chain protection: skip cross-chain mismatches
+    if (normCSCircuit && vData.normChain && normCSCircuit !== vData.normChain) continue
 
     let score = 0
     let method = 'none'
 
-    // Method 0 (NEW): Exact match on comscore_name — highest priority
-    if (csName.toLowerCase() === vComscoreName.toLowerCase()) {
-      score = 100
-      method = vComscoreName !== vName ? 'exact_comscore' : 'exact_name'
-    }
-    // Method 1: Exact match on display name (if different from comscore_name)
-    else if (csName.toLowerCase() === vName.toLowerCase()) {
-      score = 100
-      method = 'exact_name'
-    } else {
-      // Method 2: Token-based fuzzy match (try against both comscore_name and name)
-      const csTokens = tokenize(csName)
+    // Token-based fuzzy match (using pre-tokenized names)
+    const comscoreTokenScore = vData.comscoreTokens
+      ? tokenOverlapScore(csTokens, vData.comscoreTokens)
+      : 0
+    const nameTokenScore = tokenOverlapScore(csTokens, vData.nameTokens)
+    const tokenScore = Math.max(comscoreTokenScore, nameTokenScore)
 
-      // Score against comscore_name first, then display name, take best
-      const comscoreTokens = tokenize(vComscoreName)
-      const nameTokens = tokenize(vName)
+    if (tokenScore > 0) {
+      score = tokenScore
+      method = 'fuzzy_token'
 
-      const comscoreTokenScore = tokenOverlapScore(csTokens, comscoreTokens)
-      const nameTokenScore = tokenOverlapScore(csTokens, nameTokens)
-
-      // Use whichever gives the better score
-      const tokenScore = Math.max(comscoreTokenScore, nameTokenScore)
-
-      if (tokenScore > 0) {
-        score = tokenScore
-        method = 'fuzzy_token'
-
-        // City bonus: +15 if cities match
-        if (csCity && vCity && csCity === vCity) {
-          score = Math.min(100, score + 15)
-          if (method === 'fuzzy_token' && score >= 50) method = 'name_city'
-        }
-
-        // Chain+name bonus: if circuit prefix matches venue name start
-        const normCircuit = normaliseChain(csCircuit)
-        const normVenueStart = vName.toLowerCase().split(/\s+/)[0]
-        if (normCircuit && normVenueStart && normCircuit === normaliseChain(normVenueStart)) {
-          score = Math.min(100, score + 10)
-          if (score >= 60) method = 'chain_prefix'
-        }
+      // City bonus: +15 if cities match
+      if (csCity && vData.lowerCity && csCity === vData.lowerCity) {
+        score = Math.min(100, score + 15)
+        if (method === 'fuzzy_token' && score >= 50) method = 'name_city'
       }
 
-      // Method 3: Chain + city (last resort for chains with one venue per city)
-      if (score < 50 && csCity && vCity && csCity === vCity) {
-        const normCS = normaliseChain(csCircuit)
-        const normV = normaliseChain(vChain)
-        if (normCS && normV && normCS === normV) {
-          score = Math.max(score, 55)
-          method = 'chain_city'
-        }
+      // Chain+name bonus
+      if (normCSCircuit && vData.normVenueStart && normCSCircuit === normaliseChain(vData.normVenueStart)) {
+        score = Math.min(100, score + 10)
+        if (score >= 60) method = 'chain_prefix'
+      }
+    }
+
+    // Chain + city fallback
+    if (score < 50 && csCity && vData.lowerCity && csCity === vData.lowerCity) {
+      if (normCSCircuit && vData.normChain && normCSCircuit === vData.normChain) {
+        score = Math.max(score, 55)
+        method = 'chain_city'
       }
     }
 
@@ -273,7 +360,10 @@ function autoMatch(cs, venues) {
       bestScore = score
       bestMatch = venue
       bestMethod = method
-      bestChainOk = chainOk
+      bestChainOk = true
+
+      // Early exit: can't beat 100
+      if (bestScore >= 100) break
     }
   }
 
