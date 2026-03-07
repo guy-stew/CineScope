@@ -594,6 +594,7 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
         .film-detail-body {
           padding: 0 1.5rem 1.5rem;
           overflow-y: auto;
+          background: var(--cs-bg, #1a1a2e);
         }
         /* ── Text contrast for dark theme ── */
         .film-detail-hero h3 {
@@ -642,23 +643,39 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
         /* ── Form controls in edit mode ── */
         .film-detail-body .form-control,
         .film-detail-body .form-select {
-          background: rgba(255,255,255,0.08);
-          border-color: rgba(255,255,255,0.15);
+          background: #1e2a45;
+          border-color: #3a4a6a;
           color: #f0f0f0;
+        }
+        .film-detail-body .form-control::placeholder {
+          color: #778;
         }
         .film-detail-body .form-control:focus,
         .film-detail-body .form-select:focus {
-          background: rgba(255,255,255,0.12);
+          background: #243050;
           border-color: #e50914;
           color: #f0f0f0;
+          box-shadow: 0 0 0 0.2rem rgba(229, 9, 20, 0.15);
         }
         .film-detail-body .form-label {
           color: #ccc !important;
         }
         .film-detail-body .input-group-text {
-          background: rgba(255,255,255,0.06);
-          border-color: rgba(255,255,255,0.15);
+          background: #16213e;
+          border-color: #3a4a6a;
           color: #aaa;
+        }
+        .film-detail-body .form-select option {
+          background: #1e2a45;
+          color: #f0f0f0;
+        }
+        .film-detail-body .btn-outline-secondary {
+          color: #ccc;
+          border-color: #3a4a6a;
+        }
+        .film-detail-body .btn-outline-secondary:hover {
+          color: #fff;
+          background: rgba(255,255,255,0.1);
         }
 
         /* ── Light theme ── */
@@ -682,6 +699,10 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
         [data-theme="light"] .film-detail-body th,
         [data-theme="light"] .film-detail-body strong {
           color: #212529;
+          background-color: transparent;
+        }
+        [data-theme="light"] .film-detail-body {
+          background: #fff !important;
         }
         [data-theme="light"] .film-detail-body .text-muted,
         [data-theme="light"] .film-detail-body h6.text-muted {
@@ -710,6 +731,14 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
           background: #e9ecef;
           border-color: #ced4da;
           color: #495057;
+        }
+        [data-theme="light"] .film-detail-body .form-select option {
+          background: #fff;
+          color: #212529;
+        }
+        [data-theme="light"] .film-detail-body .btn-outline-secondary {
+          color: #6c757d;
+          border-color: #ced4da;
         }
       `}</style>
     </>
