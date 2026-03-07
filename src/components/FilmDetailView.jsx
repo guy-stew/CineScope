@@ -155,43 +155,54 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
     }
   }, [apiClient]);
 
-  // ─── Select a TMDB result → fetch details & merge ───
+  // ─── Select a TMDB result → fetch details & save immediately ───
   const handleTmdbSelect = useCallback(async (result) => {
     setShowTmdbDropdown(false);
     setTmdbResults([]);
     setTmdbLinking(true);
+    setError(null);
     try {
       const details = await apiClient.getTMDBDetails(result.tmdb_id);
 
-      // Build TMDB fields — always set title + TMDB link fields
-      const tmdbFields = {
+      // Build TMDB update — always set title + all TMDB link fields
+      const tmdbUpdate = {
         title: details.title,
         tmdb_id: details.tmdb_id,
-        tmdb_data: details,
+        tmdb_data: JSON.stringify(details),
         poster_path: details.poster_path,
         backdrop_path: details.backdrop_path,
-        tmdb_popularity: details.popularity,
-        tmdb_vote_average: details.vote_average,
-        tmdb_budget: details.budget,
-        tmdb_revenue: details.revenue,
+        tmdb_popularity: parseFloat(details.popularity) || null,
+        tmdb_vote_average: parseFloat(details.vote_average) || null,
+        tmdb_budget: parseInt(details.budget) || null,
+        tmdb_revenue: parseInt(details.revenue) || null,
       };
 
       // Only fill in fields that are currently empty on the existing film
-      if (!film.year) tmdbFields.year = details.year;
-      if (!film.release_date) tmdbFields.release_date = details.release_date;
-      if (!film.synopsis) tmdbFields.synopsis = details.overview;
-      if (!film.genres) tmdbFields.genres = (details.genres || []).join(', ');
-      if (!film.certification) tmdbFields.certification = details.certification;
-      if (!film.runtime) tmdbFields.runtime = details.runtime;
+      if (!film.year && details.year) tmdbUpdate.year = details.year;
+      if (!film.release_date && details.release_date) tmdbUpdate.release_date = details.release_date;
+      if (!film.synopsis && details.overview) tmdbUpdate.synopsis = details.overview;
+      if (!film.genres && details.genres) tmdbUpdate.genres = (details.genres || []).join(', ');
+      if (!film.certification && details.certification) tmdbUpdate.certification = details.certification;
+      if (!film.runtime && details.runtime) tmdbUpdate.runtime = details.runtime;
 
-      setEditData(prev => ({ ...prev, ...tmdbFields }));
+      // Save directly to the database (don't wait for the Save button)
+      await apiClient.updateCatalogueEntry(filmId, tmdbUpdate);
+
+      // Reload full film to get all the data back (including parsed tmdb_data)
+      const reloaded = await apiClient.getCatalogueEntry(filmId);
+      setFilm(reloaded);
+      onFilmUpdated?.(reloaded);
+
+      // Update editData title so the form stays in sync
+      setEditData(prev => ({ ...prev, title: details.title }));
+
     } catch (err) {
-      console.error('Failed to fetch TMDB details:', err);
-      setError('Failed to load film details from TMDB');
+      console.error('TMDB link failed:', err);
+      setError(`Failed to link TMDB: ${err.message}`);
     } finally {
       setTmdbLinking(false);
     }
-  }, [apiClient, film]);
+  }, [apiClient, film, filmId, onFilmUpdated]);
 
   // ─── Close TMDB dropdown on click outside ───
   useEffect(() => {
