@@ -551,6 +551,25 @@ export function AppProvider({ children }) {
   const venues = matchResult.venues
   const matchDetails = matchResult.details
 
+  // ── Corrected film stats from post-match data ──
+  // selectedFilm.stats uses raw Comscore name combos (inflated count).
+  // This computes the real numbers from deduplicated matched venues.
+  const filmDisplayStats = useMemo(() => {
+    if (!selectedFilm) return null
+
+    const withRevenue = venues.filter(v => v.revenue != null && v.grade && v.grade !== 'E')
+    const totalRevenue = withRevenue.reduce((sum, v) => sum + v.revenue, 0)
+
+    return {
+      totalVenues: withRevenue.length,
+      totalRevenue,
+      avgRevenue: withRevenue.length > 0 ? Math.round(totalRevenue / withRevenue.length) : 0,
+      aggregatedCount: selectedFilm.stats?.aggregatedCount || 0,
+      // Keep total including E-grade for reference
+      totalWithUnscreened: venues.filter(v => v.grade).length,
+    }
+  }, [selectedFilm, venues])
+
   // Multi-film venue lookup (for enhanced popup: per-film grades + chronological order)
   // Deferred: this is expensive (runs matchVenues for every film) but only needed
   // when a venue popup opens, so we compute it after the main render completes.
@@ -812,6 +831,7 @@ export function AppProvider({ children }) {
     importedFilms,
     selectedFilm,
     selectedFilmId,
+    filmDisplayStats, // ← corrected venue/revenue counts from post-match data
     setSelectedFilmId,
     importComscoreFile,
     clearFilmSelection,
