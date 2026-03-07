@@ -218,32 +218,34 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
   // ─── Loading / Error ───
   if (loading) {
     return (
-      <>
-        <div className="modal-header border-0">
+      <div className="film-detail-container">
+        <div className="p-3">
           <Button variant="link" className="text-muted p-0" onClick={onBack}>
             <span className="material-symbols-rounded">arrow_back</span>
           </Button>
         </div>
-        <div className="modal-body d-flex align-items-center justify-content-center" style={{ minHeight: '400px' }}>
+        <div className="d-flex align-items-center justify-content-center" style={{ minHeight: '400px' }}>
           <Spinner animation="border" variant="danger" />
         </div>
-      </>
+        <style>{`.film-detail-container { height: 100vh; overflow-y: auto; background: var(--cs-bg, #1a1a2e); }`}</style>
+      </div>
     );
   }
 
   if (error && !film) {
     return (
-      <>
-        <div className="modal-header border-0">
+      <div className="film-detail-container">
+        <div className="p-3">
           <Button variant="link" className="text-muted p-0" onClick={onBack}>
             <span className="material-symbols-rounded">arrow_back</span>
           </Button>
         </div>
-        <div className="modal-body text-center py-5">
+        <div className="text-center py-5">
           <Alert variant="danger">{error}</Alert>
           <Button variant="outline-secondary" onClick={onBack}>Go Back</Button>
         </div>
-      </>
+        <style>{`.film-detail-container { height: 100vh; overflow-y: auto; background: var(--cs-bg, #1a1a2e); }`}</style>
+      </div>
     );
   }
 
@@ -255,10 +257,10 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
   const hasImports = film.imports && film.imports.length > 0;
 
   return (
-    <>
+    <div className="film-detail-container">
       {/* Hero header with backdrop */}
       <div className="film-detail-hero" style={backdropUrl ? {
-        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.3), var(--cs-bg, #1a1a2e) 95%), url(${backdropUrl})`,
+        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.5), var(--cs-bg, #1a1a2e) 100%), url(${backdropUrl})`,
         backgroundSize: 'cover', backgroundPosition: 'center top'
       } : {}}>
         <div className="d-flex justify-content-between align-items-start p-3">
@@ -295,33 +297,33 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
               src={posterUrl}
               alt={film.title}
               className="rounded shadow"
-              style={{ width: '140px', height: 'auto', flexShrink: 0 }}
+              style={{ width: '140px', height: 'auto', flexShrink: 0, position: 'relative', zIndex: 1 }}
             />
           )}
-          <div className="d-flex flex-column justify-content-end">
+          <div className="d-flex flex-column justify-content-end" style={{ position: 'relative', zIndex: 1 }}>
             <h3 className="fw-bold mb-1">{film.title}</h3>
             <div className="d-flex align-items-center gap-2 flex-wrap mb-2">
               <Badge bg={statusConf.bg}>{statusConf.label}</Badge>
-              {film.year && <span className="text-muted">{film.year}</span>}
+              {film.year && <span>{film.year}</span>}
               {film.certification && (
                 <Badge bg="dark" style={{ border: '1px solid rgba(255,255,255,0.3)' }}>
                   {film.certification}
                 </Badge>
               )}
-              {film.runtime && <span className="text-muted">{film.runtime} min</span>}
-              {film.genres && <span className="text-muted">{film.genres}</span>}
+              {film.runtime && <span>{film.runtime} min</span>}
+              {film.genres && <span className="hero-muted">{film.genres}</span>}
             </div>
             {film.tmdb_vote_average > 0 && (
               <div style={{ fontSize: '0.9rem' }}>
                 <span style={{ color: '#f5c518' }}>★</span> {parseFloat(film.tmdb_vote_average).toFixed(1)}
                 {film.tmdb_popularity > 0 && (
-                  <span className="text-muted ms-3">Popularity: {parseFloat(film.tmdb_popularity).toFixed(0)}</span>
+                  <span className="hero-muted ms-3">Popularity: {parseFloat(film.tmdb_popularity).toFixed(0)}</span>
                 )}
               </div>
             )}
             {director && (
-              <div className="text-muted" style={{ fontSize: '0.85rem' }}>
-                Directed by <strong>{director.name}</strong>
+              <div className="hero-muted" style={{ fontSize: '0.85rem' }}>
+                Directed by <strong style={{ color: '#fff' }}>{director.name}</strong>
               </div>
             )}
           </div>
@@ -329,7 +331,7 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
       </div>
 
       {/* Tabs */}
-      <div className="film-detail-body" style={{ overflowY: 'auto' }}>
+      <div className="film-detail-body">
         <div className="film-detail-inner pt-0">
         {error && <Alert variant="danger" className="py-2 mt-2">{error}</Alert>}
 
@@ -739,35 +741,37 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
       </div>
 
       <style>{`
+        /* ── Layout: scrollable container fills the modal ── */
+        .film-detail-container {
+          height: 100vh;
+          overflow-y: auto;
+          background: var(--cs-bg, #1a1a2e);
+        }
         .film-detail-hero {
           min-height: 200px;
           position: relative;
         }
-        /* ── Hero text contrast ── */
-        .film-detail-hero .text-muted {
-          color: rgba(255,255,255,0.7) !important;
-        }
-        .film-detail-hero strong {
-          color: #fff;
-        }
-        .film-detail-hero div,
-        .film-detail-hero span {
-          color: rgba(255,255,255,0.85);
-        }
-        /* ── Max-width container for readable text ── */
         .film-detail-inner {
           max-width: 890px;
           margin: 0 auto;
         }
         .film-detail-body {
-          padding: 0 1.5rem 1.5rem;
-          overflow-y: auto;
-          background: var(--cs-bg, #1a1a2e);
+          padding: 0 1.5rem 2rem;
         }
-        /* ── Text contrast for dark theme ── */
+
+        /* ── Hero text: bright on backdrop ── */
         .film-detail-hero h3 {
-          color: #f0f0f0;
+          color: #fff;
         }
+        .film-detail-hero span,
+        .film-detail-hero div {
+          color: rgba(255,255,255,0.9);
+        }
+        .hero-muted {
+          color: rgba(255,255,255,0.65) !important;
+        }
+
+        /* ── Body text: bright on dark bg ── */
         .film-detail-body,
         .film-detail-body p,
         .film-detail-body div,
@@ -776,15 +780,14 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
         .film-detail-body strong {
           color: #f0f0f0;
         }
-        .film-detail-body h6.text-muted {
-          color: #aaa !important;
-        }
+        .film-detail-body h6.text-muted,
         .film-detail-body .text-muted {
           color: #aaa !important;
         }
         .film-detail-body .fst-italic {
           color: #bbb;
         }
+
         /* ── Tabs ── */
         .film-detail-body .nav-pills .nav-link {
           color: #aaa;
@@ -796,6 +799,7 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
           color: #fff;
           background: #e50914;
         }
+
         /* ── Table ── */
         .film-detail-body .table {
           color: #ddd;
@@ -808,7 +812,8 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
         .film-detail-body .table tbody tr:hover {
           background: rgba(255,255,255,0.04);
         }
-        /* ── Form controls in edit mode ── */
+
+        /* ── Forms in edit mode ── */
         .film-detail-body .form-control,
         .film-detail-body .form-select {
           background: #1e2a45;
@@ -846,7 +851,7 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
           background: rgba(255,255,255,0.1);
         }
 
-        /* ── TMDB search dropdown in edit mode ── */
+        /* ── TMDB search dropdown ── */
         .tmdb-edit-dropdown {
           position: absolute;
           top: 100%;
@@ -894,18 +899,18 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
         }
 
         /* ── Light theme ── */
-        [data-theme="light"] .film-detail-hero .text-muted {
-          color: rgba(0,0,0,0.5) !important;
-        }
-        [data-theme="light"] .film-detail-hero div,
-        [data-theme="light"] .film-detail-hero span {
-          color: #333;
-        }
-        [data-theme="light"] .film-detail-hero strong {
-          color: #212529;
+        [data-theme="light"] .film-detail-container {
+          background: #fff;
         }
         [data-theme="light"] .film-detail-hero h3 {
           color: #212529;
+        }
+        [data-theme="light"] .film-detail-hero span,
+        [data-theme="light"] .film-detail-hero div {
+          color: #333;
+        }
+        [data-theme="light"] .hero-muted {
+          color: rgba(0,0,0,0.5) !important;
         }
         [data-theme="light"] .film-detail-body,
         [data-theme="light"] .film-detail-body p,
@@ -914,10 +919,6 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
         [data-theme="light"] .film-detail-body th,
         [data-theme="light"] .film-detail-body strong {
           color: #212529;
-          background-color: transparent;
-        }
-        [data-theme="light"] .film-detail-body {
-          background: #fff !important;
         }
         [data-theme="light"] .film-detail-body .text-muted,
         [data-theme="light"] .film-detail-body h6.text-muted {
@@ -970,6 +971,6 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
           background: #e9ecef;
         }
       `}</style>
-    </>
+    </div>
   );
 }
