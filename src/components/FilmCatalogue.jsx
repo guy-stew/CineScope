@@ -140,22 +140,31 @@ export default function FilmCatalogue({ show, onHide }) {
   return (
     <>
       <Modal show={show} onHide={onHide} fullscreen dialogClassName="film-catalogue-modal">
-        <Modal.Header closeButton className="catalogue-header border-0 pb-0">
+        <Modal.Header className="catalogue-header border-0 pb-0">
           <div className="w-100">
             <div className="d-flex align-items-center justify-content-between mb-3">
               <div className="d-flex align-items-center gap-2">
                 <span className="material-symbols-rounded fs-3" style={{ color: '#e50914' }}>movie</span>
-                <h4 className="mb-0 fw-bold">Film Catalogue</h4>
+                <h4 className="mb-0 fw-bold" style={{ color: '#f0f0f0' }}>Film Catalogue</h4>
                 <Badge bg="secondary" pill className="ms-1">{catalogue.length}</Badge>
               </div>
-              <Button
-                variant="danger"
-                className="d-flex align-items-center gap-1"
-                onClick={() => setShowAddFilm(true)}
-              >
-                <span className="material-symbols-rounded" style={{ fontSize: '18px' }}>add</span>
-                Add Film
-              </Button>
+              <div className="d-flex align-items-center gap-2">
+                <Button
+                  variant="danger"
+                  className="d-flex align-items-center gap-1"
+                  onClick={() => setShowAddFilm(true)}
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: '18px' }}>add</span>
+                  Add Film
+                </Button>
+                <button
+                  className="catalogue-close-btn"
+                  onClick={onHide}
+                  aria-label="Close catalogue"
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: '20px' }}>close</span>
+                </button>
+              </div>
             </div>
 
             {/* Toolbar: Search + Filters + Sort */}
@@ -270,6 +279,23 @@ export default function FilmCatalogue({ show, onHide }) {
         .catalogue-header {
           background: transparent;
           padding: 1rem 1.5rem 0;
+        }
+        .catalogue-close-btn {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          border: 2px solid rgba(255,255,255,0.5);
+          background: rgba(255,255,255,0.1);
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+        .catalogue-close-btn:hover {
+          background: rgba(255,255,255,0.25);
+          border-color: #fff;
         }
         .catalogue-body {
           padding: 0.5rem 1.5rem 1.5rem;
@@ -411,6 +437,18 @@ export default function FilmCatalogue({ show, onHide }) {
         [data-theme="light"] .film-catalogue-modal .modal-content {
           background: #f8f9fa;
           color: #212529;
+        }
+        [data-theme="light"] .film-catalogue-modal h4 {
+          color: #212529 !important;
+        }
+        [data-theme="light"] .catalogue-close-btn {
+          border-color: rgba(0,0,0,0.3);
+          background: rgba(0,0,0,0.05);
+          color: #333;
+        }
+        [data-theme="light"] .catalogue-close-btn:hover {
+          background: rgba(0,0,0,0.12);
+          border-color: #333;
         }
         [data-theme="light"] .film-card {
           background: #fff;
