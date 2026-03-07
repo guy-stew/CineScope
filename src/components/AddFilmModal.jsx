@@ -179,8 +179,8 @@ export default function AddFilmModal({ show, onHide, onFilmAdded }) {
   // ─── Step 1: Search ───
   const renderSearch = () => (
     <>
-      <Modal.Header closeButton>
-        <Modal.Title className="d-flex align-items-center gap-2">
+      <Modal.Header closeButton className="add-film-header">
+        <Modal.Title className="d-flex align-items-center gap-2" style={{ color: '#f0f0f0' }}>
           <span className="material-symbols-rounded" style={{ color: '#e50914' }}>add_circle</span>
           Add Film
         </Modal.Title>
@@ -290,9 +290,9 @@ export default function AddFilmModal({ show, onHide, onFilmAdded }) {
 
     return (
       <>
-        <Modal.Header closeButton>
-          <Modal.Title className="d-flex align-items-center gap-2">
-            <Button variant="link" className="p-0 text-muted" onClick={() => setStep(1)}>
+        <Modal.Header closeButton className="add-film-header">
+          <Modal.Title className="d-flex align-items-center gap-2" style={{ color: '#f0f0f0' }}>
+            <Button variant="link" className="p-0" style={{ color: '#ccc' }} onClick={() => setStep(1)}>
               <span className="material-symbols-rounded">arrow_back</span>
             </Button>
             {manualMode ? 'Add Film Manually' : 'Review Film Details'}
@@ -513,6 +513,12 @@ export default function AddFilmModal({ show, onHide, onFilmAdded }) {
           background: var(--cs-bg, #1a1a2e);
           color: var(--cs-text, #e0e0e0);
         }
+        .add-film-header {
+          border-color: rgba(255,255,255,0.1) !important;
+        }
+        .add-film-header .btn-close {
+          filter: invert(1) grayscale(100%) brightness(200%);
+        }
         /* ── Force light text on all Bootstrap children ── */
         .add-film-modal .modal-header,
         .add-film-modal .modal-title,
@@ -615,6 +621,18 @@ export default function AddFilmModal({ show, onHide, onFilmAdded }) {
         [data-theme="light"] .add-film-modal .modal-content {
           background: #fff;
           color: #212529;
+        }
+        [data-theme="light"] .add-film-modal .modal-title {
+          color: #212529 !important;
+        }
+        [data-theme="light"] .add-film-header {
+          border-color: #dee2e6 !important;
+        }
+        [data-theme="light"] .add-film-header .btn-close {
+          filter: none;
+        }
+        [data-theme="light"] .add-film-header .btn-link {
+          color: #6c757d !important;
         }
         [data-theme="light"] .add-film-modal .modal-header,
         [data-theme="light"] .add-film-modal .modal-title,

@@ -176,7 +176,7 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
         </div>
 
         {/* Film info row */}
-        <div className="d-flex gap-3 px-3 pb-3" style={{ marginTop: backdropUrl ? '60px' : '0' }}>
+        <div className="film-detail-inner d-flex gap-3 px-3 pb-3" style={{ marginTop: backdropUrl ? '60px' : '0' }}>
           {posterUrl && (
             <img
               src={posterUrl}
@@ -216,7 +216,8 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
       </div>
 
       {/* Tabs */}
-      <div className="modal-body pt-0" style={{ overflowY: 'auto' }}>
+      <div className="film-detail-body" style={{ overflowY: 'auto' }}>
+        <div className="film-detail-inner pt-0">
         {error && <Alert variant="danger" className="py-2 mt-2">{error}</Alert>}
 
         <Tabs activeKey={activeTab} onSelect={setActiveTab} className="mb-3 mt-2" variant="pills">
@@ -556,12 +557,125 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
             </div>
           </Tab>
         </Tabs>
+        </div>
       </div>
 
       <style>{`
         .film-detail-hero {
           min-height: 200px;
           position: relative;
+        }
+        /* ── Max-width container for readable text ── */
+        .film-detail-inner {
+          max-width: 890px;
+          margin: 0 auto;
+        }
+        .film-detail-body {
+          padding: 0 1.5rem 1.5rem;
+          overflow-y: auto;
+        }
+        /* ── Text contrast for dark theme ── */
+        .film-detail-hero h3 {
+          color: #f0f0f0;
+        }
+        .film-detail-body,
+        .film-detail-body p,
+        .film-detail-body div,
+        .film-detail-body td,
+        .film-detail-body th,
+        .film-detail-body strong {
+          color: #e0e0e0;
+        }
+        .film-detail-body h6.text-muted {
+          color: #999 !important;
+        }
+        .film-detail-body .text-muted {
+          color: #999 !important;
+        }
+        /* ── Tabs ── */
+        .film-detail-body .nav-pills .nav-link {
+          color: #aaa;
+          border-radius: 20px;
+          padding: 0.35rem 0.9rem;
+          font-size: 0.9rem;
+        }
+        .film-detail-body .nav-pills .nav-link.active {
+          color: #fff;
+          background: #e50914;
+        }
+        /* ── Table ── */
+        .film-detail-body .table {
+          color: #ddd;
+          border-color: rgba(255,255,255,0.08);
+        }
+        .film-detail-body .table thead th {
+          color: #aaa;
+          border-color: rgba(255,255,255,0.12);
+        }
+        .film-detail-body .table tbody tr:hover {
+          background: rgba(255,255,255,0.04);
+        }
+        /* ── Form controls in edit mode ── */
+        .film-detail-body .form-control,
+        .film-detail-body .form-select {
+          background: rgba(255,255,255,0.08);
+          border-color: rgba(255,255,255,0.15);
+          color: #f0f0f0;
+        }
+        .film-detail-body .form-control:focus,
+        .film-detail-body .form-select:focus {
+          background: rgba(255,255,255,0.12);
+          border-color: #e50914;
+          color: #f0f0f0;
+        }
+        .film-detail-body .form-label {
+          color: #ccc !important;
+        }
+        .film-detail-body .input-group-text {
+          background: rgba(255,255,255,0.06);
+          border-color: rgba(255,255,255,0.15);
+          color: #aaa;
+        }
+
+        /* ── Light theme ── */
+        [data-theme="light"] .film-detail-hero h3 {
+          color: #212529;
+        }
+        [data-theme="light"] .film-detail-body,
+        [data-theme="light"] .film-detail-body p,
+        [data-theme="light"] .film-detail-body div,
+        [data-theme="light"] .film-detail-body td,
+        [data-theme="light"] .film-detail-body th,
+        [data-theme="light"] .film-detail-body strong {
+          color: #212529;
+        }
+        [data-theme="light"] .film-detail-body .text-muted,
+        [data-theme="light"] .film-detail-body h6.text-muted {
+          color: #6c757d !important;
+        }
+        [data-theme="light"] .film-detail-body .nav-pills .nav-link {
+          color: #6c757d;
+        }
+        [data-theme="light"] .film-detail-body .nav-pills .nav-link.active {
+          color: #fff;
+        }
+        [data-theme="light"] .film-detail-body .table {
+          color: #212529;
+          border-color: #dee2e6;
+        }
+        [data-theme="light"] .film-detail-body .form-control,
+        [data-theme="light"] .film-detail-body .form-select {
+          background: #fff;
+          border-color: #ced4da;
+          color: #212529;
+        }
+        [data-theme="light"] .film-detail-body .form-label {
+          color: #495057 !important;
+        }
+        [data-theme="light"] .film-detail-body .input-group-text {
+          background: #e9ecef;
+          border-color: #ced4da;
+          color: #495057;
         }
       `}</style>
     </>
