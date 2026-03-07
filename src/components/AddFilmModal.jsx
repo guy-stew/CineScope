@@ -513,6 +513,62 @@ export default function AddFilmModal({ show, onHide, onFilmAdded }) {
           background: var(--cs-bg, #1a1a2e);
           color: var(--cs-text, #e0e0e0);
         }
+        /* ── Force light text on all Bootstrap children ── */
+        .add-film-modal .modal-header,
+        .add-film-modal .modal-title,
+        .add-film-modal .modal-body,
+        .add-film-modal .modal-footer {
+          color: var(--cs-text, #e0e0e0);
+          border-color: rgba(255,255,255,0.1);
+        }
+        .add-film-modal .btn-close {
+          filter: invert(1) grayscale(100%) brightness(200%);
+        }
+        .add-film-modal .form-label,
+        .add-film-modal h6 {
+          color: var(--cs-text, #ccc) !important;
+        }
+        .add-film-modal .form-control,
+        .add-film-modal .form-select {
+          background: rgba(255,255,255,0.08);
+          border-color: rgba(255,255,255,0.15);
+          color: #f0f0f0;
+        }
+        .add-film-modal .form-control::placeholder {
+          color: #888;
+        }
+        .add-film-modal .form-control:focus,
+        .add-film-modal .form-select:focus {
+          background: rgba(255,255,255,0.12);
+          border-color: #e50914;
+          color: #f0f0f0;
+          box-shadow: 0 0 0 0.2rem rgba(229, 9, 20, 0.15);
+        }
+        .add-film-modal .input-group-text {
+          background: rgba(255,255,255,0.06);
+          border-color: rgba(255,255,255,0.15);
+          color: #aaa;
+        }
+        .add-film-modal .text-muted {
+          color: #999 !important;
+        }
+        .add-film-modal hr {
+          border-color: rgba(255,255,255,0.1);
+        }
+        .add-film-modal .btn-outline-secondary {
+          color: #ccc;
+          border-color: rgba(255,255,255,0.2);
+        }
+        .add-film-modal .btn-outline-secondary:hover {
+          color: #fff;
+          background: rgba(255,255,255,0.1);
+        }
+        .add-film-modal .form-select option {
+          background: #1a1a2e;
+          color: #e0e0e0;
+        }
+
+        /* ── TMDB search results ── */
         .tmdb-results {
           max-height: 400px;
           overflow-y: auto;
@@ -524,10 +580,10 @@ export default function AddFilmModal({ show, onHide, onFilmAdded }) {
           border-radius: 6px;
           cursor: pointer;
           transition: background 0.15s;
-          border-bottom: 1px solid var(--cs-border, rgba(255,255,255,0.06));
+          border-bottom: 1px solid rgba(255,255,255,0.06);
         }
         .tmdb-result-item:hover {
-          background: var(--cs-hover, rgba(229, 9, 20, 0.08));
+          background: rgba(229, 9, 20, 0.08);
         }
         .tmdb-result-poster {
           flex-shrink: 0;
@@ -555,12 +611,54 @@ export default function AddFilmModal({ show, onHide, onFilmAdded }) {
           min-width: 0;
         }
 
+        /* ── Light theme overrides ── */
         [data-theme="light"] .add-film-modal .modal-content {
           background: #fff;
           color: #212529;
         }
+        [data-theme="light"] .add-film-modal .modal-header,
+        [data-theme="light"] .add-film-modal .modal-title,
+        [data-theme="light"] .add-film-modal .modal-body,
+        [data-theme="light"] .add-film-modal .modal-footer {
+          color: #212529;
+          border-color: #dee2e6;
+        }
+        [data-theme="light"] .add-film-modal .btn-close {
+          filter: none;
+        }
+        [data-theme="light"] .add-film-modal .form-label,
+        [data-theme="light"] .add-film-modal h6 {
+          color: #495057 !important;
+        }
+        [data-theme="light"] .add-film-modal .form-control,
+        [data-theme="light"] .add-film-modal .form-select {
+          background: #fff;
+          border-color: #ced4da;
+          color: #212529;
+        }
+        [data-theme="light"] .add-film-modal .form-control:focus,
+        [data-theme="light"] .add-film-modal .form-select:focus {
+          background: #fff;
+          color: #212529;
+        }
+        [data-theme="light"] .add-film-modal .input-group-text {
+          background: #e9ecef;
+          border-color: #ced4da;
+          color: #495057;
+        }
+        [data-theme="light"] .add-film-modal .text-muted {
+          color: #6c757d !important;
+        }
+        [data-theme="light"] .add-film-modal .btn-outline-secondary {
+          color: #6c757d;
+          border-color: #ced4da;
+        }
         [data-theme="light"] .tmdb-result-item:hover {
           background: rgba(229, 9, 20, 0.05);
+        }
+        [data-theme="light"] .add-film-modal .form-select option {
+          background: #fff;
+          color: #212529;
         }
       `}</style>
     </Modal>

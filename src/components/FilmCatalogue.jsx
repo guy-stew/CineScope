@@ -368,6 +368,45 @@ export default function FilmCatalogue({ show, onHide }) {
           margin-top: 0.25rem;
         }
 
+        /* ── Form contrast fixes (covers FilmDetailView edit mode) ── */
+        .film-catalogue-modal .form-label,
+        .film-catalogue-modal h6 {
+          color: #ccc !important;
+        }
+        .film-catalogue-modal .form-control,
+        .film-catalogue-modal .form-select {
+          background: rgba(255,255,255,0.08);
+          border-color: rgba(255,255,255,0.15);
+          color: #f0f0f0;
+        }
+        .film-catalogue-modal .form-control::placeholder {
+          color: #888;
+        }
+        .film-catalogue-modal .form-control:focus,
+        .film-catalogue-modal .form-select:focus {
+          background: rgba(255,255,255,0.12);
+          border-color: #e50914;
+          color: #f0f0f0;
+          box-shadow: 0 0 0 0.2rem rgba(229, 9, 20, 0.15);
+        }
+        .film-catalogue-modal .input-group-text {
+          background: rgba(255,255,255,0.06);
+          border-color: rgba(255,255,255,0.15);
+          color: #aaa;
+        }
+        .film-catalogue-modal .nav-tabs .nav-link {
+          color: #999;
+        }
+        .film-catalogue-modal .nav-tabs .nav-link.active {
+          color: #f0f0f0;
+          background: transparent;
+          border-bottom-color: #e50914;
+        }
+        .film-catalogue-modal .form-select option {
+          background: #1a1a2e;
+          color: #e0e0e0;
+        }
+
         /* Light theme overrides */
         [data-theme="light"] .film-catalogue-modal .modal-content {
           background: #f8f9fa;
@@ -384,6 +423,31 @@ export default function FilmCatalogue({ show, onHide }) {
         [data-theme="light"] .film-card-poster .placeholder-title {
           background: linear-gradient(135deg, #e8e0f0 0%, #f0f0f5 50%, #e0e8f0 100%);
           color: rgba(0,0,0,0.4);
+        }
+        [data-theme="light"] .film-catalogue-modal .form-label,
+        [data-theme="light"] .film-catalogue-modal h6 {
+          color: #495057 !important;
+        }
+        [data-theme="light"] .film-catalogue-modal .form-control,
+        [data-theme="light"] .film-catalogue-modal .form-select {
+          background: #fff;
+          border-color: #ced4da;
+          color: #212529;
+        }
+        [data-theme="light"] .film-catalogue-modal .input-group-text {
+          background: #e9ecef;
+          border-color: #ced4da;
+          color: #495057;
+        }
+        [data-theme="light"] .film-catalogue-modal .nav-tabs .nav-link {
+          color: #6c757d;
+        }
+        [data-theme="light"] .film-catalogue-modal .nav-tabs .nav-link.active {
+          color: #212529;
+        }
+        [data-theme="light"] .film-catalogue-modal .form-select option {
+          background: #fff;
+          color: #212529;
         }
       `}</style>
     </>
