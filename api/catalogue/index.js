@@ -172,8 +172,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'No fields to update' });
       }
 
-      // Build SET clause dynamically
-      // We have to handle tmdb_data specially (needs JSON.stringify)
+      // We have to handle tmdb_data specially (needs to be a JSON string for JSONB column)
       const setClauses = [];
       const values = [];
       let paramIndex = 1;
@@ -181,13 +180,21 @@ export default async function handler(req, res) {
       for (const [field, value] of Object.entries(updates)) {
         if (field === 'tmdb_data') {
           setClauses.push(`${field} = $${paramIndex}`);
-          values.push(value ? JSON.stringify(value) : null);
+          // Accept both pre-stringified (from client) and object (from addFilmFromTMDB)
+          if (typeof value === 'string') {
+            values.push(value);
+          } else {
+            values.push(value ? JSON.stringify(value) : null);
+          }
         } else {
           setClauses.push(`${field} = $${paramIndex}`);
           values.push(value === undefined ? null : value);
         }
         paramIndex++;
       }
+
+      // Add updated_at
+      setClauses.push(`updated_at = NOW()`);
 
       // Add the WHERE clause params
       values.push(id);
@@ -197,7 +204,10 @@ export default async function handler(req, res) {
         UPDATE film_catalogue
         SET ${setClauses.join(', ')}
         WHERE id = $${paramIndex} AND user_id = $${paramIndex + 1}
-        RETURNING *
+        RETURNING id, title, year, status, release_date, synopsis, genres,
+                  tmdb_id, poster_path, backdrop_path, certification, runtime,
+                  tmdb_budget, tmdb_revenue, tmdb_popularity, tmdb_vote_average,
+                  distribution_cost, production_cost, notes, created_at, updated_at
       `;
 
       const rows = await sql.unsafe(query, values);
