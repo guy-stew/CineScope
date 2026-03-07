@@ -150,13 +150,45 @@ export default async function handler(req, res) {
         return res.status(404).json({ error: 'Catalogue entry not found' });
       }
 
-      // Build dynamic update from provided fields
       const body = req.body;
+      const { action } = req.query;
+
+      // ─── Special path: TMDB link (uses tagged template for reliable JSONB handling) ───
+      if (action === 'tmdb_link') {
+        const tmdbDataStr = body.tmdb_data
+          ? (typeof body.tmdb_data === 'string' ? body.tmdb_data : JSON.stringify(body.tmdb_data))
+          : null;
+
+        const rows = await sql`
+          UPDATE film_catalogue SET
+            title = ${body.title || null},
+            year = ${body.year || null},
+            release_date = ${body.release_date || null},
+            synopsis = COALESCE(synopsis, ${body.synopsis || null}),
+            genres = COALESCE(genres, ${body.genres || null}),
+            certification = COALESCE(certification, ${body.certification || null}),
+            runtime = COALESCE(runtime, ${body.runtime || null}),
+            tmdb_id = ${body.tmdb_id || null},
+            tmdb_data = ${tmdbDataStr},
+            poster_path = ${body.poster_path || null},
+            backdrop_path = ${body.backdrop_path || null},
+            tmdb_budget = ${body.tmdb_budget || 0},
+            tmdb_revenue = ${body.tmdb_revenue || 0},
+            tmdb_popularity = ${body.tmdb_popularity || null},
+            tmdb_vote_average = ${body.tmdb_vote_average || null},
+            updated_at = NOW()
+          WHERE id = ${id} AND user_id = ${user.id}
+          RETURNING *
+        `;
+
+        console.log('Catalogue TMDB link: tmdb_id =', body.tmdb_id, ', rows updated:', rows.length);
+        return res.status(200).json(rows[0] || {});
+      }
+
+      // ─── Standard field update (non-TMDB fields) ───
       const updatable = [
         'title', 'year', 'status', 'release_date', 'synopsis', 'genres',
-        'tmdb_id', 'tmdb_data', 'poster_path', 'backdrop_path',
-        'certification', 'runtime', 'tmdb_budget', 'tmdb_revenue',
-        'tmdb_popularity', 'tmdb_vote_average',
+        'certification', 'runtime',
         'distribution_cost', 'production_cost', 'notes'
       ];
 
@@ -172,31 +204,18 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'No fields to update' });
       }
 
-      // Build SET clause
+      // Build SET clause (simple fields only — no JSONB)
       const setClauses = [];
       const values = [];
       let paramIndex = 1;
 
       for (const [field, value] of Object.entries(updates)) {
         setClauses.push(`${field} = $${paramIndex}`);
-        if (field === 'tmdb_data') {
-          // JSONB column accepts a JSON string without explicit cast
-          if (value === null || value === undefined) {
-            values.push(null);
-          } else if (typeof value === 'string') {
-            values.push(value);
-          } else {
-            values.push(JSON.stringify(value));
-          }
-        } else {
-          values.push(value === undefined ? null : value);
-        }
+        values.push(value === undefined ? null : value);
         paramIndex++;
       }
 
-      // Always bump updated_at
       setClauses.push(`updated_at = NOW()`);
-
       values.push(id);
       values.push(user.id);
 

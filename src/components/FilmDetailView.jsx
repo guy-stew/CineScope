@@ -185,8 +185,8 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
       if (!film.certification && details.certification) tmdbUpdate.certification = details.certification;
       if (!film.runtime && details.runtime) tmdbUpdate.runtime = details.runtime;
 
-      // Save directly to the database (don't wait for the Save button)
-      await apiClient.updateCatalogueEntry(filmId, tmdbUpdate);
+      // Save TMDB data via dedicated endpoint (uses tagged template for reliable JSONB)
+      await apiClient.linkCatalogueTMDB(filmId, tmdbUpdate);
 
       // Reload full film to get all the data back (including parsed tmdb_data)
       const reloaded = await apiClient.getCatalogueEntry(filmId);

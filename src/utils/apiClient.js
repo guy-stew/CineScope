@@ -457,6 +457,19 @@ export async function updateCatalogueEntry(id, updates, getToken) {
 }
 
 /**
+ * Link a catalogue entry to TMDB — dedicated endpoint for reliable JSONB handling.
+ * @param {string} id - Catalogue entry UUID
+ * @param {Object} tmdbData - TMDB fields to set (title, tmdb_id, tmdb_data, poster_path, etc.)
+ * @param {Function} getToken
+ */
+export async function linkCatalogueTMDB(id, tmdbData, getToken) {
+  return apiFetch(`/catalogue?id=${id}&action=tmdb_link`, {
+    method: 'PUT',
+    body: JSON.stringify(tmdbData),
+  }, getToken);
+}
+
+/**
  * Delete a catalogue entry. Linked Comscore imports are preserved (just unlinked).
  * @param {string} id - Catalogue entry UUID
  * @param {Function} getToken

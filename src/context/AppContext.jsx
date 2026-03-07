@@ -805,6 +805,7 @@ export function AppProvider({ children }) {
     getCatalogueEntry:   (id)                   => api.getCatalogueEntry(id, getTokenRef.current),
     createCatalogueEntry:(entry)                => api.createCatalogueEntry(entry, getTokenRef.current),
     updateCatalogueEntry:(id, updates)          => api.updateCatalogueEntry(id, updates, getTokenRef.current),
+    linkCatalogueTMDB:   (id, tmdbData)          => api.linkCatalogueTMDB(id, tmdbData, getTokenRef.current),
     deleteCatalogueEntry:(id)                   => api.deleteCatalogueEntry(id, getTokenRef.current),
     searchTMDB:          (query)                => api.searchTMDB(query, getTokenRef.current),
     getTMDBDetails:      (tmdbId)               => api.getTMDBDetails(tmdbId, getTokenRef.current),
