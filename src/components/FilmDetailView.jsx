@@ -158,7 +158,9 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
             {!editing && (
               <Button variant="outline-light" size="sm" onClick={() => {
                 setEditing(true);
+                setActiveTab('financials');
                 setEditData({
+                  title: film.title || '',
                   status: film.status,
                   distribution_cost: film.distribution_cost || '',
                   production_cost: film.production_cost || '',
@@ -410,6 +412,14 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
             <div className="py-2">
               {editing ? (
                 <>
+                  <Form.Group className="mb-3">
+                    <Form.Label className="small fw-semibold">Film Title</Form.Label>
+                    <Form.Control
+                      value={editData.title ?? film.title}
+                      onChange={e => setEditData(prev => ({ ...prev, title: e.target.value }))}
+                      placeholder="Film title"
+                    />
+                  </Form.Group>
                   <Row className="g-3 mb-3">
                     <Col xs={6}>
                       <Form.Group>
@@ -565,6 +575,17 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
           min-height: 200px;
           position: relative;
         }
+        /* ── Hero text contrast ── */
+        .film-detail-hero .text-muted {
+          color: rgba(255,255,255,0.7) !important;
+        }
+        .film-detail-hero strong {
+          color: #fff;
+        }
+        .film-detail-hero div,
+        .film-detail-hero span {
+          color: rgba(255,255,255,0.85);
+        }
         /* ── Max-width container for readable text ── */
         .film-detail-inner {
           max-width: 890px;
@@ -584,13 +605,16 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
         .film-detail-body td,
         .film-detail-body th,
         .film-detail-body strong {
-          color: #e0e0e0;
+          color: #f0f0f0;
         }
         .film-detail-body h6.text-muted {
-          color: #999 !important;
+          color: #aaa !important;
         }
         .film-detail-body .text-muted {
-          color: #999 !important;
+          color: #aaa !important;
+        }
+        .film-detail-body .fst-italic {
+          color: #bbb;
         }
         /* ── Tabs ── */
         .film-detail-body .nav-pills .nav-link {
@@ -638,6 +662,16 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
         }
 
         /* ── Light theme ── */
+        [data-theme="light"] .film-detail-hero .text-muted {
+          color: rgba(0,0,0,0.5) !important;
+        }
+        [data-theme="light"] .film-detail-hero div,
+        [data-theme="light"] .film-detail-hero span {
+          color: #333;
+        }
+        [data-theme="light"] .film-detail-hero strong {
+          color: #212529;
+        }
         [data-theme="light"] .film-detail-hero h3 {
           color: #212529;
         }
