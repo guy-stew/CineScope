@@ -81,6 +81,7 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
   // ─── Save edits ───
   const handleSave = async () => {
     setSaving(true);
+    setError(null);
     try {
       const updates = {};
       for (const [key, val] of Object.entries(editData)) {
@@ -88,6 +89,17 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
           updates[key] = val === '' ? null : val;
         }
       }
+
+      // Ensure numeric fields are proper numbers (not strings)
+      const numericFields = ['year', 'runtime', 'tmdb_id', 'tmdb_budget', 'tmdb_revenue'];
+      const floatFields = ['tmdb_popularity', 'tmdb_vote_average', 'distribution_cost', 'production_cost'];
+      for (const f of numericFields) {
+        if (f in updates && updates[f] !== null) updates[f] = parseInt(updates[f]) || null;
+      }
+      for (const f of floatFields) {
+        if (f in updates && updates[f] !== null) updates[f] = parseFloat(updates[f]) || null;
+      }
+
       const updated = await apiClient.updateCatalogueEntry(filmId, updates);
       setFilm(prev => ({ ...prev, ...updated }));
       onFilmUpdated?.(updated);
@@ -96,7 +108,8 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
       setTmdbResults([]);
       setShowTmdbDropdown(false);
     } catch (err) {
-      setError('Failed to save changes');
+      console.error('Save failed:', err);
+      setError(err.message || 'Failed to save changes');
     } finally {
       setSaving(false);
     }
