@@ -172,28 +172,31 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'No fields to update' });
       }
 
-      // We have to handle tmdb_data specially (needs to be a JSON string for JSONB column)
+      // Build SET clause
       const setClauses = [];
       const values = [];
       let paramIndex = 1;
 
       for (const [field, value] of Object.entries(updates)) {
+        setClauses.push(`${field} = $${paramIndex}`);
         if (field === 'tmdb_data') {
-          // Explicit JSONB cast required for sql.unsafe() (tagged template handles this automatically)
-          setClauses.push(`${field} = $${paramIndex}::jsonb`);
-          if (typeof value === 'string') {
+          // JSONB column accepts a JSON string without explicit cast
+          if (value === null || value === undefined) {
+            values.push(null);
+          } else if (typeof value === 'string') {
             values.push(value);
           } else {
-            values.push(value ? JSON.stringify(value) : null);
+            values.push(JSON.stringify(value));
           }
         } else {
-          setClauses.push(`${field} = $${paramIndex}`);
           values.push(value === undefined ? null : value);
         }
         paramIndex++;
       }
 
-      // Add the WHERE clause params
+      // Always bump updated_at
+      setClauses.push(`updated_at = NOW()`);
+
       values.push(id);
       values.push(user.id);
 
@@ -207,6 +210,7 @@ export default async function handler(req, res) {
                   distribution_cost, production_cost, notes, created_at, updated_at
       `;
 
+      console.log('Catalogue PUT fields:', Object.keys(updates).join(', '));
       const rows = await sql.unsafe(query, values);
 
       return res.status(200).json(rows[0] || {});
