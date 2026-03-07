@@ -181,7 +181,7 @@ export default function AddFilmModal({ show, onHide, onFilmAdded }) {
     <>
       <Modal.Header closeButton>
         <Modal.Title className="d-flex align-items-center gap-2">
-          <span className="material-symbols-outlined" style={{ color: '#e50914' }}>add_circle</span>
+          <span className="material-symbols-rounded" style={{ color: '#e50914' }}>add_circle</span>
           Add Film
         </Modal.Title>
       </Modal.Header>
@@ -190,7 +190,7 @@ export default function AddFilmModal({ show, onHide, onFilmAdded }) {
 
         <InputGroup className="mb-3">
           <InputGroup.Text>
-            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>search</span>
+            <span className="material-symbols-rounded" style={{ fontSize: '18px' }}>search</span>
           </InputGroup.Text>
           <Form.Control
             placeholder="Search for a film... (e.g. Importance of Being Earnest)"
@@ -229,7 +229,7 @@ export default function AddFilmModal({ show, onHide, onFilmAdded }) {
                     <img src={tmdbImageUrl(result.poster_path, 'w92')} alt="" />
                   ) : (
                     <div className="tmdb-result-no-poster">
-                      <span className="material-symbols-outlined">movie</span>
+                      <span className="material-symbols-rounded">movie</span>
                     </div>
                   )}
                 </div>
@@ -293,7 +293,7 @@ export default function AddFilmModal({ show, onHide, onFilmAdded }) {
         <Modal.Header closeButton>
           <Modal.Title className="d-flex align-items-center gap-2">
             <Button variant="link" className="p-0 text-muted" onClick={() => setStep(1)}>
-              <span className="material-symbols-outlined">arrow_back</span>
+              <span className="material-symbols-rounded">arrow_back</span>
             </Button>
             {manualMode ? 'Add Film Manually' : 'Review Film Details'}
           </Modal.Title>
@@ -440,7 +440,7 @@ export default function AddFilmModal({ show, onHide, onFilmAdded }) {
 
               <hr className="my-3" />
               <h6 className="text-muted mb-2">
-                <span className="material-symbols-outlined me-1" style={{ fontSize: '16px', verticalAlign: 'middle' }}>payments</span>
+                <span className="material-symbols-rounded me-1" style={{ fontSize: '16px', verticalAlign: 'middle' }}>payments</span>
                 Financial Details (optional)
               </h6>
 
@@ -496,7 +496,7 @@ export default function AddFilmModal({ show, onHide, onFilmAdded }) {
             {saving ? (
               <><Spinner animation="border" size="sm" className="me-1" /> Saving...</>
             ) : (
-              <><span className="material-symbols-outlined me-1" style={{ fontSize: '18px' }}>save</span> Save to Catalogue</>
+              <><span className="material-symbols-rounded me-1" style={{ fontSize: '18px' }}>save</span> Save to Catalogue</>
             )}
           </Button>
         </Modal.Footer>

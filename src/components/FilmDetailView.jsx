@@ -110,7 +110,7 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
       <>
         <div className="modal-header border-0">
           <Button variant="link" className="text-muted p-0" onClick={onBack}>
-            <span className="material-symbols-outlined">arrow_back</span>
+            <span className="material-symbols-rounded">arrow_back</span>
           </Button>
         </div>
         <div className="modal-body d-flex align-items-center justify-content-center" style={{ minHeight: '400px' }}>
@@ -125,7 +125,7 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
       <>
         <div className="modal-header border-0">
           <Button variant="link" className="text-muted p-0" onClick={onBack}>
-            <span className="material-symbols-outlined">arrow_back</span>
+            <span className="material-symbols-rounded">arrow_back</span>
           </Button>
         </div>
         <div className="modal-body text-center py-5">
@@ -152,7 +152,7 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
       } : {}}>
         <div className="d-flex justify-content-between align-items-start p-3">
           <Button variant="link" className="text-white p-0" onClick={onBack}>
-            <span className="material-symbols-outlined fs-4">arrow_back</span>
+            <span className="material-symbols-rounded fs-4">arrow_back</span>
           </Button>
           <div className="d-flex gap-2">
             {!editing && (
@@ -165,12 +165,12 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
                   notes: film.notes || '',
                 });
               }}>
-                <span className="material-symbols-outlined me-1" style={{ fontSize: '16px' }}>edit</span>
+                <span className="material-symbols-rounded me-1" style={{ fontSize: '16px' }}>edit</span>
                 Edit
               </Button>
             )}
             <Button variant="link" className="text-white p-0" onClick={onClose}>
-              <span className="material-symbols-outlined fs-4">close</span>
+              <span className="material-symbols-rounded fs-4">close</span>
             </Button>
           </div>
         </div>
@@ -250,7 +250,7 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
                             <img src={tmdbImageUrl(c.profile_path, 'w185')} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           ) : (
                             <div className="d-flex align-items-center justify-content-center h-100">
-                              <span className="material-symbols-outlined" style={{ color: '#555' }}>person</span>
+                              <span className="material-symbols-rounded" style={{ color: '#555' }}>person</span>
                             </div>
                           )}
                         </div>
@@ -391,11 +391,11 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
                 </>
               ) : (
                 <div className="text-center py-5">
-                  <span className="material-symbols-outlined" style={{ fontSize: '48px', color: '#555' }}>assessment</span>
+                  <span className="material-symbols-rounded" style={{ fontSize: '48px', color: '#555' }}>assessment</span>
                   <h6 className="mt-2 text-muted">No Comscore data yet</h6>
                   <p className="text-muted small">Import a Comscore spreadsheet to see performance analytics for this film.</p>
                   <Button variant="outline-danger" size="sm" disabled>
-                    <span className="material-symbols-outlined me-1" style={{ fontSize: '16px' }}>upload_file</span>
+                    <span className="material-symbols-rounded me-1" style={{ fontSize: '16px' }}>upload_file</span>
                     Import Comscore Data
                   </Button>
                   <div className="text-muted mt-1" style={{ fontSize: '0.75rem' }}>(Coming in Stage 3)</div>
@@ -546,7 +546,7 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
                       </Alert>
                     ) : (
                       <Button variant="outline-danger" size="sm" onClick={() => setConfirmDelete(true)}>
-                        <span className="material-symbols-outlined me-1" style={{ fontSize: '16px' }}>delete</span>
+                        <span className="material-symbols-rounded me-1" style={{ fontSize: '16px' }}>delete</span>
                         Delete from Catalogue
                       </Button>
                     )}

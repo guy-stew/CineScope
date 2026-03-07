@@ -144,7 +144,7 @@ export default function FilmCatalogue({ show, onHide }) {
           <div className="w-100">
             <div className="d-flex align-items-center justify-content-between mb-3">
               <div className="d-flex align-items-center gap-2">
-                <span className="material-symbols-outlined fs-3" style={{ color: '#e50914' }}>movie</span>
+                <span className="material-symbols-rounded fs-3" style={{ color: '#e50914' }}>movie</span>
                 <h4 className="mb-0 fw-bold">Film Catalogue</h4>
                 <Badge bg="secondary" pill className="ms-1">{catalogue.length}</Badge>
               </div>
@@ -153,7 +153,7 @@ export default function FilmCatalogue({ show, onHide }) {
                 className="d-flex align-items-center gap-1"
                 onClick={() => setShowAddFilm(true)}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add</span>
+                <span className="material-symbols-rounded" style={{ fontSize: '18px' }}>add</span>
                 Add Film
               </Button>
             </div>
@@ -162,7 +162,7 @@ export default function FilmCatalogue({ show, onHide }) {
             <div className="d-flex flex-wrap gap-2 align-items-center mb-2">
               <InputGroup style={{ maxWidth: '300px' }}>
                 <InputGroup.Text>
-                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>search</span>
+                  <span className="material-symbols-rounded" style={{ fontSize: '18px' }}>search</span>
                 </InputGroup.Text>
                 <Form.Control
                   placeholder="Search films..."
@@ -171,7 +171,7 @@ export default function FilmCatalogue({ show, onHide }) {
                 />
                 {searchTerm && (
                   <Button variant="outline-secondary" size="sm" onClick={() => setSearchTerm('')}>
-                    <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>close</span>
+                    <span className="material-symbols-rounded" style={{ fontSize: '16px' }}>close</span>
                   </Button>
                 )}
               </InputGroup>
@@ -222,13 +222,13 @@ export default function FilmCatalogue({ show, onHide }) {
             </div>
           ) : error ? (
             <div className="text-center text-danger py-5">
-              <span className="material-symbols-outlined fs-1">error</span>
+              <span className="material-symbols-rounded fs-1">error</span>
               <p className="mt-2">{error}</p>
               <Button variant="outline-danger" size="sm" onClick={loadCatalogue}>Retry</Button>
             </div>
           ) : filteredFilms.length === 0 ? (
             <div className="text-center py-5">
-              <span className="material-symbols-outlined" style={{ fontSize: '64px', color: '#666' }}>movie</span>
+              <span className="material-symbols-rounded" style={{ fontSize: '64px', color: '#666' }}>movie</span>
               <h5 className="mt-3 text-muted">
                 {catalogue.length === 0 ? 'No films yet' : 'No films match your filters'}
               </h5>
@@ -239,7 +239,7 @@ export default function FilmCatalogue({ show, onHide }) {
               </p>
               {catalogue.length === 0 && (
                 <Button variant="danger" onClick={() => setShowAddFilm(true)}>
-                  <span className="material-symbols-outlined me-1" style={{ fontSize: '18px' }}>add</span>
+                  <span className="material-symbols-rounded me-1" style={{ fontSize: '18px' }}>add</span>
                   Add Your First Film
                 </Button>
               )}
@@ -420,7 +420,7 @@ function FilmCard({ film, onClick }) {
         <div className="film-card-comscore">
           {hasComscore ? (
             <Badge bg="success" style={{ fontSize: '0.6rem' }} className="d-flex align-items-center gap-1">
-              <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>check</span>
+              <span className="material-symbols-rounded" style={{ fontSize: '12px' }}>check</span>
               Comscore
             </Badge>
           ) : (
