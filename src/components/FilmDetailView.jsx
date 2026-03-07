@@ -101,8 +101,16 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
       }
 
       const updated = await apiClient.updateCatalogueEntry(filmId, updates);
-      setFilm(prev => ({ ...prev, ...updated }));
-      onFilmUpdated?.(updated);
+
+      if (updated) {
+        setFilm(prev => ({ ...prev, ...updated }));
+        onFilmUpdated?.(updated);
+      } else {
+        // API returned empty response — reload the full film to get fresh data
+        const reloaded = await apiClient.getCatalogueEntry(filmId);
+        setFilm(reloaded);
+        onFilmUpdated?.(reloaded);
+      }
       setEditing(false);
       setEditData({});
       setTmdbResults([]);

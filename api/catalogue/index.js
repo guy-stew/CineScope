@@ -179,8 +179,8 @@ export default async function handler(req, res) {
 
       for (const [field, value] of Object.entries(updates)) {
         if (field === 'tmdb_data') {
-          setClauses.push(`${field} = $${paramIndex}`);
-          // Accept both pre-stringified (from client) and object (from addFilmFromTMDB)
+          // Explicit JSONB cast required for sql.unsafe() (tagged template handles this automatically)
+          setClauses.push(`${field} = $${paramIndex}::jsonb`);
           if (typeof value === 'string') {
             values.push(value);
           } else {
@@ -192,9 +192,6 @@ export default async function handler(req, res) {
         }
         paramIndex++;
       }
-
-      // Add updated_at
-      setClauses.push(`updated_at = NOW()`);
 
       // Add the WHERE clause params
       values.push(id);
@@ -212,7 +209,7 @@ export default async function handler(req, res) {
 
       const rows = await sql.unsafe(query, values);
 
-      return res.status(200).json(rows[0]);
+      return res.status(200).json(rows[0] || {});
     }
 
     // ─── DELETE: Remove catalogue entry ───
@@ -239,6 +236,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('Catalogue API error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: err.message || 'Internal server error' });
   }
 }

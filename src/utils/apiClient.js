@@ -44,12 +44,23 @@ async function apiFetch(path, options = {}, getToken) {
   // Handle non-JSON responses (e.g. SSE streams)
   if (options.raw) return res;
 
+  // Read body as text first to avoid "unexpected end of JSON" on empty responses
+  const text = await res.text();
+
   if (!res.ok) {
-    const errBody = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(errBody.error || `API error: ${res.status}`);
+    let errMsg = res.statusText || `API error: ${res.status}`;
+    try {
+      const errBody = JSON.parse(text);
+      errMsg = errBody.error || errMsg;
+    } catch {}
+    throw new Error(errMsg);
   }
 
-  return res.json();
+  // Parse JSON, handling empty body gracefully
+  if (!text || !text.trim()) {
+    return null;
+  }
+  return JSON.parse(text);
 }
 
 
