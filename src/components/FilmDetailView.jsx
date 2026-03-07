@@ -2,7 +2,7 @@
 // Full film detail view within the catalogue overlay
 // Tabs: Overview, Performance (if Comscore data), Financials
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Button, Badge, Spinner, Alert, Tabs, Tab, Row, Col, Form, InputGroup, Table } from 'react-bootstrap';
 import { useApp } from '../context/AppContext';
 import { tmdbImageUrl } from '../utils/apiClient';
@@ -26,6 +26,14 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // ─── TMDB search-on-edit state ───
+  const [tmdbResults, setTmdbResults] = useState([]);
+  const [tmdbSearching, setTmdbSearching] = useState(false);
+  const [showTmdbDropdown, setShowTmdbDropdown] = useState(false);
+  const [tmdbLinking, setTmdbLinking] = useState(false);
+  const tmdbTimeout = useRef(null);
+  const dropdownRef = useRef(null);
 
   // ─── Load full film details ───
   useEffect(() => {
@@ -85,6 +93,8 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
       onFilmUpdated?.(updated);
       setEditing(false);
       setEditData({});
+      setTmdbResults([]);
+      setShowTmdbDropdown(false);
     } catch (err) {
       setError('Failed to save changes');
     } finally {
@@ -103,6 +113,79 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
       setDeleting(false);
     }
   };
+
+  // ─── TMDB search (debounced, triggered by title input) ───
+  const handleTitleChange = useCallback((value) => {
+    setEditData(prev => ({ ...prev, title: value }));
+    clearTimeout(tmdbTimeout.current);
+    if (value.trim().length >= 2 && apiClient) {
+      setShowTmdbDropdown(true);
+      tmdbTimeout.current = setTimeout(async () => {
+        setTmdbSearching(true);
+        try {
+          const data = await apiClient.searchTMDB(value);
+          setTmdbResults(data.results || []);
+        } catch (err) {
+          console.error('TMDB search failed:', err);
+          setTmdbResults([]);
+        } finally {
+          setTmdbSearching(false);
+        }
+      }, 500);
+    } else {
+      setTmdbResults([]);
+      setShowTmdbDropdown(false);
+    }
+  }, [apiClient]);
+
+  // ─── Select a TMDB result → fetch details & merge ───
+  const handleTmdbSelect = useCallback(async (result) => {
+    setShowTmdbDropdown(false);
+    setTmdbResults([]);
+    setTmdbLinking(true);
+    try {
+      const details = await apiClient.getTMDBDetails(result.tmdb_id);
+
+      // Build TMDB fields — always set title + TMDB link fields
+      const tmdbFields = {
+        title: details.title,
+        tmdb_id: details.tmdb_id,
+        tmdb_data: details,
+        poster_path: details.poster_path,
+        backdrop_path: details.backdrop_path,
+        tmdb_popularity: details.popularity,
+        tmdb_vote_average: details.vote_average,
+        tmdb_budget: details.budget,
+        tmdb_revenue: details.revenue,
+      };
+
+      // Only fill in fields that are currently empty on the existing film
+      if (!film.year) tmdbFields.year = details.year;
+      if (!film.release_date) tmdbFields.release_date = details.release_date;
+      if (!film.synopsis) tmdbFields.synopsis = details.overview;
+      if (!film.genres) tmdbFields.genres = (details.genres || []).join(', ');
+      if (!film.certification) tmdbFields.certification = details.certification;
+      if (!film.runtime) tmdbFields.runtime = details.runtime;
+
+      setEditData(prev => ({ ...prev, ...tmdbFields }));
+    } catch (err) {
+      console.error('Failed to fetch TMDB details:', err);
+      setError('Failed to load film details from TMDB');
+    } finally {
+      setTmdbLinking(false);
+    }
+  }, [apiClient, film]);
+
+  // ─── Close TMDB dropdown on click outside ───
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowTmdbDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // ─── Loading / Error ───
   if (loading) {
@@ -412,13 +495,70 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
             <div className="py-2">
               {editing ? (
                 <>
-                  <Form.Group className="mb-3">
-                    <Form.Label className="small fw-semibold">Film Title</Form.Label>
+                  <Form.Group className="mb-3" ref={dropdownRef} style={{ position: 'relative' }}>
+                    <Form.Label className="small fw-semibold d-flex align-items-center gap-2">
+                      Film Title
+                      {(editData.tmdb_id || film.tmdb_id) && (
+                        <Badge bg="success" style={{ fontSize: '0.65rem', fontWeight: 'normal' }}>
+                          <span className="material-symbols-rounded me-1" style={{ fontSize: '12px', verticalAlign: 'middle' }}>link</span>
+                          TMDB linked
+                        </Badge>
+                      )}
+                      {tmdbLinking && <Spinner animation="border" size="sm" variant="danger" />}
+                    </Form.Label>
                     <Form.Control
                       value={editData.title ?? film.title}
-                      onChange={e => setEditData(prev => ({ ...prev, title: e.target.value }))}
-                      placeholder="Film title"
+                      onChange={e => handleTitleChange(e.target.value)}
+                      onFocus={() => { if (tmdbResults.length > 0) setShowTmdbDropdown(true); }}
+                      placeholder="Type to search TMDB..."
+                      autoComplete="off"
                     />
+                    {!film.tmdb_id && !editData.tmdb_id && (
+                      <Form.Text className="text-muted" style={{ fontSize: '0.72rem' }}>
+                        Type a film title to search The Movie Database and auto-fill metadata
+                      </Form.Text>
+                    )}
+
+                    {/* TMDB search results dropdown */}
+                    {showTmdbDropdown && (editData.title ?? film.title || '').trim().length >= 2 && (
+                      <div className="tmdb-edit-dropdown">
+                        {tmdbSearching && (
+                          <div className="text-center py-2">
+                            <Spinner animation="border" size="sm" variant="secondary" />
+                            <span className="ms-2" style={{ fontSize: '0.8rem', color: '#999' }}>Searching TMDB...</span>
+                          </div>
+                        )}
+                        {!tmdbSearching && tmdbResults.length === 0 && (
+                          <div className="text-center py-2" style={{ fontSize: '0.8rem', color: '#888' }}>
+                            No TMDB matches found
+                          </div>
+                        )}
+                        {!tmdbSearching && tmdbResults.slice(0, 6).map(r => (
+                          <div
+                            key={r.tmdb_id}
+                            className="tmdb-edit-result"
+                            onClick={() => handleTmdbSelect(r)}
+                          >
+                            <div className="tmdb-edit-poster">
+                              {r.poster_path ? (
+                                <img src={tmdbImageUrl(r.poster_path, 'w92')} alt="" />
+                              ) : (
+                                <span className="material-symbols-rounded" style={{ color: '#555', fontSize: '24px' }}>movie</span>
+                              )}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div className="fw-semibold" style={{ fontSize: '0.85rem' }}>{r.title}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#999' }}>
+                                {r.year || 'Unknown year'}
+                                {r.vote_average > 0 && (
+                                  <span className="ms-2"><span style={{ color: '#f5c518' }}>★</span> {r.vote_average.toFixed(1)}</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </Form.Group>
                   <Row className="g-3 mb-3">
                     <Col xs={6}>
@@ -479,7 +619,7 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
                     <Button variant="danger" onClick={handleSave} disabled={saving}>
                       {saving ? <Spinner animation="border" size="sm" /> : 'Save Changes'}
                     </Button>
-                    <Button variant="outline-secondary" onClick={() => { setEditing(false); setEditData({}); }}>Cancel</Button>
+                    <Button variant="outline-secondary" onClick={() => { setEditing(false); setEditData({}); setTmdbResults([]); setShowTmdbDropdown(false); }}>Cancel</Button>
                   </div>
                 </>
               ) : (
@@ -678,6 +818,53 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
           background: rgba(255,255,255,0.1);
         }
 
+        /* ── TMDB search dropdown in edit mode ── */
+        .tmdb-edit-dropdown {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          z-index: 1050;
+          background: #1e2a45;
+          border: 1px solid #3a4a6a;
+          border-top: none;
+          border-radius: 0 0 8px 8px;
+          max-height: 320px;
+          overflow-y: auto;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .tmdb-edit-result {
+          display: flex;
+          align-items: center;
+          gap: 0.6rem;
+          padding: 0.5rem 0.75rem;
+          cursor: pointer;
+          transition: background 0.12s;
+          border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .tmdb-edit-result:hover {
+          background: rgba(229, 9, 20, 0.1);
+        }
+        .tmdb-edit-result:last-child {
+          border-bottom: none;
+        }
+        .tmdb-edit-poster {
+          flex-shrink: 0;
+          width: 40px;
+          height: 60px;
+          border-radius: 3px;
+          overflow: hidden;
+          background: #2a2a4a;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .tmdb-edit-poster img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
         /* ── Light theme ── */
         [data-theme="light"] .film-detail-hero .text-muted {
           color: rgba(0,0,0,0.5) !important;
@@ -739,6 +926,20 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
         [data-theme="light"] .film-detail-body .btn-outline-secondary {
           color: #6c757d;
           border-color: #ced4da;
+        }
+        [data-theme="light"] .tmdb-edit-dropdown {
+          background: #fff;
+          border-color: #ced4da;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        [data-theme="light"] .tmdb-edit-result:hover {
+          background: rgba(229, 9, 20, 0.05);
+        }
+        [data-theme="light"] .tmdb-edit-result {
+          border-color: #eee;
+        }
+        [data-theme="light"] .tmdb-edit-poster {
+          background: #e9ecef;
         }
       `}</style>
     </>
