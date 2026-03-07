@@ -520,7 +520,7 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
                     )}
 
                     {/* TMDB search results dropdown */}
-                    {showTmdbDropdown && (editData.title ?? film.title || '').trim().length >= 2 && (
+                    {showTmdbDropdown && ((editData.title ?? film.title) || '').trim().length >= 2 && (
                       <div className="tmdb-edit-dropdown">
                         {tmdbSearching && (
                           <div className="text-center py-2">
