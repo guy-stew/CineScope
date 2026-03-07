@@ -7,7 +7,7 @@ import { formatRevenue } from '../utils/formatRevenue'
 import GradeSummary from './GradeSummary'
 
 export default function AnalyticsPanel() {
-  const { filteredVenues, selectedVenue, setSelectedVenue, selectedFilm, gradeFilter, revenueFormat } = useApp()
+  const { filteredVenues, selectedVenue, setSelectedVenue, selectedFilm, filmDisplayStats, gradeFilter, revenueFormat } = useApp()
   const { theme } = useTheme()
   const [sortField, setSortField] = useState('name')
   const [sortDir, setSortDir] = useState('asc')
@@ -68,16 +68,16 @@ export default function AnalyticsPanel() {
                 {selectedFilm.filmInfo.title || selectedFilm.filmInfo.fileName}
               </strong>
               <div style={{ color: theme.textMuted, fontSize: '0.78rem' }}>
-                {selectedFilm.stats.totalVenues} venues · {formatRevenue(selectedFilm.stats.totalRevenue, revenueFormat)} total
-                {selectedFilm.stats.aggregatedCount > 0 && (
+                {filmDisplayStats?.totalWithUnscreened ?? selectedFilm.stats.totalVenues} venues · {formatRevenue(filmDisplayStats?.totalRevenue ?? selectedFilm.stats.totalRevenue, revenueFormat)} total
+                {(filmDisplayStats?.aggregatedCount || selectedFilm.stats.aggregatedCount) > 0 && (
                   <span title="Multi-screen entries were automatically combined">
-                    {' '}· 🖥️ {selectedFilm.stats.aggregatedCount} rows combined
+                    {' '}· 🖥️ {filmDisplayStats?.aggregatedCount || selectedFilm.stats.aggregatedCount} rows combined
                   </span>
                 )}
               </div>
             </div>
             <Badge bg="info" style={{ fontSize: '0.75rem' }}>
-              Avg {formatRevenue(selectedFilm.stats.avgRevenue, revenueFormat)}
+              Avg {formatRevenue(filmDisplayStats?.avgRevenue ?? selectedFilm.stats.avgRevenue, revenueFormat)}
             </Badge>
           </div>
         </div>
