@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, Component } from 'react'
-import { Modal, Badge, Button, Tab, Tabs, Spinner, Form, Alert } from 'react-bootstrap'
+import { Modal, Badge, Button, Tab, Tabs, Spinner, Form, Alert, OverlayTrigger, Tooltip as BTooltip } from 'react-bootstrap'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as RTooltip, Cell } from 'recharts'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
@@ -272,21 +272,36 @@ function TrendPanelInner({ show, onHide }) {
                       <td><small style={{ color: theme.textMuted }}>{String(v.region || '')}</small></td>
                       <td className="text-center">
                         <div className="d-flex gap-1 justify-content-center">
-                          {(v.grades || []).map((g, i) => (
-                            <Badge
-                              key={i}
-                              bg=""
-                              style={{
-                                backgroundColor: GRADES[g]?.color || '#95a5a6',
-                                color: '#fff',
-                                minWidth: 22,
-                                fontSize: '0.7rem',
-                              }}
-                              title={String(filmTitles[(v.appearances || [])[i]?.filmIndex] || '')}
-                            >
-                              {String(g)}
-                            </Badge>
-                          ))}
+                          {(v.grades || []).map((g, i) => {
+                            const filmIdx = (v.appearances || [])[i]?.filmIndex
+                            const filmName = filmIdx != null ? filmTitles[filmIdx] : filmTitles[i]
+                            const filmRevenue = (v.appearances || [])[i]?.revenue
+                            const position = i + 1
+                            const tooltipText = filmName
+                              ? `${position}. ${filmName}${filmRevenue != null ? ` — £${Number(filmRevenue).toLocaleString()}` : ''}`
+                              : `Film ${position}`
+
+                            return (
+                              <OverlayTrigger
+                                key={i}
+                                placement="top"
+                                overlay={<BTooltip style={{ fontSize: '0.78rem' }}>{tooltipText}</BTooltip>}
+                              >
+                                <Badge
+                                  bg=""
+                                  style={{
+                                    backgroundColor: GRADES[g]?.color || '#95a5a6',
+                                    color: '#fff',
+                                    minWidth: 22,
+                                    fontSize: '0.7rem',
+                                    cursor: 'help',
+                                  }}
+                                >
+                                  {String(g)}
+                                </Badge>
+                              </OverlayTrigger>
+                            )
+                          })}
                         </div>
                       </td>
                       <td className="text-end" style={{ fontWeight: 600 }}>
@@ -365,18 +380,23 @@ function TrendPanelInner({ show, onHide }) {
                             <td className="text-center">
                               <div className="d-flex gap-1 justify-content-center">
                                 {(c.perFilm || []).map((p, i) => (
-                                  <Badge
+                                  <OverlayTrigger
                                     key={i}
-                                    bg=""
-                                    style={{
-                                      backgroundColor: GRADES[p.avgGrade]?.color || '#95a5a6',
-                                      color: '#fff',
-                                      fontSize: '0.65rem',
-                                    }}
-                                    title={String(p.filmTitle || '')}
+                                    placement="top"
+                                    overlay={<BTooltip style={{ fontSize: '0.78rem' }}>{i + 1}. {String(p.filmTitle || `Film ${i + 1}`)}</BTooltip>}
                                   >
-                                    {String(p.avgGrade || '?')}
-                                  </Badge>
+                                    <Badge
+                                      bg=""
+                                      style={{
+                                        backgroundColor: GRADES[p.avgGrade]?.color || '#95a5a6',
+                                        color: '#fff',
+                                        fontSize: '0.65rem',
+                                        cursor: 'help',
+                                      }}
+                                    >
+                                      {String(p.avgGrade || '?')}
+                                    </Badge>
+                                  </OverlayTrigger>
                                 ))}
                               </div>
                             </td>
@@ -447,18 +467,23 @@ function TrendPanelInner({ show, onHide }) {
                             <td className="text-center">
                               <div className="d-flex gap-1 justify-content-center">
                                 {(r.perFilm || []).map((p, i) => (
-                                  <Badge
+                                  <OverlayTrigger
                                     key={i}
-                                    bg=""
-                                    style={{
-                                      backgroundColor: GRADES[p.avgGrade]?.color || '#95a5a6',
-                                      color: '#fff',
-                                      fontSize: '0.65rem',
-                                    }}
-                                    title={String(p.filmTitle || '')}
+                                    placement="top"
+                                    overlay={<BTooltip style={{ fontSize: '0.78rem' }}>{i + 1}. {String(p.filmTitle || `Film ${i + 1}`)}</BTooltip>}
                                   >
-                                    {String(p.avgGrade || '?')}
-                                  </Badge>
+                                    <Badge
+                                      bg=""
+                                      style={{
+                                        backgroundColor: GRADES[p.avgGrade]?.color || '#95a5a6',
+                                        color: '#fff',
+                                        fontSize: '0.65rem',
+                                        cursor: 'help',
+                                      }}
+                                    >
+                                      {String(p.avgGrade || '?')}
+                                    </Badge>
+                                  </OverlayTrigger>
                                 ))}
                               </div>
                             </td>
