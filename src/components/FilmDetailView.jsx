@@ -15,7 +15,7 @@ const STATUS_CONFIG = {
 };
 
 export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated, onFilmDeleted }) {
-  const { apiClient } = useApp();
+  const { apiClient, importComscoreFile } = useApp();
 
   const [film, setFilm] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +34,21 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
   const [tmdbLinking, setTmdbLinking] = useState(false);
   const tmdbTimeout = useRef(null);
   const dropdownRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // ─── Handle Comscore file import from detail view ───
+  const handleComscoreFile = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      await importComscoreFile(file);
+      // Close the catalogue so the FilmNameDialog can appear
+      onClose?.();
+    } catch (err) {
+      setError(`Import failed: ${err.message}`);
+    }
+    e.target.value = '';
+  }, [importComscoreFile, onClose]);
 
   // ─── Load full film details ───
   useEffect(() => {
@@ -510,11 +525,17 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
                   <span className="material-symbols-rounded" style={{ fontSize: '48px', color: '#555' }}>assessment</span>
                   <h6 className="mt-2 text-muted">No Comscore data yet</h6>
                   <p className="text-muted small">Import a Comscore spreadsheet to see performance analytics for this film.</p>
-                  <Button variant="outline-danger" size="sm" disabled>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    style={{ display: 'none' }}
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleComscoreFile}
+                  />
+                  <Button variant="outline-danger" size="sm" onClick={() => fileInputRef.current?.click()}>
                     <span className="material-symbols-rounded me-1" style={{ fontSize: '16px' }}>upload_file</span>
                     Import Comscore Data
                   </Button>
-                  <div className="text-muted mt-1" style={{ fontSize: '0.75rem' }}>(Coming in Stage 3)</div>
                 </div>
               )}
             </div>
