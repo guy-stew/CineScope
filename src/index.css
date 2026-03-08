@@ -15,9 +15,14 @@
   --cs-input-border: #ced4da;
   --cs-input-text: #212529;
   --cs-scroll-thumb: #ccc;
+  --cs-sidebar-width: 200px;
+  --cs-sidebar-width-collapsed: 56px;
+  --cs-sidebar-transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ── Layout ──────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════ */
+/* ── NEW: App Shell Layout (v3.0 Sidebar) ────────────────── */
+/* ═══════════════════════════════════════════════════════════ */
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -26,6 +31,202 @@ body {
   color: var(--cs-text);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+.cs-app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--cs-body);
+}
+
+.cs-header-wrapper {
+  flex-shrink: 0;
+  z-index: 1000;
+}
+
+.cs-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+
+.cs-sidebar {
+  width: var(--cs-sidebar-width);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width var(--cs-sidebar-transition);
+  z-index: 900;
+}
+
+.cs-sidebar--collapsed {
+  width: var(--cs-sidebar-width-collapsed);
+}
+
+.cs-sidebar__nav {
+  flex: 1;
+  padding: 8px 6px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.cs-sidebar__section {
+  margin-bottom: 4px;
+}
+
+.cs-sidebar__section-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 12px 10px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.15s ease;
+}
+
+.cs-sidebar--collapsed .cs-sidebar__section-label {
+  opacity: 0;
+  height: 8px;
+  padding: 2px 0;
+  margin: 0;
+}
+
+.cs-sidebar__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: all 0.12s ease;
+  text-align: left;
+}
+
+.cs-sidebar__item:hover {
+  filter: brightness(1.2);
+}
+
+.cs-sidebar__icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+}
+
+.cs-sidebar__label {
+  opacity: 1;
+  transition: opacity 0.15s ease;
+  overflow: hidden;
+}
+
+.cs-sidebar--collapsed .cs-sidebar__label {
+  opacity: 0;
+  width: 0;
+}
+
+.cs-sidebar--collapsed .cs-sidebar__item {
+  justify-content: center;
+  padding: 8px;
+}
+
+.cs-sidebar__badge {
+  margin-left: auto;
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.cs-sidebar__badge--soon {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.cs-sidebar__footer {
+  padding: 8px 6px;
+  flex-shrink: 0;
+}
+
+.cs-sidebar__collapse-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: all 0.12s ease;
+}
+
+.cs-sidebar__collapse-btn:hover {
+  background: var(--cs-surface-alt);
+}
+
+.cs-sidebar--collapsed .cs-sidebar__collapse-btn {
+  justify-content: center;
+  padding: 7px;
+}
+
+/* Tooltip on hover for collapsed sidebar items */
+.cs-sidebar--collapsed .cs-sidebar__item {
+  position: relative;
+}
+
+.cs-sidebar--collapsed .cs-sidebar__item:hover::after {
+  content: attr(title);
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  color: var(--cs-text);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  z-index: 1100;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ── Main Content Area ───────────────────────────────────── */
+
+.cs-main {
+  flex: 1;
+  overflow: hidden;
+  min-width: 0; /* prevents flex blowout */
+  transition: margin-left 0s; /* no transition needed — sidebar width handles it */
+}
+
+/* ═══════════════════════════════════════════════════════════ */
+/* ── EXISTING STYLES (preserved from v2.x) ───────────────── */
+/* ═══════════════════════════════════════════════════════════ */
+
+/* ── Layout ──────────────────────────────────────────────── */
 
 .app-container {
   background: var(--cs-body);
@@ -211,6 +412,16 @@ body {
   background: #999;
 }
 
+/* Also style sidebar scrollbar */
+.cs-sidebar__nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.cs-sidebar__nav::-webkit-scrollbar-thumb {
+  background: var(--cs-scroll-thumb);
+  border-radius: 2px;
+}
+
 /* ── Population Layer ────────────────────────────────────── */
 
 .population-loading {
@@ -277,8 +488,28 @@ body {
 /* ── Responsive ──────────────────────────────────────────── */
 
 @media (max-width: 991.98px) {
-  .app-container {
-    overflow: auto;
+  .cs-sidebar {
+    width: var(--cs-sidebar-width-collapsed) !important;
+  }
+
+  .cs-sidebar .cs-sidebar__label {
+    opacity: 0;
+    width: 0;
+  }
+
+  .cs-sidebar .cs-sidebar__item {
+    justify-content: center;
+    padding: 8px;
+  }
+
+  .cs-sidebar .cs-sidebar__section-label {
+    opacity: 0;
+    height: 8px;
+    padding: 2px 0;
+  }
+
+  .cs-sidebar .cs-sidebar__badge {
+    display: none;
   }
 
   .map-wrapper {
