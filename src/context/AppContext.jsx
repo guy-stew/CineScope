@@ -876,6 +876,40 @@ export function AppProvider({ children }) {
     }
   }, [])
 
+  // ── Unified delete: removes catalogue entry + linked Comscore imports + local state ──
+  // Called from FilmDetailView Financials tab. The backend now handles deleting
+  // linked films rows (which cascade-deletes film_revenues) before removing the
+  // catalogue entry itself.
+  const deleteFilmUnified = useCallback(async (catalogueId) => {
+    try {
+      // 1. Call API — deletes imports + catalogue entry server-side
+      await api.deleteCatalogueEntry(catalogueId, getTokenRef.current)
+
+      // 2. Remove linked Comscore imports from local state
+      setImportedFilms(prev => prev.filter(f => f.catalogueId !== catalogueId))
+
+      // 3. Remove from catalogue state
+      setCatalogue(prev => prev.filter(f => f.id !== catalogueId))
+
+      // 4. Remove from analysis set
+      setAnalysisSet(prev => {
+        const next = prev.filter(id => id !== catalogueId)
+        localStorage.setItem('cinescope_analysis_set', JSON.stringify(next))
+        return next
+      })
+
+      // 5. If the deleted film was selected, clear selection
+      setSelectedFilmIdLocal(prev => {
+        // Check if any importedFilm with this catalogueId was the selected one
+        // (selectedFilmId is the Postgres integer film ID, not the catalogue UUID)
+        return prev // Will be handled by the selectedFilm useMemo returning null
+      })
+    } catch (err) {
+      console.error('CineScope: Failed to delete film (unified)', err)
+      throw err
+    }
+  }, [])
+
   // Rerun matching (called after override changes)
   const rerunMatching = useCallback(() => {
     setOverrides(prev => ({ ...prev }))
@@ -926,6 +960,7 @@ export function AppProvider({ children }) {
     clearFilmSelection,
     removeFilm,
     clearAllFilmsData,
+    deleteFilmUnified,
     filmsLoaded: !isLoading, // backwards compat
     importStatus,
     pendingImport,

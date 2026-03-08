@@ -235,24 +235,41 @@ export default async function handler(req, res) {
       return res.status(200).json(rows[0] || {});
     }
 
-    // ─── DELETE: Remove catalogue entry ───
+    // ─── DELETE: Remove catalogue entry + linked Comscore imports ───
     if (req.method === 'DELETE') {
       if (!id) {
         return res.status(400).json({ error: 'Missing id parameter' });
       }
 
-      // This will SET NULL on films.catalogue_id (cascade rule)
+      // Verify ownership first
+      const existing = await sql`
+        SELECT id, title FROM film_catalogue
+        WHERE id = ${id} AND user_id = ${user.id}
+      `;
+      if (existing.length === 0) {
+        return res.status(404).json({ error: 'Catalogue entry not found' });
+      }
+
+      // Step 1: Delete linked Comscore imports (film_revenues cascade-deletes automatically)
+      const deletedImports = await sql`
+        DELETE FROM films
+        WHERE catalogue_id = ${id} AND user_id = ${user.id}
+        RETURNING id
+      `;
+
+      // Step 2: Delete the catalogue entry itself
       const rows = await sql`
         DELETE FROM film_catalogue
         WHERE id = ${id} AND user_id = ${user.id}
         RETURNING id, title
       `;
 
-      if (rows.length === 0) {
-        return res.status(404).json({ error: 'Catalogue entry not found' });
-      }
+      console.log(`Catalogue DELETE: "${existing[0].title}" — removed ${deletedImports.length} linked import(s)`);
 
-      return res.status(200).json({ deleted: rows[0] });
+      return res.status(200).json({
+        deleted: rows[0],
+        deleted_imports: deletedImports.length,
+      });
     }
 
     return res.status(405).json({ error: 'Method not allowed' });

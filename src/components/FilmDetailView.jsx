@@ -15,7 +15,7 @@ const STATUS_CONFIG = {
 };
 
 export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated, onFilmDeleted }) {
-  const { apiClient, importComscoreFile } = useApp();
+  const { apiClient, importComscoreFile, deleteFilmUnified } = useApp();
 
   const [film, setFilm] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -134,11 +134,11 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
     }
   };
 
-  // ─── Delete film ───
+  // ─── Delete film (unified — removes catalogue + Comscore imports + local state) ───
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      await apiClient.deleteCatalogueEntry(filmId);
+      await deleteFilmUnified(filmId);
       onFilmDeleted?.(filmId);
     } catch (err) {
       setError('Failed to delete film');
@@ -738,10 +738,10 @@ export default function FilmDetailView({ filmId, onBack, onClose, onFilmUpdated,
                   <div>
                     {confirmDelete ? (
                       <Alert variant="danger">
-                        <strong>Are you sure?</strong> This will remove the catalogue entry. Any linked Comscore imports will be preserved but unlinked.
+                        <strong>Are you sure?</strong> This will permanently remove the catalogue entry and all linked Comscore import data. This cannot be undone.
                         <div className="mt-2 d-flex gap-2">
                           <Button variant="danger" size="sm" onClick={handleDelete} disabled={deleting}>
-                            {deleting ? <Spinner animation="border" size="sm" /> : 'Yes, delete'}
+                            {deleting ? <Spinner animation="border" size="sm" /> : 'Yes, delete everything'}
                           </Button>
                           <Button variant="outline-secondary" size="sm" onClick={() => setConfirmDelete(false)}>Cancel</Button>
                         </div>
