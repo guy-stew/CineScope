@@ -472,6 +472,12 @@ body {
   pointer-events: none;
 }
 
+/* Push overlay controls away from Leaflet zoom if it's top-left */
+.leaflet-top.leaflet-left ~ .cs-map-overlay-controls,
+.cs-map-overlay-controls {
+  left: 12px;
+}
+
 .cs-map-overlay-controls > * {
   pointer-events: auto;
 }

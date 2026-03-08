@@ -10,7 +10,7 @@
  */
 
 import React, { useMemo, useEffect, useState } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Popup, ZoomControl, useMap } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
@@ -189,6 +189,21 @@ function MapOverlayControls({ panelVisible, onTogglePanel }) {
 }
 
 
+/**
+ * Invalidate map size when panel visibility changes,
+ * so the map fills the available space without grey gaps.
+ */
+function MapResizer({ panelVisible }) {
+  const map = useMap()
+  useEffect(() => {
+    // Small delay to let CSS transition complete
+    const timer = setTimeout(() => map.invalidateSize(), 300)
+    return () => clearTimeout(timer)
+  }, [panelVisible, map])
+  return null
+}
+
+
 export default function MapView({ panelVisible, onTogglePanel }) {
   const { filteredVenues, selectedFilm, setSelectedVenue, populationMode } = useApp()
   const { theme } = useTheme()
@@ -208,13 +223,15 @@ export default function MapView({ panelVisible, onTogglePanel }) {
         center={UK_CENTER}
         zoom={DEFAULT_ZOOM}
         className="h-100 w-100"
-        zoomControl={true}
+        zoomControl={false}
         scrollWheelZoom={true}
       >
         <ThemeTiles />
         <PopulationHeatLayer />
         <PopulationZonesLayer />
         <FitBounds venues={mappableVenues} />
+        <MapResizer panelVisible={panelVisible} />
+        <ZoomControl position="bottomleft" />
 
         <MarkerClusterGroup
           chunkedLoading
