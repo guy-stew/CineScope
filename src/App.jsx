@@ -1,11 +1,13 @@
 /**
- * CineScope — App Shell (v3.0 Stage 2)
+ * CineScope — App Shell (v3.0 Stage 3)
  *
- * Stage 2 changes:
- *   - Map view now uses MapView + MapPanel side by side (replaces Col 8/4 + AnalyticsPanel)
- *   - MapPanel state (visible/hidden) managed here
- *   - MapView receives panelVisible + onTogglePanel props for overlay controls
- *   - AnalyticsPanel import removed (replaced by MapPanel)
+ * Stage 3 changes:
+ *   - Films sidebar tab opens FilmCatalogue modal (full-screen overlay)
+ *   - Closing the catalogue returns to Map view
+ *   - Venues sidebar tab opens VenueManager modal
+ *   - Closing the venue manager returns to Map view
+ *   - FilmCatalogue and VenueManager components are UNCHANGED
+ *   - Header no longer has Catalogue or Venue Manager buttons (moved to sidebar)
  */
 
 import React, { useState, useCallback } from 'react'
@@ -19,9 +21,11 @@ import SettingsPanel from './components/SettingsPanel'
 import MatchReviewPanel from './components/MatchReviewPanel'
 import TrendPanel from './components/TrendPanel'
 import FilmNameDialog from './components/FilmNameDialog'
+import FilmCatalogue from './components/FilmCatalogue'
+import VenueManager from './components/VenueManager'
 import Icon from './components/Icon'
 
-// ── Placeholder views for Stages 3-5 ──
+// ── Placeholder views ──
 function PlaceholderView({ title, icon, description, stage }) {
   const { theme } = useTheme()
   return (
@@ -88,6 +92,11 @@ function AppContent() {
     setMapPanelVisible(prev => !prev)
   }, [])
 
+  // When closing a modal view (Films/Venues), return to Map
+  const handleReturnToMap = useCallback(() => {
+    setCurrentView('map')
+  }, [])
+
   return (
     <div className="cs-app-shell">
       {/* Header */}
@@ -123,26 +132,6 @@ function AppContent() {
             </div>
           )}
 
-          {/* ══════ FILMS VIEW (placeholder — Stage 3) ══════ */}
-          {currentView === 'films' && (
-            <PlaceholderView
-              title="Film Catalogue"
-              icon="movie"
-              description="The Film Catalogue will move here from its current overlay. You'll be able to browse, add, import Comscore data, and manage all your films in a dedicated full-screen view. For now, use the Catalogue button in the header."
-              stage={3}
-            />
-          )}
-
-          {/* ══════ VENUES VIEW (placeholder — Stage 4) ══════ */}
-          {currentView === 'venues' && (
-            <PlaceholderView
-              title="Venue Manager"
-              icon="storefront"
-              description="The Venue Manager will move here from its current overlay. Add, edit, import, and manage all 943 venues in a dedicated view with stats cards and a full data table. For now, use the venue icon in the header."
-              stage={4}
-            />
-          )}
-
           {/* ══════ TRENDS VIEW (placeholder — Stage 5) ══════ */}
           {currentView === 'trends' && (
             <PlaceholderView
@@ -165,7 +154,19 @@ function AppContent() {
         </main>
       </div>
 
-      {/* ── Modals / overlays (unchanged) ── */}
+      {/* ══════ FILM CATALOGUE — opens as modal when Films tab active ══════ */}
+      <FilmCatalogue
+        show={currentView === 'films'}
+        onHide={handleReturnToMap}
+      />
+
+      {/* ══════ VENUE MANAGER — opens as modal when Venues tab active ══════ */}
+      <VenueManager
+        show={currentView === 'venues'}
+        onHide={handleReturnToMap}
+      />
+
+      {/* ── Other modals / overlays (unchanged) ── */}
       <SettingsPanel />
       <MatchReviewPanel />
       <TrendPanel show={showTrends} onHide={() => setShowTrends(false)} />
