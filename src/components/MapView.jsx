@@ -1,4 +1,15 @@
-import React, { useMemo, useEffect } from 'react'
+/**
+ * CineScope — MapView (v3.0 Stage 2)
+ *
+ * Changes from v2.x:
+ *   - Added overlay controls bar at top of map (Population mode, Panel toggle)
+ *   - Population toggle moved here from Header.jsx
+ *   - Panel toggle button to show/hide MapPanel
+ *   - Intensity slider appears when population layer is active
+ *   - All existing map functionality preserved (markers, clusters, legends, popups)
+ */
+
+import React, { useMemo, useEffect, useState } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import { useApp } from '../context/AppContext'
@@ -7,6 +18,7 @@ import { getGradeColor, GRADES } from '../utils/grades'
 import PopulationHeatLayer from './PopulationHeatLayer'
 import PopulationZonesLayer from './PopulationZonesLayer'
 import VenuePopup from './VenuePopup'
+import Icon from './Icon'
 
 const UK_CENTER = [54.0, -2.5]
 const DEFAULT_ZOOM = 6
@@ -79,7 +91,105 @@ function MapLegend({ hasGrades, hasClosedVenues }) {
   )
 }
 
-export default function MapView() {
+/**
+ * Overlay controls that sit on top of the map.
+ * Contains: Population mode toggle, Panel toggle.
+ */
+function MapOverlayControls({ panelVisible, onTogglePanel }) {
+  const { populationMode, updatePopulationMode, heatmapIntensity, updateHeatmapIntensity } = useApp()
+  const { theme } = useTheme()
+  const [localIntensity, setLocalIntensity] = useState(heatmapIntensity)
+  const [showPopMenu, setShowPopMenu] = useState(false)
+
+  // Sync local intensity when global changes
+  useEffect(() => {
+    setLocalIntensity(heatmapIntensity)
+  }, [heatmapIntensity])
+
+  const popModes = [
+    { key: 'off', label: 'Off', icon: 'visibility_off' },
+    { key: 'heatmap', label: 'Heat Map', icon: 'local_fire_department' },
+    { key: 'zones', label: 'Area Zones', icon: 'map' },
+  ]
+
+  const popActive = populationMode !== 'off'
+  const popLabel = populationMode === 'heatmap' ? 'Heat Map' : populationMode === 'zones' ? 'Area Zones' : 'Population'
+
+  return (
+    <div className="cs-map-overlay-controls">
+      {/* Population toggle group */}
+      <div className="cs-map-ctrl-group" style={{ background: `${theme.surface}ee`, borderColor: theme.border }}>
+        <button
+          className={`cs-map-ctrl-btn ${popActive ? 'cs-map-ctrl-btn--active' : ''}`}
+          onClick={() => setShowPopMenu(!showPopMenu)}
+          style={{ color: popActive ? theme.headerBorder : theme.textMuted }}
+        >
+          <Icon name="groups" size={16} />
+          <span>{popLabel}</span>
+        </button>
+      </div>
+
+      {/* Population dropdown */}
+      {showPopMenu && (
+        <div
+          className="cs-map-pop-menu"
+          style={{ background: theme.surface, borderColor: theme.border }}
+        >
+          {popModes.map(({ key, label, icon }) => (
+            <button
+              key={key}
+              className={`cs-map-pop-item ${populationMode === key ? 'cs-map-pop-item--active' : ''}`}
+              onClick={() => { updatePopulationMode(key); setShowPopMenu(false) }}
+              style={{
+                color: populationMode === key ? theme.headerBorder : theme.text,
+                background: populationMode === key ? `${theme.headerBorder}12` : 'transparent',
+              }}
+            >
+              <Icon name={icon} size={16} />
+              <span>{label}</span>
+            </button>
+          ))}
+          {(populationMode === 'heatmap' || populationMode === 'zones') && (
+            <div className="cs-map-pop-slider" style={{ borderTop: `1px solid ${theme.border}` }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 600, color: theme.textMuted, marginBottom: 4 }}>
+                Intensity
+              </div>
+              <input
+                type="range"
+                min="0.1"
+                max="1.0"
+                step="0.05"
+                value={localIntensity}
+                onChange={e => setLocalIntensity(parseFloat(e.target.value))}
+                onPointerUp={e => updateHeatmapIntensity(parseFloat(e.target.value))}
+                onTouchEnd={e => updateHeatmapIntensity(parseFloat(e.target.value))}
+                style={{ width: '100%' }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* Panel toggle */}
+      <div className="cs-map-ctrl-group" style={{ background: `${theme.surface}ee`, borderColor: theme.border }}>
+        <button
+          className={`cs-map-ctrl-btn ${panelVisible ? 'cs-map-ctrl-btn--active' : ''}`}
+          onClick={onTogglePanel}
+          style={{ color: panelVisible ? theme.headerBorder : theme.textMuted }}
+        >
+          <Icon name="view_sidebar" size={16} />
+          <span>Panel</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+
+export default function MapView({ panelVisible, onTogglePanel }) {
   const { filteredVenues, selectedFilm, setSelectedVenue, populationMode } = useApp()
   const { theme } = useTheme()
 
@@ -178,6 +288,12 @@ export default function MapView() {
         {mappableVenues.length} venues shown
         {!selectedFilm && ' (no film selected)'}
       </div>
+
+      {/* ── Overlay controls (Population toggle + Panel toggle) ── */}
+      <MapOverlayControls
+        panelVisible={panelVisible}
+        onTogglePanel={onTogglePanel}
+      />
     </div>
   )
 }

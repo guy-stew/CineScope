@@ -223,6 +223,330 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════ */
+/* ── Map Layout (v3.0 Stage 2) ───────────────────────────── */
+/* ═══════════════════════════════════════════════════════════ */
+
+.cs-map-layout {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.cs-map-area {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+/* ── Map Panel (right side) ──────────────────────────────── */
+
+.cs-map-panel {
+  width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width 0.22s ease, opacity 0.15s ease;
+}
+
+.cs-map-panel__header {
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.cs-map-panel__close {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s;
+}
+
+.cs-map-panel__close:hover {
+  background: rgba(0,0,0,0.08);
+}
+
+.cs-map-panel__film-selector {
+  padding: 8px 14px;
+  flex-shrink: 0;
+}
+
+.cs-map-panel__select {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+}
+
+.cs-map-panel__select:focus {
+  border-color: var(--cs-header-border);
+}
+
+.cs-map-panel__film-banner {
+  padding: 10px 14px;
+  flex-shrink: 0;
+}
+
+.cs-map-panel__grades {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  flex-shrink: 0;
+}
+
+.cs-map-panel__grade-card {
+  flex: 1;
+  text-align: center;
+  padding: 6px 2px;
+  border-radius: 6px;
+  transition: all 0.12s ease;
+}
+
+.cs-map-panel__filters {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px;
+  flex-shrink: 0;
+}
+
+.cs-map-panel__filter-select {
+  flex: 1;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid;
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  outline: none;
+  min-width: 0; /* prevent flex overflow */
+}
+
+.cs-map-panel__filter-select:focus {
+  border-color: var(--cs-header-border);
+}
+
+.cs-map-panel__search {
+  padding: 8px 14px;
+  flex-shrink: 0;
+}
+
+.cs-map-panel__search-wrap {
+  position: relative;
+}
+
+.cs-map-panel__search-input {
+  width: 100%;
+  padding: 6px 10px 6px 30px;
+  border-radius: 6px;
+  border: 1px solid;
+  font-family: inherit;
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.cs-map-panel__search-input:focus {
+  border-color: var(--cs-header-border);
+}
+
+.cs-map-panel__search-input::placeholder {
+  color: var(--cs-text-muted);
+  opacity: 0.7;
+}
+
+.cs-map-panel__sort-bar {
+  display: flex;
+  gap: 2px;
+  padding: 4px 14px;
+  flex-shrink: 0;
+}
+
+.cs-map-panel__sort-btn {
+  flex: 1;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+
+.cs-map-panel__sort-btn:hover {
+  background: rgba(0,0,0,0.04);
+}
+
+.cs-map-panel__venue-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.cs-map-panel__venue-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.08s;
+}
+
+.cs-map-panel__venue-row:hover {
+  filter: brightness(0.96);
+}
+
+.cs-map-panel__venue-grade {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.cs-map-panel__venue-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.cs-map-panel__venue-name {
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.cs-map-panel__venue-revenue {
+  font-size: 0.72rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.cs-map-panel__footer {
+  padding: 8px 14px;
+  font-size: 0.72rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Scrollbar for venue list */
+.cs-map-panel__venue-list::-webkit-scrollbar {
+  width: 5px;
+}
+.cs-map-panel__venue-list::-webkit-scrollbar-thumb {
+  background: var(--cs-scroll-thumb);
+  border-radius: 3px;
+}
+
+/* ── Map Overlay Controls ────────────────────────────────── */
+
+.cs-map-overlay-controls {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  z-index: 800;
+  pointer-events: none;
+}
+
+.cs-map-overlay-controls > * {
+  pointer-events: auto;
+}
+
+.cs-map-ctrl-group {
+  display: flex;
+  align-items: center;
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+  backdrop-filter: blur(8px);
+}
+
+.cs-map-ctrl-btn {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+
+.cs-map-ctrl-btn:hover {
+  filter: brightness(1.15);
+}
+
+.cs-map-ctrl-btn--active {
+  background: rgba(56, 178, 172, 0.12);
+}
+
+/* Population dropdown menu */
+.cs-map-pop-menu {
+  position: absolute;
+  top: 42px;
+  left: 0;
+  min-width: 180px;
+  border: 1px solid;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  overflow: hidden;
+  z-index: 810;
+}
+
+.cs-map-pop-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.cs-map-pop-item:hover {
+  filter: brightness(0.95);
+}
+
+.cs-map-pop-slider {
+  padding: 10px 14px;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
 /* ── EXISTING STYLES (preserved from v2.x) ───────────────── */
 /* ═══════════════════════════════════════════════════════════ */
 
@@ -312,7 +636,7 @@ body {
 
 .map-venue-count {
   position: absolute;
-  top: 12px;
+  top: 52px;
   right: 12px;
   color: #fff;
   padding: 6px 14px;
@@ -512,13 +836,28 @@ body {
     display: none;
   }
 
-  .map-wrapper {
-    height: 50vh !important;
-    min-height: 350px;
+  .cs-map-panel {
+    width: 280px;
   }
 
-  .analytics-col {
-    height: auto !important;
-    overflow: visible;
+  .map-wrapper {
+    min-height: 350px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .cs-map-layout {
+    flex-direction: column;
+  }
+
+  .cs-map-area {
+    min-height: 50vh;
+  }
+
+  .cs-map-panel {
+    width: 100% !important;
+    max-height: 40vh;
+    border-left: none !important;
+    border-top: 1px solid var(--cs-border);
   }
 }

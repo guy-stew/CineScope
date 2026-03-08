@@ -1,36 +1,27 @@
 /**
- * CineScope — App Shell (v3.0 Layout Redesign Stage 1)
+ * CineScope — App Shell (v3.0 Stage 2)
  *
- * New layout structure:
- *   ┌──────────────────────────────────────┐
- *   │           Header (full width)        │
- *   ├─────────┬────────────────────────────┤
- *   │         │                            │
- *   │ Sidebar │      Main Content Area     │
- *   │         │                            │
- *   └─────────┴────────────────────────────┘
- *
- * Stage 1: Sidebar + view switching added.
- * Map view is default and contains the existing MapView + AnalyticsPanel.
- * Other views (Films, Venues, Trends, Promote) show placeholders.
- * Header remains completely unchanged — all buttons still work.
+ * Stage 2 changes:
+ *   - Map view now uses MapView + MapPanel side by side (replaces Col 8/4 + AnalyticsPanel)
+ *   - MapPanel state (visible/hidden) managed here
+ *   - MapView receives panelVisible + onTogglePanel props for overlay controls
+ *   - AnalyticsPanel import removed (replaced by MapPanel)
  */
 
 import React, { useState, useCallback } from 'react'
-import { Container, Row, Col } from 'react-bootstrap'
 import { AppProvider, useApp } from './context/AppContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import Header from './components/Header'
 import Sidebar from './components/Sidebar'
 import MapView from './components/MapView'
-import AnalyticsPanel from './components/AnalyticsPanel'
+import MapPanel from './components/MapPanel'
 import SettingsPanel from './components/SettingsPanel'
 import MatchReviewPanel from './components/MatchReviewPanel'
 import TrendPanel from './components/TrendPanel'
 import FilmNameDialog from './components/FilmNameDialog'
 import Icon from './components/Icon'
 
-// ── Placeholder views for Stages 2-5 ──
+// ── Placeholder views for Stages 3-5 ──
 function PlaceholderView({ title, icon, description, stage }) {
   const { theme } = useTheme()
   return (
@@ -79,11 +70,11 @@ function PlaceholderView({ title, icon, description, stage }) {
 
 function AppContent() {
   const { pendingImport, confirmImport, cancelImport, showTrends, setShowTrends } = useApp()
-  const { theme } = useTheme()
 
   // ── View switching state ──
   const [currentView, setCurrentView] = useState('map')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mapPanelVisible, setMapPanelVisible] = useState(true)
 
   const handleViewChange = useCallback((viewId) => {
     setCurrentView(viewId)
@@ -93,9 +84,13 @@ function AppContent() {
     setSidebarCollapsed(prev => !prev)
   }, [])
 
+  const handleMapPanelToggle = useCallback(() => {
+    setMapPanelVisible(prev => !prev)
+  }, [])
+
   return (
     <div className="cs-app-shell">
-      {/* Header — unchanged, sits on top */}
+      {/* Header */}
       <div className="cs-header-wrapper">
         <Header />
       </div>
@@ -112,18 +107,20 @@ function AppContent() {
         <main
           className={`cs-main ${sidebarCollapsed ? 'cs-main--sidebar-collapsed' : ''}`}
         >
-          {/* ══════ MAP VIEW (default — existing layout) ══════ */}
+          {/* ══════ MAP VIEW ══════ */}
           {currentView === 'map' && (
-            <Container fluid className="p-0 h-100 overflow-hidden">
-              <Row className="g-0 h-100">
-                <Col lg={8} className="h-100">
-                  <MapView />
-                </Col>
-                <Col lg={4} className="h-100 overflow-auto analytics-col">
-                  <AnalyticsPanel />
-                </Col>
-              </Row>
-            </Container>
+            <div className="cs-map-layout">
+              <div className="cs-map-area">
+                <MapView
+                  panelVisible={mapPanelVisible}
+                  onTogglePanel={handleMapPanelToggle}
+                />
+              </div>
+              <MapPanel
+                visible={mapPanelVisible}
+                onToggle={handleMapPanelToggle}
+              />
+            </div>
           )}
 
           {/* ══════ FILMS VIEW (placeholder — Stage 3) ══════ */}
@@ -168,7 +165,7 @@ function AppContent() {
         </main>
       </div>
 
-      {/* ── Modals / overlays (still rendered globally, same as before) ── */}
+      {/* ── Modals / overlays (unchanged) ── */}
       <SettingsPanel />
       <MatchReviewPanel />
       <TrendPanel show={showTrends} onHide={() => setShowTrends(false)} />
