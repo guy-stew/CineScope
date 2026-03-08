@@ -1,15 +1,14 @@
 /**
- * CineScope — Header (v3.0 Stage 6 — Final Polish)
+ * CineScope — Header (v3.0 Final)
  *
- * Slim header matching mockup design:
+ * Minimal header matching mockup:
  *   Left:  CineScope logo + current view name
- *   Right: Import (icon) + Export + Match Review (conditional) + Settings + Theme
+ *   Right: Match Review (conditional) + Settings + Theme toggle
  */
 
-import React, { useRef } from 'react'
+import React from 'react'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
-import ExportMenu from './ExportMenu'
 import Icon from './Icon'
 
 const VIEW_LABELS = {
@@ -26,23 +25,13 @@ export default function Header({ currentView }) {
     showSettings, setShowSettings,
     showMatchReview, setShowMatchReview,
     matchDetails,
-    importComscoreFile, importStatus,
   } = useApp()
 
   const { themeName, toggleTheme } = useTheme()
-  const fileInputRef = useRef(null)
 
   const reviewCount = selectedFilm && matchDetails.length > 0
     ? matchDetails.filter(m => m.confidence.key === 'medium' || m.confidence.key === 'low').length
     : 0
-
-  const handleFileClick = () => fileInputRef.current?.click()
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    try { await importComscoreFile(file) } catch (err) { console.error('Import failed:', err) }
-    e.target.value = ''
-  }
 
   return (
     <header className="cs-header">
@@ -61,36 +50,6 @@ export default function Header({ currentView }) {
 
       {/* Right: Action icons */}
       <div className="cs-header__right">
-        {/* Import status indicator */}
-        {importStatus?.loading && (
-          <div className="cs-header__status cs-header__status--loading">
-            <Icon name="progress_activity" size={16} />
-          </div>
-        )}
-        {importStatus?.success && (
-          <div className="cs-header__status cs-header__status--success" title={importStatus.success}>
-            <Icon name="check_circle" size={16} />
-          </div>
-        )}
-        {importStatus?.error && (
-          <div className="cs-header__status cs-header__status--error" title={importStatus.error}>
-            <Icon name="error" size={16} />
-          </div>
-        )}
-
-        {/* Import Comscore file */}
-        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv,.xls,.xlsx" className="d-none" />
-        <button
-          className="cs-header__icon-btn"
-          onClick={handleFileClick}
-          title="Import Comscore data"
-        >
-          <Icon name="upload_file" size={18} />
-        </button>
-
-        {/* Export */}
-        <ExportMenu />
-
         {/* Match review — only when film loaded and matches exist */}
         {selectedFilm && matchDetails.length > 0 && (
           <button
