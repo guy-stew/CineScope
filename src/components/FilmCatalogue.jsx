@@ -27,7 +27,7 @@ const SORT_OPTIONS = [
 ];
 
 export default function FilmCatalogue({ show, onHide }) {
-  const { apiClient, catalogue, refreshCatalogue } = useApp();
+  const { apiClient, catalogue, refreshCatalogue, analysisSet, toggleAnalysisFilm, selectAllAnalysis, clearAllAnalysis } = useApp();
 
   // ─── State ───
   const [loading, setLoading] = useState(false);
@@ -105,6 +105,13 @@ export default function FilmCatalogue({ show, onHide }) {
     }
     return counts;
   }, [catalogue]);
+
+  // How many films have Comscore data (eligible for analysis set)
+  const filmsWithDataCount = useMemo(() =>
+    catalogue.filter(f => parseInt(f.import_count) > 0).length,
+    [catalogue]
+  );
+  const analysisCount = analysisSet.length;
 
   // ─── Render ───
   if (selectedFilmId) {
@@ -203,6 +210,37 @@ export default function FilmCatalogue({ show, onHide }) {
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </Form.Select>
+
+              {/* Analysis set controls — only show when there are films with data */}
+              {filmsWithDataCount > 1 && (
+                <div className="d-flex align-items-center gap-2 ms-auto">
+                  <span style={{ fontSize: '0.75rem', color: '#aaa', whiteSpace: 'nowrap' }}>
+                    Analysis: {analysisCount} of {filmsWithDataCount}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline-success"
+                    className="d-flex align-items-center gap-1"
+                    style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
+                    onClick={selectAllAnalysis}
+                    disabled={analysisCount === filmsWithDataCount}
+                  >
+                    <span className="material-symbols-rounded" style={{ fontSize: '14px' }}>check_box</span>
+                    Select All
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline-secondary"
+                    className="d-flex align-items-center gap-1"
+                    style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
+                    onClick={clearAllAnalysis}
+                    disabled={analysisCount === 0}
+                  >
+                    <span className="material-symbols-rounded" style={{ fontSize: '14px' }}>check_box_outline_blank</span>
+                    Deselect All
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </Modal.Header>
@@ -240,7 +278,13 @@ export default function FilmCatalogue({ show, onHide }) {
           ) : (
             <div className="catalogue-grid">
               {filteredFilms.map(film => (
-                <FilmCard key={film.id} film={film} onClick={() => setSelectedFilmId(film.id)} />
+                <FilmCard
+                  key={film.id}
+                  film={film}
+                  onClick={() => setSelectedFilmId(film.id)}
+                  isInAnalysis={analysisSet.includes(film.id)}
+                  onToggleAnalysis={toggleAnalysisFilm}
+                />
               ))}
             </div>
           )}
@@ -338,6 +382,33 @@ export default function FilmCatalogue({ show, onHide }) {
           position: absolute;
           top: 8px;
           right: 8px;
+        }
+        .film-card-checkbox {
+          position: absolute;
+          top: 6px;
+          left: 6px;
+          z-index: 2;
+          cursor: pointer;
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 4px;
+          background: rgba(0,0,0,0.45);
+          backdrop-filter: blur(2px);
+          transition: background 0.15s ease;
+        }
+        .film-card-checkbox:hover {
+          background: rgba(0,0,0,0.65);
+        }
+        .film-card--selected {
+          border-color: rgba(74, 222, 128, 0.5) !important;
+          box-shadow: 0 0 12px rgba(74, 222, 128, 0.2), inset 0 0 0 1px rgba(74, 222, 128, 0.15);
+        }
+        .film-card--selected:hover {
+          border-color: rgba(74, 222, 128, 0.7) !important;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 16px rgba(74, 222, 128, 0.25);
         }
         .film-card-comscore {
           position: absolute;
@@ -442,6 +513,20 @@ export default function FilmCatalogue({ show, onHide }) {
           border-color: rgba(229, 9, 20, 0.3);
           box-shadow: 0 8px 24px rgba(0,0,0,0.12);
         }
+        [data-theme="light"] .film-card--selected {
+          border-color: rgba(34, 160, 80, 0.5) !important;
+          box-shadow: 0 0 12px rgba(34, 160, 80, 0.15), inset 0 0 0 1px rgba(34, 160, 80, 0.1);
+        }
+        [data-theme="light"] .film-card--selected:hover {
+          border-color: rgba(34, 160, 80, 0.7) !important;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 0 16px rgba(34, 160, 80, 0.2);
+        }
+        [data-theme="light"] .film-card-checkbox {
+          background: rgba(255,255,255,0.7);
+        }
+        [data-theme="light"] .film-card-checkbox:hover {
+          background: rgba(255,255,255,0.9);
+        }
         [data-theme="light"] .film-card-poster .placeholder-title {
           background: linear-gradient(135deg, #e8e0f0 0%, #f0f0f5 50%, #e0e8f0 100%);
           color: rgba(0,0,0,0.4);
@@ -478,20 +563,45 @@ export default function FilmCatalogue({ show, onHide }) {
 
 
 // ─── Film Card Component ───
-function FilmCard({ film, onClick }) {
+function FilmCard({ film, onClick, isInAnalysis, onToggleAnalysis }) {
   const posterUrl = tmdbImageUrl(film.poster_path, 'w342');
   const statusConf = STATUS_CONFIG[film.status] || STATUS_CONFIG.pre_release;
   const hasComscore = parseInt(film.import_count) > 0;
   const revenue = parseFloat(film.total_uk_revenue) || 0;
 
+  const handleCheckboxClick = (e) => {
+    e.stopPropagation(); // Don't open detail view
+    onToggleAnalysis(film.id);
+  };
+
   return (
-    <div className="film-card" onClick={onClick} title={film.title}>
+    <div
+      className={`film-card${isInAnalysis ? ' film-card--selected' : ''}`}
+      onClick={onClick}
+      title={film.title}
+    >
       <div className="film-card-poster">
         {posterUrl ? (
           <img src={posterUrl} alt={film.title} loading="lazy" />
         ) : (
           <div className="placeholder-title">
             <span>{film.title}</span>
+          </div>
+        )}
+
+        {/* Analysis checkbox overlay — top-left, only for films with Comscore data */}
+        {hasComscore && (
+          <div className="film-card-checkbox" onClick={handleCheckboxClick}>
+            <span
+              className="material-symbols-rounded"
+              style={{
+                fontSize: '22px',
+                color: isInAnalysis ? '#4ade80' : 'rgba(255,255,255,0.5)',
+                filter: isInAnalysis ? 'drop-shadow(0 0 3px rgba(74, 222, 128, 0.5))' : 'none',
+              }}
+            >
+              {isInAnalysis ? 'check_box' : 'check_box_outline_blank'}
+            </span>
           </div>
         )}
 

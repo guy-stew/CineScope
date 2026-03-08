@@ -499,6 +499,7 @@ export function AppProvider({ children }) {
   // ═══════════════════════════════════════════════════════════════
 
   // Get the currently selected film data (or build aggregate for "all-films")
+  // The "all-films" aggregate now only includes films in the analysisSet.
   const selectedFilm = useMemo(() => {
     if (!selectedFilmId) return null
 
@@ -507,11 +508,18 @@ export function AppProvider({ children }) {
       return importedFilms.find(f => f.id === selectedFilmId) || null
     }
 
-    // All Films aggregate
+    // All Films aggregate — only include films in the analysis set
     if (importedFilms.length === 0) return null
 
+    // Filter to only films whose catalogue ID is in the analysis set
+    const analysisFilms = analysisSet.length > 0
+      ? importedFilms.filter(f => f.catalogueId && analysisSet.includes(f.catalogueId))
+      : importedFilms // Fallback: if analysisSet is empty, include all (safety net)
+
+    if (analysisFilms.length === 0) return null
+
     const venueRevMap = new Map()
-    for (const film of importedFilms) {
+    for (const film of analysisFilms) {
       for (const cs of film.comscoreVenues) {
         const key = `${cs.theater}|${cs.city}`.toLowerCase()
         if (!venueRevMap.has(key)) {
@@ -535,7 +543,7 @@ export function AppProvider({ children }) {
     return {
       id: 'all-films',
       filmInfo: {
-        title: `All Films (${importedFilms.length} combined)`,
+        title: `Selected Films (${analysisFilms.length} combined)`,
         fileName: 'aggregate',
       },
       comscoreVenues: combinedVenues,
@@ -547,7 +555,7 @@ export function AppProvider({ children }) {
       },
       aggregationLog: [],
     }
-  }, [selectedFilmId, importedFilms])
+  }, [selectedFilmId, importedFilms, analysisSet])
 
   // ── Only open venues for matching (closed venues excluded from active grading) ──
   const activeVenues = useMemo(() => {
@@ -800,6 +808,19 @@ export function AppProvider({ children }) {
       setPendingImport(null)
       setShowMatchReview(true)
 
+      // Auto-add to analysis set if linked to a catalogue entry
+      if (catalogueId) {
+        setAnalysisSet(prev => {
+          if (prev.includes(catalogueId)) return prev
+          const next = [...prev, catalogueId]
+          localStorage.setItem('cinescope_analysis_set', JSON.stringify(next))
+          return next
+        })
+      }
+
+      // Refresh catalogue so import_count updates in the grid
+      refreshCatalogue()
+
       setImportStatus({
         loading: false,
         error: null,
@@ -818,7 +839,7 @@ export function AppProvider({ children }) {
         success: null,
       })
     }
-  }, [pendingImport, setSelectedFilmId])
+  }, [pendingImport, setSelectedFilmId, refreshCatalogue])
 
   // Cancel pending import
   const cancelImport = useCallback(() => {
