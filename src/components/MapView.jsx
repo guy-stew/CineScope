@@ -231,7 +231,7 @@ export default function MapView({ panelVisible, onTogglePanel }) {
         <PopulationZonesLayer />
         <FitBounds venues={mappableVenues} />
         <MapResizer panelVisible={panelVisible} />
-        <ZoomControl position="bottomleft" />
+        <ZoomControl position="bottomright" />
 
         <MarkerClusterGroup
           chunkedLoading
