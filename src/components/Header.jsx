@@ -1,15 +1,15 @@
 /**
- * CineScope — Header (v3.0 Stage 3)
+ * CineScope — Header (v3.0 Stage 4)
  *
- * Stage 3 changes:
- *   REMOVED: Film Catalogue button (now accessed via sidebar Films tab)
- *   REMOVED: Venue Manager button (now accessed via sidebar Venues tab)
- *   REMOVED: VenueManager + FilmCatalogue imports (managed by App.jsx)
- *   KEPT: Import, Export, Trends, Match Review, Settings, Theme toggle
+ * Stage 4 changes:
+ *   REMOVED: Trends button (now accessed via sidebar Trends tab)
+ *   REMOVED: showTrends/setShowTrends usage
+ *   KEPT: Import, Export, Match Review, Settings, Theme toggle
  *
- * Remaining buttons will migrate to their respective views in later stages:
- *   - Import → Films view (Stage 6 cleanup)
- *   - Export + Trends → Trends view (Stage 5)
+ * Remaining migration (Stage 5 cleanup):
+ *   - Import → could move to Films view
+ *   - Export → could move to Trends view
+ *   - Match Review → could move to Map overlay controls
  */
 
 import React, { useRef } from 'react'
@@ -21,12 +21,10 @@ import Icon from './Icon'
 
 export default function Header() {
   const {
-    importedFilms,
     importComscoreFile, importStatus,
     selectedFilm,
     showSettings, setShowSettings,
     showMatchReview, setShowMatchReview,
-    showTrends, setShowTrends,
     matchDetails,
   } = useApp()
 
@@ -95,24 +93,6 @@ export default function Header() {
 
           {/* Export menu */}
           <ExportMenu />
-
-          {/* Trend analysis button — only when 2+ films imported */}
-          {importedFilms.length >= 2 && (
-            <OverlayTrigger
-              placement="bottom"
-              overlay={<Tooltip>Trend analysis across {importedFilms.length} films</Tooltip>}
-            >
-              <Button
-                size="sm"
-                variant="outline-light"
-                onClick={() => setShowTrends(true)}
-                className="d-flex align-items-center gap-1"
-              >
-                <Icon name="insights" size={16} />
-                <span style={{ fontSize: '0.78rem' }}>Trends</span>
-              </Button>
-            </OverlayTrigger>
-          )}
 
           {/* Match review button — only when film loaded */}
           {selectedFilm && matchDetails.length > 0 && (() => {
