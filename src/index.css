@@ -616,6 +616,25 @@ body {
   letter-spacing: -0.3px;
 }
 
+.cs-header__title-cine {
+  color: #fff;
+}
+
+.cs-header__title-scope {
+  color: var(--cs-header-border);
+}
+
+.cs-header__version {
+  font-size: 0.55rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.5);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  letter-spacing: 0.3px;
+}
+
 .cs-header__view-name {
   font-size: 0.78rem;
   color: rgba(255, 255, 255, 0.5);

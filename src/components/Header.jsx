@@ -39,7 +39,10 @@ export default function Header({ currentView }) {
       <div className="cs-header__left">
         <div className="cs-header__brand">
           <Icon name="movie" size={22} />
-          <span className="cs-header__title">CineScope</span>
+          <span className="cs-header__title">
+            <span className="cs-header__title-cine">Cine</span><span className="cs-header__title-scope">Scope</span>
+          </span>
+          <span className="cs-header__version">v3.0</span>
         </div>
         {currentView && (
           <div className="cs-header__view-name">
