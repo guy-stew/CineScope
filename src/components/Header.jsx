@@ -1,159 +1,128 @@
 /**
- * CineScope — Header (v3.0 Stage 4)
+ * CineScope — Header (v3.0 Stage 6 — Final Polish)
  *
- * Stage 4 changes:
- *   REMOVED: Trends button (now accessed via sidebar Trends tab)
- *   REMOVED: showTrends/setShowTrends usage
- *   KEPT: Import, Export, Match Review, Settings, Theme toggle
- *
- * Remaining migration (Stage 5 cleanup):
- *   - Import → could move to Films view
- *   - Export → could move to Trends view
- *   - Match Review → could move to Map overlay controls
+ * Slim header matching mockup design:
+ *   Left:  CineScope logo + current view name
+ *   Right: Import (icon) + Export + Match Review (conditional) + Settings + Theme
  */
 
 import React, { useRef } from 'react'
-import { Navbar, Nav, Button, Badge, Spinner, OverlayTrigger, Tooltip } from 'react-bootstrap'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import ExportMenu from './ExportMenu'
 import Icon from './Icon'
 
-export default function Header() {
+const VIEW_LABELS = {
+  map: 'Map',
+  films: 'Film Catalogue',
+  venues: 'Venue Manager',
+  trends: 'Performance & Trends',
+  promote: 'Promote',
+}
+
+export default function Header({ currentView }) {
   const {
-    importComscoreFile, importStatus,
     selectedFilm,
     showSettings, setShowSettings,
     showMatchReview, setShowMatchReview,
     matchDetails,
+    importComscoreFile, importStatus,
   } = useApp()
 
   const { themeName, toggleTheme } = useTheme()
   const fileInputRef = useRef(null)
 
-  const handleFileClick = () => fileInputRef.current?.click()
+  const reviewCount = selectedFilm && matchDetails.length > 0
+    ? matchDetails.filter(m => m.confidence.key === 'medium' || m.confidence.key === 'low').length
+    : 0
 
+  const handleFileClick = () => fileInputRef.current?.click()
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    try {
-      await importComscoreFile(file)
-    } catch (err) {
-      console.error('Import failed:', err)
-    }
+    try { await importComscoreFile(file) } catch (err) { console.error('Import failed:', err) }
     e.target.value = ''
   }
 
   return (
-    <Navbar variant="dark" expand="lg" className="px-3 py-2 app-header">
-      {/* Brand */}
-      <Navbar.Brand className="d-flex align-items-center me-3">
-        <span className="me-2" style={{ fontSize: '1.3rem' }}><Icon name="movie" size={24} /></span>
-        <span className="fw-bold">CineScope</span>
-      </Navbar.Brand>
+    <header className="cs-header">
+      {/* Left: Logo + View name */}
+      <div className="cs-header__left">
+        <div className="cs-header__brand">
+          <Icon name="movie" size={22} />
+          <span className="cs-header__title">CineScope</span>
+        </div>
+        {currentView && (
+          <div className="cs-header__view-name">
+            {VIEW_LABELS[currentView] || ''}
+          </div>
+        )}
+      </div>
 
-      <Navbar.Toggle aria-controls="header-nav" />
-      <Navbar.Collapse id="header-nav">
-        {/* Left side — spacer */}
-        <Nav className="me-auto" />
+      {/* Right: Action icons */}
+      <div className="cs-header__right">
+        {/* Import status indicator */}
+        {importStatus?.loading && (
+          <div className="cs-header__status cs-header__status--loading">
+            <Icon name="progress_activity" size={16} />
+          </div>
+        )}
+        {importStatus?.success && (
+          <div className="cs-header__status cs-header__status--success" title={importStatus.success}>
+            <Icon name="check_circle" size={16} />
+          </div>
+        )}
+        {importStatus?.error && (
+          <div className="cs-header__status cs-header__status--error" title={importStatus.error}>
+            <Icon name="error" size={16} />
+          </div>
+        )}
 
-        {/* Right side — action buttons */}
-        <Nav className="d-flex align-items-center gap-2">
-          {/* Import status */}
-          {importStatus?.loading && (
-            <Spinner animation="border" size="sm" variant="light" />
-          )}
-          {importStatus?.success && (
-            <Badge bg="success" className="text-truncate" style={{ maxWidth: 200 }}>
-              <Icon name="check_circle" size={14} className="me-1" /> {importStatus.success}
-            </Badge>
-          )}
-          {importStatus?.error && (
-            <Badge bg="danger" className="text-truncate" style={{ maxWidth: 200 }}>
-              <Icon name="error" size={14} className="me-1" /> {importStatus.error}
-            </Badge>
-          )}
+        {/* Import Comscore file */}
+        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv,.xls,.xlsx" className="d-none" />
+        <button
+          className="cs-header__icon-btn"
+          onClick={handleFileClick}
+          title="Import Comscore data"
+        >
+          <Icon name="upload_file" size={18} />
+        </button>
 
-          {/* File upload */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept=".csv,.xls,.xlsx"
-            className="d-none"
-          />
-          <OverlayTrigger
-            placement="bottom"
-            overlay={<Tooltip>Import Comscore data file</Tooltip>}
+        {/* Export */}
+        <ExportMenu />
+
+        {/* Match review — only when film loaded and matches exist */}
+        {selectedFilm && matchDetails.length > 0 && (
+          <button
+            className={`cs-header__icon-btn ${reviewCount > 0 ? 'cs-header__icon-btn--warn' : ''}`}
+            onClick={() => setShowMatchReview(true)}
+            title={`Review venue matching${reviewCount > 0 ? ` (${reviewCount} need attention)` : ''}`}
           >
-            <Button size="sm" variant="outline-light" onClick={handleFileClick}>
-              <Icon name="upload_file" size={16} className="me-1" /> Import
-            </Button>
-          </OverlayTrigger>
+            <Icon name="link" size={18} />
+            {reviewCount > 0 && (
+              <span className="cs-header__badge">{reviewCount}</span>
+            )}
+          </button>
+        )}
 
-          {/* Export menu */}
-          <ExportMenu />
+        {/* Settings */}
+        <button
+          className="cs-header__icon-btn"
+          onClick={() => setShowSettings(true)}
+          title="Grade boundary settings"
+        >
+          <Icon name="settings" size={18} />
+        </button>
 
-          {/* Match review button — only when film loaded */}
-          {selectedFilm && matchDetails.length > 0 && (() => {
-            const reviewCount = matchDetails.filter(m => m.confidence.key === 'medium' || m.confidence.key === 'low').length
-            return (
-              <OverlayTrigger
-                placement="bottom"
-                overlay={<Tooltip>Review venue matching ({reviewCount > 0 ? `${reviewCount} need attention` : 'all good'})</Tooltip>}
-              >
-                <Button
-                  size="sm"
-                  variant={reviewCount > 0 ? 'outline-warning' : 'outline-light'}
-                  onClick={() => setShowMatchReview(true)}
-                  className="position-relative"
-                >
-                  <Icon name="link" size={18} />
-                  {reviewCount > 0 && (
-                    <Badge
-                      bg="danger"
-                      pill
-                      className="position-absolute"
-                      style={{ top: -4, right: -6, fontSize: '0.6rem' }}
-                    >
-                      {reviewCount}
-                    </Badge>
-                  )}
-                </Button>
-              </OverlayTrigger>
-            )
-          })()}
-
-          {/* Settings */}
-          <OverlayTrigger
-            placement="bottom"
-            overlay={<Tooltip>Grade boundary settings</Tooltip>}
-          >
-            <Button
-              size="sm"
-              variant="outline-light"
-              onClick={() => setShowSettings(true)}
-            >
-              <Icon name="settings" size={18} />
-            </Button>
-          </OverlayTrigger>
-
-          {/* Theme toggle */}
-          <OverlayTrigger
-            placement="bottom"
-            overlay={<Tooltip>Switch to {themeName === 'light' ? 'dark' : 'light'} theme</Tooltip>}
-          >
-            <Button
-              size="sm"
-              variant="outline-light"
-              onClick={toggleTheme}
-              style={{ minWidth: 36 }}
-            >
-              {themeName === 'light' ? <Icon name="dark_mode" size={18} /> : <Icon name="light_mode" size={18} />}
-            </Button>
-          </OverlayTrigger>
-        </Nav>
-      </Navbar.Collapse>
-    </Navbar>
+        {/* Theme toggle */}
+        <button
+          className="cs-header__icon-btn"
+          onClick={toggleTheme}
+          title={`Switch to ${themeName === 'light' ? 'dark' : 'light'} theme`}
+        >
+          <Icon name={themeName === 'light' ? 'dark_mode' : 'light_mode'} size={18} />
+        </button>
+      </div>
+    </header>
   )
 }

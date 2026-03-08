@@ -71,8 +71,8 @@ export default function Sidebar({ currentView, onViewChange, collapsed, onToggle
                   onClick={() => onViewChange(item.id)}
                   title={collapsed ? item.label : undefined}
                   style={{
-                    color: isActive ? theme.headerBorder : theme.textMuted,
-                    background: isActive ? `${theme.headerBorder}18` : 'transparent',
+                    color: isActive ? undefined : theme.textMuted,
+                    background: isActive ? undefined : 'transparent',
                   }}
                 >
                   <span className="cs-sidebar__icon">

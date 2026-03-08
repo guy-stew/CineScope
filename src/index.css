@@ -101,7 +101,7 @@ body {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 8px 10px;
+  padding: 9px 10px;
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -112,10 +112,17 @@ body {
   overflow: hidden;
   transition: all 0.12s ease;
   text-align: left;
+  position: relative;
 }
 
 .cs-sidebar__item:hover {
-  filter: brightness(1.2);
+  background: var(--cs-surface-alt);
+  color: var(--cs-text) !important;
+}
+
+.cs-sidebar__item--active {
+  background: rgba(56, 178, 172, 0.12) !important;
+  color: var(--cs-header-border) !important;
 }
 
 .cs-sidebar__icon {
@@ -570,6 +577,149 @@ body {
 
 /* ── Header / Navbar ─────────────────────────────────────── */
 
+.cs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 16px;
+  background: var(--cs-header);
+  border-bottom: 2px solid var(--cs-header-border);
+  flex-shrink: 0;
+  z-index: 1000;
+}
+
+.cs-header__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cs-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.cs-header__brand .material-symbols-rounded {
+  color: var(--cs-header-border);
+}
+
+.cs-header__title {
+  letter-spacing: -0.3px;
+}
+
+.cs-header__view-name {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.5);
+  padding-left: 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  font-weight: 500;
+}
+
+.cs-header__right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cs-header__icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+  position: relative;
+}
+
+.cs-header__icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.cs-header__icon-btn--warn {
+  color: #f5c542;
+}
+
+.cs-header__badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 0.55rem;
+  font-weight: 700;
+  background: #e74c3c;
+  color: #fff;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+
+.cs-header__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 0;
+}
+
+.cs-header__status--loading {
+  color: rgba(255, 255, 255, 0.6);
+  animation: cs-spin 1s linear infinite;
+}
+
+.cs-header__status--success {
+  color: #34d399;
+}
+
+.cs-header__status--error {
+  color: #ef4444;
+}
+
+@keyframes cs-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ExportMenu in new header — override Bootstrap dropdown styling */
+.cs-header .dropdown .btn {
+  background: transparent !important;
+  border: none !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+  border-radius: 6px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cs-header .dropdown .btn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+}
+
+.cs-header .dropdown .dropdown-toggle::after {
+  margin-left: 2px;
+  opacity: 0.5;
+}
+
+/* Old Bootstrap navbar header — keep for compatibility but hidden */
 .app-header {
   background: var(--cs-header) !important;
   border-bottom: 3px solid var(--cs-header-border);

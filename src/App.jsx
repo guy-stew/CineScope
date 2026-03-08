@@ -1,10 +1,9 @@
 /**
- * CineScope — App Shell (v3.0 Stage 4)
+ * CineScope — App Shell (v3.0 Stage 6 — Final Polish)
  *
- * Stage 4 changes:
- *   - Trends sidebar tab opens TrendPanel modal (same pattern as Films/Venues)
- *   - TrendPanel no longer needs showTrends/setShowTrends from AppContext
- *   - Removed Trends button trigger from Header (now sidebar only)
+ * All views render inline with persistent header + sidebar.
+ * Header is slim (logo + view name + icon buttons).
+ * No more modal overlays for main views.
  */
 
 import React, { useState, useCallback } from 'react'
@@ -89,19 +88,13 @@ function AppContent() {
     setMapPanelVisible(prev => !prev)
   }, [])
 
-  // When closing a modal view (Films/Venues/Trends), return to Map
-  const handleReturnToMap = useCallback(() => {
-    setCurrentView('map')
-  }, [])
-
-  // Trends requires 2+ films — show a helpful message if not enough
   const hasTrendData = importedFilms.length >= 2
 
   return (
     <div className="cs-app-shell">
       {/* Header */}
       <div className="cs-header-wrapper">
-        <Header />
+        <Header currentView={currentView} />
       </div>
 
       {/* Body: Sidebar + Main Content */}
