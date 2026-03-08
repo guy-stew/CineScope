@@ -1,25 +1,26 @@
+/**
+ * CineScope — Trend Panel (Restyled v3.3)
+ *
+ * Performance & Trends view — tracks venue grade changes across films.
+ * Tabs: Venues, Chains, Regions, AI Insights.
+ * Matches cinescope_redesign_v2 mockup design language.
+ */
+
 import React, { useState, useMemo, useCallback, Component } from 'react'
-import { Modal, Badge, Button, Tab, Tabs, Spinner, Form, Alert, OverlayTrigger, Tooltip as BTooltip } from 'react-bootstrap'
+import { Modal } from 'react-bootstrap'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as RTooltip, Cell } from 'recharts'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '@clerk/clerk-react'
 import { GRADES } from '../utils/grades'
 import { computeTrends, buildTrendSummaryForAI } from '../utils/trendAnalysis'
-import { generateAIReport } from '../utils/aiReport'
-import { buildFilmProfileForAI } from '../utils/aiReport'
+import { generateAIReport, buildFilmProfileForAI } from '../utils/aiReport'
 import { formatRevenue } from '../utils/formatRevenue'
 import Icon from './Icon'
 import ExportMenu from './ExportMenu'
 
-const DIRECTION_ICONS = {
-  improving: { icon: 'trending_up', color: '#27ae60', label: 'Improving' },
-  declining: { icon: 'trending_down', color: '#e74c3c', label: 'Declining' },
-  stable: { icon: 'trending_flat', color: '#95a5a6', label: 'Stable' },
-}
 
 // ─── Error Boundary ──────────────────────────────────────────
-// Catches rendering errors so they don't nuke the whole app.
 class TrendErrorBoundary extends Component {
   constructor(props) {
     super(props)
@@ -37,19 +38,18 @@ class TrendErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="text-center py-5">
-          <Icon name="error" size={40} style={{ color: '#e74c3c' }} />
-          <p className="mt-3 text-danger fw-bold">Trend analysis encountered an error</p>
-          <p className="text-muted" style={{ fontSize: '0.85rem' }}>
+        <div className="cs-tp__error-box">
+          <Icon name="error" size={40} style={{ color: '#ef4444' }} />
+          <p style={{ marginTop: 12, color: '#ef4444', fontWeight: 600 }}>Trend analysis encountered an error</p>
+          <p style={{ fontSize: '0.85rem', color: 'var(--cs-text-muted)' }}>
             {String(this.state.error?.message || 'Unknown error')}
           </p>
-          <Button
-            variant="outline-secondary"
-            size="sm"
+          <button
+            className="cs-tp__btn"
             onClick={() => this.setState({ hasError: false, error: null })}
           >
             Try Again
-          </Button>
+          </button>
         </div>
       )
     }
@@ -65,10 +65,18 @@ export default function TrendPanel({ show, onHide, inline = false }) {
   )
 }
 
+
 function TrendPanelInner({ show, onHide, inline = false }) {
-  const { importedFilms, baseVenues, gradeSettings, revenueFormat, hasApiKey, selectedFilmId, setAiReportText, setAiReportFilmId, catalogue, apiClient } = useApp()
+  const {
+    importedFilms, baseVenues, gradeSettings, revenueFormat,
+    hasApiKey, selectedFilmId, setAiReportText, setAiReportFilmId,
+    catalogue, apiClient
+  } = useApp()
   const { theme } = useTheme()
   const { getToken } = useAuth()
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState('venues')
 
   // AI report state
   const [aiReport, setAiReport] = useState('')
@@ -76,10 +84,10 @@ function TrendPanelInner({ show, onHide, inline = false }) {
   const [aiError, setAiError] = useState(null)
 
   // Venue filter
-  const [venueFilter, setVenueFilter] = useState('all') // all, improving, declining, stable
+  const [venueFilter, setVenueFilter] = useState('all')
   const [venueSearch, setVenueSearch] = useState('')
 
-  // Compute trends — wrapped in try/catch to prevent crash
+  // Compute trends
   const trendData = useMemo(() => {
     if ((!show && !inline) || importedFilms.length < 2) return null
     try {
@@ -100,34 +108,26 @@ function TrendPanelInner({ show, onHide, inline = false }) {
     try {
       const summary = buildTrendSummaryForAI(trendData)
 
-      // Build film profiles from catalogue entries (where available)
       let filmProfile = ''
       try {
-        // Look up full catalogue entries for the imported films
         const catEntries = []
         for (const film of importedFilms) {
           if (film.catalogueId) {
-            // Try lightweight catalogue list first
             const catMatch = catalogue.find(c => c.id === film.catalogueId)
             if (catMatch) {
-              // Fetch full entry with tmdb_data for richer profile
               const fullEntry = await apiClient.getCatalogueEntry(film.catalogueId)
               if (fullEntry) catEntries.push(fullEntry)
             }
           }
         }
-        if (catEntries.length > 0) {
-          filmProfile = buildFilmProfileForAI(catEntries)
-        }
+        if (catEntries.length > 0) filmProfile = buildFilmProfileForAI(catEntries)
       } catch (profileErr) {
         console.warn('CineScope: Could not load film profiles for AI', profileErr)
-        // Continue without profiles — not a fatal error
       }
 
       const fullReport = await generateAIReport(getToken, summary, (chunk) => {
         setAiReport(prev => prev + chunk)
       }, filmProfile || undefined)
-      // Save to shared context so ExportMenu can include it in PDF
       setAiReportText(fullReport)
       setAiReportFilmId(selectedFilmId)
     } catch (err) {
@@ -142,9 +142,9 @@ function TrendPanelInner({ show, onHide, inline = false }) {
 
   if (!trendData || importedFilms.length < 2) {
     const notEnoughContent = (
-      <div className="text-center py-5" style={{ color: theme.textMuted }}>
-        <Icon name="trending_up" size={48} />
-        <p className="mt-3">Import at least 2 Comscore files to see trend analysis.</p>
+      <div className="cs-tp__empty">
+        <span className="cs-tp__empty-icon material-symbols-rounded">trending_up</span>
+        <p>Import at least 2 Comscore files to see trend analysis.</p>
         <p style={{ fontSize: '0.85rem' }}>
           Trends track how each venue's grade changes across film releases,
           helping you spot improving and declining cinemas.
@@ -154,12 +154,8 @@ function TrendPanelInner({ show, onHide, inline = false }) {
 
     if (inline) {
       return (
-        <div className="d-flex flex-column h-100" style={{ background: theme.surface, color: theme.text }}>
-          <div className="px-3 py-2 d-flex align-items-center gap-2" style={{ borderBottom: `1px solid ${theme.border}`, background: theme.surfaceAlt }}>
-            <Icon name="insights" size={22} style={{ color: theme.headerBorder }} />
-            <span className="fw-bold" style={{ fontSize: '1.1rem' }}>Trend Analysis</span>
-          </div>
-          <div className="flex-grow-1 d-flex align-items-center justify-content-center" style={{ background: theme.surface }}>
+        <div className="d-flex flex-column h-100" style={{ background: 'var(--cs-body)', color: 'var(--cs-text)' }}>
+          <div className="cs-tp" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {notEnoughContent}
           </div>
         </div>
@@ -168,10 +164,14 @@ function TrendPanelInner({ show, onHide, inline = false }) {
 
     return (
       <Modal show={show} onHide={onHide} size="lg" centered>
-        <Modal.Header closeButton style={{ background: 'var(--cs-header, #1a365d)', color: 'white' }}>
-          <Modal.Title><Icon name="insights" size={22} className="me-2" /> Trend Analysis</Modal.Title>
+        <Modal.Header closeButton style={{ background: theme.header, borderBottom: `1px solid ${theme.border}` }}>
+          <Modal.Title style={{ color: theme.headerText || '#fff' }}>
+            <div className="d-flex align-items-center gap-2">
+              <Icon name="insights" size={22} /> Trend Analysis
+            </div>
+          </Modal.Title>
         </Modal.Header>
-        <Modal.Body style={{ background: theme.surface }}>
+        <Modal.Body style={{ background: 'var(--cs-body)', color: 'var(--cs-text)' }}>
           {notEnoughContent}
         </Modal.Body>
       </Modal>
@@ -181,21 +181,17 @@ function TrendPanelInner({ show, onHide, inline = false }) {
   // ── Computation error ──
   if (trendData.error) {
     const errorContent = (
-      <div className="text-center py-5">
-        <Icon name="error" size={40} style={{ color: '#e74c3c' }} />
-        <p className="mt-3 text-danger">Could not compute trends</p>
-        <p className="text-muted" style={{ fontSize: '0.85rem' }}>{String(trendData.error)}</p>
+      <div className="cs-tp__error-box">
+        <Icon name="error" size={40} style={{ color: '#ef4444' }} />
+        <p style={{ marginTop: 12, color: '#ef4444' }}>Could not compute trends</p>
+        <p style={{ fontSize: '0.85rem', color: 'var(--cs-text-muted)' }}>{String(trendData.error)}</p>
       </div>
     )
 
     if (inline) {
       return (
-        <div className="d-flex flex-column h-100" style={{ background: theme.surface, color: theme.text }}>
-          <div className="px-3 py-2 d-flex align-items-center gap-2" style={{ borderBottom: `1px solid ${theme.border}`, background: theme.surfaceAlt }}>
-            <Icon name="insights" size={22} style={{ color: theme.headerBorder }} />
-            <span className="fw-bold" style={{ fontSize: '1.1rem' }}>Trend Analysis</span>
-          </div>
-          <div className="flex-grow-1 d-flex align-items-center justify-content-center" style={{ background: theme.surface }}>
+        <div className="d-flex flex-column h-100" style={{ background: 'var(--cs-body)', color: 'var(--cs-text)' }}>
+          <div className="cs-tp" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {errorContent}
           </div>
         </div>
@@ -204,15 +200,24 @@ function TrendPanelInner({ show, onHide, inline = false }) {
 
     return (
       <Modal show={show} onHide={onHide} size="lg" centered>
-        <Modal.Header closeButton style={{ background: 'var(--cs-header, #1a365d)', color: 'white' }}>
-          <Modal.Title><Icon name="insights" size={22} className="me-2" /> Trend Analysis</Modal.Title>
+        <Modal.Header closeButton style={{ background: theme.header, borderBottom: `1px solid ${theme.border}` }}>
+          <Modal.Title style={{ color: theme.headerText || '#fff' }}>
+            <div className="d-flex align-items-center gap-2">
+              <Icon name="insights" size={22} /> Trend Analysis
+            </div>
+          </Modal.Title>
         </Modal.Header>
-        <Modal.Body style={{ background: theme.surface }}>
+        <Modal.Body style={{ background: 'var(--cs-body)', color: 'var(--cs-text)' }}>
           {errorContent}
         </Modal.Body>
       </Modal>
     )
   }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // MAIN RENDER (has data)
+  // ═══════════════════════════════════════════════════════════════
 
   const summary = trendData.summary || {}
   const venueTrends = trendData.venueTrends || []
@@ -234,127 +239,159 @@ function TrendPanelInner({ show, onHide, inline = false }) {
     return true
   })
 
-  const headerContent = (
-    <div className="d-flex align-items-center gap-2" style={{ color: inline ? 'var(--cs-text, #fff)' : 'white' }}>
-      <Icon name="insights" size={22} style={{ color: inline ? theme.headerBorder : 'inherit' }} />
-      <span className="fw-bold" style={{ fontSize: '1.1rem' }}>Trend Analysis</span>
-      <Badge bg="light" text="dark" style={{ fontSize: '0.7rem', fontWeight: 'normal' }}>
-        {summary.filmCount || 0} films
-      </Badge>
-    </div>
-  )
+  const DIRECTION_ICONS = {
+    improving: { icon: 'trending_up', color: '#27ae60', label: 'Improving' },
+    declining: { icon: 'trending_down', color: '#e74c3c', label: 'Declining' },
+    stable:    { icon: 'trending_flat', color: '#95a5a6', label: 'Stable' },
+  }
 
-  const bodyContent = (
-    <>
-      {/* ── Summary Bar ── */}
-      <div className="d-flex gap-3 mb-3 flex-wrap">
-        <SummaryCard label="Films Analysed" value={summary.filmCount || 0} color="#6c757d" icon="movie" />
-        <SummaryCard label="Venues Tracked" value={summary.trackedVenues || 0} color="#17a2b8" icon="location_on" />
-        <SummaryCard label="Improving" value={summary.improving || 0} color="#27ae60" icon="trending_up" />
-        <SummaryCard label="Stable" value={summary.stable || 0} color="#95a5a6" icon="trending_flat" />
-        <SummaryCard label="Declining" value={summary.declining || 0} color="#e74c3c" icon="trending_down" />
+  const mainContent = (
+    <div className="cs-tp">
+      {/* ── Toolbar ── */}
+      <div className="cs-tp__toolbar">
+        <h1 className="cs-tp__title">
+          Trend Analysis
+          <span className="cs-tp__count-badge">{summary.filmCount || 0} films</span>
+        </h1>
+        <div className="cs-tp__toolbar-right">
+          <ExportMenu />
+        </div>
+      </div>
+
+      {/* ── Summary Cards ── */}
+      <div className="cs-tp__stats">
+        <div className="cs-tp__stat-card">
+          <Icon name="movie" size={18} className="cs-tp__stat-icon" style={{ color: 'var(--cs-text-muted)' }} />
+          <div className="cs-tp__stat-value" style={{ color: 'var(--cs-text)' }}>{summary.filmCount || 0}</div>
+          <div className="cs-tp__stat-label">Films Analysed</div>
+        </div>
+        <div className="cs-tp__stat-card cs-tp__stat-card--highlight">
+          <Icon name="location_on" size={18} className="cs-tp__stat-icon" style={{ color: 'var(--cs-header-border)' }} />
+          <div className="cs-tp__stat-value" style={{ color: 'var(--cs-header-border)' }}>{summary.trackedVenues || 0}</div>
+          <div className="cs-tp__stat-label">Venues Tracked</div>
+        </div>
+        <div className="cs-tp__stat-card">
+          <Icon name="trending_up" size={18} className="cs-tp__stat-icon" style={{ color: '#27ae60' }} />
+          <div className="cs-tp__stat-value" style={{ color: '#27ae60' }}>{summary.improving || 0}</div>
+          <div className="cs-tp__stat-label">Improving</div>
+        </div>
+        <div className="cs-tp__stat-card">
+          <Icon name="trending_flat" size={18} className="cs-tp__stat-icon" style={{ color: '#95a5a6' }} />
+          <div className="cs-tp__stat-value" style={{ color: '#95a5a6' }}>{summary.stable || 0}</div>
+          <div className="cs-tp__stat-label">Stable</div>
+        </div>
+        <div className="cs-tp__stat-card">
+          <Icon name="trending_down" size={18} className="cs-tp__stat-icon" style={{ color: '#e74c3c' }} />
+          <div className="cs-tp__stat-value" style={{ color: '#e74c3c' }}>{summary.declining || 0}</div>
+          <div className="cs-tp__stat-label">Declining</div>
+        </div>
       </div>
 
       {/* ── Tabs ── */}
-      <Tabs defaultActiveKey="venues" className="mb-3">
+      <div className="cs-tp__tabs">
+        {[
+          { key: 'venues',  icon: 'location_on',   label: 'Venues' },
+          { key: 'chains',  icon: 'business',      label: 'Chains' },
+          { key: 'regions', icon: 'map',            label: 'Regions' },
+          { key: 'ai',      icon: 'auto_awesome',   label: 'AI Insights' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            className={`cs-tp__tab ${activeTab === tab.key ? 'cs-tp__tab--active' : ''}`}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            <Icon name={tab.icon} size={16} /> {tab.label}
+          </button>
+        ))}
+      </div>
 
-          {/* ─── Venue Trends ─── */}
-          <Tab eventKey="venues" title={<span><Icon name="location_on" size={16} className="me-1" />Venues</span>}>
-            <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
-              <div className="d-flex gap-1">
-                {['all', 'improving', 'stable', 'declining'].map(f => (
-                  <Button
-                    key={f}
-                    size="sm"
-                    variant={venueFilter === f ? 'primary' : 'outline-secondary'}
-                    onClick={() => setVenueFilter(f)}
-                    style={venueFilter !== f ? { color: theme.text, borderColor: theme.border } : {}}
-                  >
-                    {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
-                    {f !== 'all' && (
-                      <Badge bg="light" text="dark" className="ms-1" style={{ fontSize: '0.65rem' }}>
-                        {venueTrends.filter(v => v.direction === f).length}
-                      </Badge>
-                    )}
-                  </Button>
-                ))}
-              </div>
-              <Form.Control
-                size="sm"
+      {/* ── TAB: Venues ── */}
+      {activeTab === 'venues' && (
+        <>
+          <div className="cs-tp__filters">
+            <div className="cs-tp__status-pills">
+              {['all', 'improving', 'stable', 'declining'].map(f => (
+                <button
+                  key={f}
+                  className={`cs-tp__pill ${venueFilter === f ? 'cs-tp__pill--active' : ''}`}
+                  onClick={() => setVenueFilter(f)}
+                >
+                  {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+                  {f !== 'all' && (
+                    <span className="cs-tp__pill-count">
+                      {venueTrends.filter(v => v.direction === f).length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <div className="cs-tp__search-wrap">
+              <Icon name="search" size={16} />
+              <input
                 type="text"
+                className="cs-tp__search"
                 placeholder="Search venues..."
                 value={venueSearch}
                 onChange={e => setVenueSearch(e.target.value)}
-                style={{ maxWidth: 200 }}
               />
-              <small style={{ color: theme.textMuted }}>{filteredVenues.length} venues</small>
             </div>
 
-            <div className="table-responsive" style={{ maxHeight: 400, fontSize: '0.82rem' }}>
-              <table className="table table-sm table-hover align-middle mb-0" style={{ color: theme.text }}>
+            <span className="cs-tp__venue-count">{filteredVenues.length} venues</span>
+          </div>
+
+          <div className="cs-tp__table-wrap">
+            <div className="cs-tp__table-scroll">
+              <table className="cs-tp__table">
                 <thead>
-                  <tr style={{ borderBottom: '2px solid ' + (theme.border || '#dee2e6') }}>
+                  <tr>
                     <th>Venue</th>
                     <th>City</th>
                     <th>Chain</th>
                     <th>Region</th>
-                    <th className="text-center">Grades</th>
-                    <th className="text-end">Avg Revenue</th>
-                    <th className="text-center">Trend</th>
+                    <th className="cs-tp__cell-center">Grades</th>
+                    <th className="cs-tp__cell-right">Avg Revenue</th>
+                    <th className="cs-tp__cell-center">Trend</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredVenues.slice(0, 200).map(v => (
                     <tr key={v.key}>
-                      <td className="text-truncate" style={{ maxWidth: 160 }}>{String(v.name || '')}</td>
-                      <td className="text-truncate" style={{ maxWidth: 90 }}>{String(v.city || '')}</td>
-                      <td><small style={{ color: theme.textMuted }}>{String(v.chain || '')}</small></td>
-                      <td><small style={{ color: theme.textMuted }}>{String(v.region || '')}</small></td>
-                      <td className="text-center">
-                        <div className="d-flex gap-1 justify-content-center">
+                      <td className="cs-tp__cell-name">{String(v.name || '')}</td>
+                      <td>{String(v.city || '')}</td>
+                      <td style={{ fontSize: '12px' }}>{String(v.chain || '')}</td>
+                      <td style={{ fontSize: '12px' }}>{String(v.region || '')}</td>
+                      <td className="cs-tp__cell-center">
+                        <div style={{ display: 'flex', gap: 3, justifyContent: 'center' }}>
                           {(v.grades || []).map((g, i) => {
                             const filmIdx = (v.appearances || [])[i]?.filmIndex
                             const filmName = filmIdx != null ? filmTitles[filmIdx] : filmTitles[i]
                             const filmRevenue = (v.appearances || [])[i]?.revenue
-                            const position = i + 1
                             const tooltipText = filmName
-                              ? `${position}. ${filmName}${filmRevenue != null ? ` — ${formatRevenue(filmRevenue, revenueFormat)}` : ''}`
-                              : `Film ${position}`
-
+                              ? `${i + 1}. ${filmName}${filmRevenue != null ? ` — ${formatRevenue(filmRevenue, revenueFormat)}` : ''}`
+                              : `Film ${i + 1}`
                             return (
-                              <OverlayTrigger
+                              <span
                                 key={i}
-                                placement="top"
-                                overlay={<BTooltip style={{ fontSize: '0.78rem' }}>{tooltipText}</BTooltip>}
+                                className="cs-tp__grade-badge"
+                                style={{ backgroundColor: GRADES[g]?.color || '#95a5a6' }}
+                                title={tooltipText}
                               >
-                                <Badge
-                                  bg=""
-                                  style={{
-                                    backgroundColor: GRADES[g]?.color || '#95a5a6',
-                                    color: '#fff',
-                                    minWidth: 22,
-                                    fontSize: '0.7rem',
-                                    cursor: 'help',
-                                  }}
-                                >
-                                  {String(g)}
-                                </Badge>
-                              </OverlayTrigger>
+                                {String(g)}
+                              </span>
                             )
                           })}
                         </div>
                       </td>
-                      <td className="text-end" style={{ fontWeight: 600 }}>
-                        {formatRevenue(v.avgRevenue, revenueFormat)}
-                      </td>
-                      <td className="text-center">
-                        <TrendBadge direction={v.direction} />
+                      <td className="cs-tp__cell-right">{formatRevenue(v.avgRevenue, revenueFormat)}</td>
+                      <td className="cs-tp__cell-center">
+                        <TrendIcon direction={v.direction} />
                       </td>
                     </tr>
                   ))}
                   {filteredVenues.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="text-center py-4" style={{ color: theme.textMuted }}>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '24px 0', color: 'var(--cs-text-muted)' }}>
                         No venues match filters
                       </td>
                     </tr>
@@ -362,44 +399,43 @@ function TrendPanelInner({ show, onHide, inline = false }) {
                 </tbody>
               </table>
             </div>
-          </Tab>
+          </div>
+        </>
+      )}
 
-          {/* ─── Chain Trends ─── */}
-          <Tab eventKey="chains" title={<span><Icon name="business" size={16} className="me-1" />Chains</span>}>
-            {chainTrends.length === 0 ? (
-              <div className="text-center py-4" style={{ color: theme.textMuted }}>
-                Not enough chain data across films
+      {/* ── TAB: Chains ── */}
+      {activeTab === 'chains' && (
+        <>
+          {chainTrends.length === 0 ? (
+            <div className="cs-tp__empty">Not enough chain data across films</div>
+          ) : (
+            <>
+              <div className="cs-tp__chart-wrap" style={{ height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chainTrends.slice(0, 15)} layout="vertical" margin={{ left: 120, right: 20, top: 5, bottom: 5 }}>
+                    <XAxis type="number" tickFormatter={v => '\u00A3' + Number(v || 0).toLocaleString()} style={{ fontSize: '0.72rem' }} />
+                    <YAxis type="category" dataKey="chain" width={110} style={{ fontSize: '0.72rem' }} />
+                    <RTooltip formatter={(v) => ['\u00A3' + Number(v || 0).toLocaleString(), 'Avg Revenue']} contentStyle={{ fontSize: '0.8rem' }} />
+                    <Bar dataKey="latestAvgRevenue" radius={[0, 4, 4, 0]}>
+                      {chainTrends.slice(0, 15).map((entry, i) => (
+                        <Cell key={i} fill={GRADES[entry.latestAvgGrade]?.color || '#95a5a6'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            ) : (
-              <>
-                <div className="mb-3" style={{ height: 250 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chainTrends.slice(0, 15)} layout="vertical" margin={{ left: 120, right: 20, top: 5, bottom: 5 }}>
-                      <XAxis type="number" tickFormatter={v => '\u00A3' + Number(v || 0).toLocaleString()} style={{ fontSize: '0.72rem' }} />
-                      <YAxis type="category" dataKey="chain" width={110} style={{ fontSize: '0.72rem' }} />
-                      <RTooltip
-                        formatter={(v) => ['\u00A3' + Number(v || 0).toLocaleString(), 'Avg Revenue']}
-                        contentStyle={{ fontSize: '0.8rem' }}
-                      />
-                      <Bar dataKey="latestAvgRevenue" radius={[0, 4, 4, 0]}>
-                        {chainTrends.slice(0, 15).map((entry, i) => (
-                          <Cell key={i} fill={GRADES[entry.latestAvgGrade]?.color || '#95a5a6'} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
 
-                <div className="table-responsive" style={{ fontSize: '0.82rem' }}>
-                  <table className="table table-sm table-hover align-middle mb-0" style={{ color: theme.text }}>
+              <div className="cs-tp__table-wrap">
+                <div className="cs-tp__table-scroll">
+                  <table className="cs-tp__table">
                     <thead>
-                      <tr style={{ borderBottom: '2px solid ' + (theme.border || '#dee2e6') }}>
+                      <tr>
                         <th>Chain</th>
-                        <th className="text-center">Venues</th>
-                        <th className="text-center">Avg Grade</th>
-                        <th className="text-end">Avg Revenue</th>
-                        <th className="text-center">Per Film</th>
-                        <th className="text-center">Trend</th>
+                        <th className="cs-tp__cell-center">Venues</th>
+                        <th className="cs-tp__cell-center">Avg Grade</th>
+                        <th className="cs-tp__cell-right">Avg Revenue</th>
+                        <th className="cs-tp__cell-center">Per Film</th>
+                        <th className="cs-tp__cell-center">Trend</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -407,86 +443,74 @@ function TrendPanelInner({ show, onHide, inline = false }) {
                         const latest = c.perFilm[c.perFilm.length - 1]
                         return (
                           <tr key={c.chain}>
-                            <td><strong>{String(c.chain || '')}</strong></td>
-                            <td className="text-center">{latest?.venueCount || 0}</td>
-                            <td className="text-center">
-                              <Badge bg="" style={{ backgroundColor: GRADES[c.latestAvgGrade]?.color || '#95a5a6', color: '#fff' }}>
+                            <td className="cs-tp__cell-name">{String(c.chain || '')}</td>
+                            <td className="cs-tp__cell-center">{latest?.venueCount || 0}</td>
+                            <td className="cs-tp__cell-center">
+                              <span className="cs-tp__grade-badge" style={{ backgroundColor: GRADES[c.latestAvgGrade]?.color || '#95a5a6' }}>
                                 {String(c.latestAvgGrade || '?')}
-                              </Badge>
+                              </span>
                             </td>
-                            <td className="text-end" style={{ fontWeight: 600 }}>
-                              {formatRevenue(c.latestAvgRevenue, revenueFormat)}
-                            </td>
-                            <td className="text-center">
-                              <div className="d-flex gap-1 justify-content-center">
+                            <td className="cs-tp__cell-right">{formatRevenue(c.latestAvgRevenue, revenueFormat)}</td>
+                            <td className="cs-tp__cell-center">
+                              <div style={{ display: 'flex', gap: 3, justifyContent: 'center' }}>
                                 {(c.perFilm || []).map((p, i) => (
-                                  <OverlayTrigger
+                                  <span
                                     key={i}
-                                    placement="top"
-                                    overlay={<BTooltip style={{ fontSize: '0.78rem' }}>{i + 1}. {String(p.filmTitle || `Film ${i + 1}`)}</BTooltip>}
+                                    className="cs-tp__grade-badge"
+                                    style={{ backgroundColor: GRADES[p.avgGrade]?.color || '#95a5a6' }}
+                                    title={`${i + 1}. ${String(p.filmTitle || `Film ${i + 1}`)}`}
                                   >
-                                    <Badge
-                                      bg=""
-                                      style={{
-                                        backgroundColor: GRADES[p.avgGrade]?.color || '#95a5a6',
-                                        color: '#fff',
-                                        fontSize: '0.65rem',
-                                        cursor: 'help',
-                                      }}
-                                    >
-                                      {String(p.avgGrade || '?')}
-                                    </Badge>
-                                  </OverlayTrigger>
+                                    {String(p.avgGrade || '?')}
+                                  </span>
                                 ))}
                               </div>
                             </td>
-                            <td className="text-center"><TrendBadge direction={c.direction} /></td>
+                            <td className="cs-tp__cell-center"><TrendIcon direction={c.direction} /></td>
                           </tr>
                         )
                       })}
                     </tbody>
                   </table>
                 </div>
-              </>
-            )}
-          </Tab>
-
-          {/* ─── Regional Trends ─── */}
-          <Tab eventKey="regions" title={<span><Icon name="map" size={16} className="me-1" />Regions</span>}>
-            {regionalTrends.length === 0 ? (
-              <div className="text-center py-4" style={{ color: theme.textMuted }}>
-                Not enough regional data across films
               </div>
-            ) : (
-              <>
-                <div className="mb-3" style={{ height: 220 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={regionalTrends} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
-                      <XAxis dataKey="region" style={{ fontSize: '0.68rem' }} angle={-20} textAnchor="end" height={60} />
-                      <YAxis tickFormatter={v => '\u00A3' + Number(v || 0).toLocaleString()} style={{ fontSize: '0.72rem' }} />
-                      <RTooltip
-                        formatter={(v) => ['\u00A3' + Number(v || 0).toLocaleString(), 'Avg Revenue']}
-                        contentStyle={{ fontSize: '0.8rem' }}
-                      />
-                      <Bar dataKey="latestAvgRevenue" radius={[4, 4, 0, 0]}>
-                        {regionalTrends.map((entry, i) => (
-                          <Cell key={i} fill={GRADES[entry.latestAvgGrade]?.color || '#95a5a6'} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+            </>
+          )}
+        </>
+      )}
 
-                <div className="table-responsive" style={{ fontSize: '0.82rem' }}>
-                  <table className="table table-sm table-hover align-middle mb-0" style={{ color: theme.text }}>
+      {/* ── TAB: Regions ── */}
+      {activeTab === 'regions' && (
+        <>
+          {regionalTrends.length === 0 ? (
+            <div className="cs-tp__empty">Not enough regional data across films</div>
+          ) : (
+            <>
+              <div className="cs-tp__chart-wrap" style={{ height: 250 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={regionalTrends} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
+                    <XAxis dataKey="region" style={{ fontSize: '0.68rem' }} angle={-20} textAnchor="end" height={60} />
+                    <YAxis tickFormatter={v => '\u00A3' + Number(v || 0).toLocaleString()} style={{ fontSize: '0.72rem' }} />
+                    <RTooltip formatter={(v) => ['\u00A3' + Number(v || 0).toLocaleString(), 'Avg Revenue']} contentStyle={{ fontSize: '0.8rem' }} />
+                    <Bar dataKey="latestAvgRevenue" radius={[4, 4, 0, 0]}>
+                      {regionalTrends.map((entry, i) => (
+                        <Cell key={i} fill={GRADES[entry.latestAvgGrade]?.color || '#95a5a6'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="cs-tp__table-wrap">
+                <div className="cs-tp__table-scroll">
+                  <table className="cs-tp__table">
                     <thead>
-                      <tr style={{ borderBottom: '2px solid ' + (theme.border || '#dee2e6') }}>
+                      <tr>
                         <th>Region</th>
-                        <th className="text-center">Venues</th>
-                        <th className="text-center">Avg Grade</th>
-                        <th className="text-end">Avg Revenue</th>
-                        <th className="text-center">Per Film</th>
-                        <th className="text-center">Trend</th>
+                        <th className="cs-tp__cell-center">Venues</th>
+                        <th className="cs-tp__cell-center">Avg Grade</th>
+                        <th className="cs-tp__cell-right">Avg Revenue</th>
+                        <th className="cs-tp__cell-center">Per Film</th>
+                        <th className="cs-tp__cell-center">Trend</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -494,210 +518,156 @@ function TrendPanelInner({ show, onHide, inline = false }) {
                         const latest = r.perFilm[r.perFilm.length - 1]
                         return (
                           <tr key={r.region}>
-                            <td><strong>{String(r.region || '')}</strong></td>
-                            <td className="text-center">{latest?.venueCount || 0}</td>
-                            <td className="text-center">
-                              <Badge bg="" style={{ backgroundColor: GRADES[r.latestAvgGrade]?.color || '#95a5a6', color: '#fff' }}>
+                            <td className="cs-tp__cell-name">{String(r.region || '')}</td>
+                            <td className="cs-tp__cell-center">{latest?.venueCount || 0}</td>
+                            <td className="cs-tp__cell-center">
+                              <span className="cs-tp__grade-badge" style={{ backgroundColor: GRADES[r.latestAvgGrade]?.color || '#95a5a6' }}>
                                 {String(r.latestAvgGrade || '?')}
-                              </Badge>
+                              </span>
                             </td>
-                            <td className="text-end" style={{ fontWeight: 600 }}>
-                              {formatRevenue(r.latestAvgRevenue, revenueFormat)}
-                            </td>
-                            <td className="text-center">
-                              <div className="d-flex gap-1 justify-content-center">
+                            <td className="cs-tp__cell-right">{formatRevenue(r.latestAvgRevenue, revenueFormat)}</td>
+                            <td className="cs-tp__cell-center">
+                              <div style={{ display: 'flex', gap: 3, justifyContent: 'center' }}>
                                 {(r.perFilm || []).map((p, i) => (
-                                  <OverlayTrigger
+                                  <span
                                     key={i}
-                                    placement="top"
-                                    overlay={<BTooltip style={{ fontSize: '0.78rem' }}>{i + 1}. {String(p.filmTitle || `Film ${i + 1}`)}</BTooltip>}
+                                    className="cs-tp__grade-badge"
+                                    style={{ backgroundColor: GRADES[p.avgGrade]?.color || '#95a5a6' }}
+                                    title={`${i + 1}. ${String(p.filmTitle || `Film ${i + 1}`)}`}
                                   >
-                                    <Badge
-                                      bg=""
-                                      style={{
-                                        backgroundColor: GRADES[p.avgGrade]?.color || '#95a5a6',
-                                        color: '#fff',
-                                        fontSize: '0.65rem',
-                                        cursor: 'help',
-                                      }}
-                                    >
-                                      {String(p.avgGrade || '?')}
-                                    </Badge>
-                                  </OverlayTrigger>
+                                    {String(p.avgGrade || '?')}
+                                  </span>
                                 ))}
                               </div>
                             </td>
-                            <td className="text-center"><TrendBadge direction={r.direction} /></td>
+                            <td className="cs-tp__cell-center"><TrendIcon direction={r.direction} /></td>
                           </tr>
                         )
                       })}
                     </tbody>
                   </table>
                 </div>
-              </>
-            )}
-          </Tab>
+              </div>
+            </>
+          )}
+        </>
+      )}
 
-          {/* ─── AI Insights ─── */}
-          <Tab eventKey="ai" title={<span><Icon name="auto_awesome" size={16} className="me-1" />AI Insights</span>}>
-            <div className="p-3">
-              {!hasApiKey ? (
-                <div className="text-center py-4" style={{ color: theme.textMuted }}>
-                  <Icon name="key" size={40} />
-                  <p className="mt-3">Add your Anthropic API key in <strong>Settings</strong> to enable AI-powered insights.</p>
-                  <p style={{ fontSize: '0.85rem' }}>
-                    Claude will analyse your trend data and write a concise report highlighting
-                    marketing opportunities, improving venues, and actionable recommendations.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="d-flex align-items-center gap-2 mb-3">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={handleGenerateReport}
-                      disabled={aiLoading}
-                    >
-                      {aiLoading ? (
-                        <span><Spinner animation="border" size="sm" className="me-1" /> Analysing...</span>
-                      ) : (
-                        <span><Icon name="auto_awesome" size={16} className="me-1" /> Generate Report</span>
-                      )}
-                    </Button>
-                    {aiReport && !aiLoading && (
-                      <Button
-                        variant="outline-secondary"
-                        size="sm"
-                        onClick={() => navigator.clipboard.writeText(aiReport)}
-                        style={{ color: theme.text, borderColor: theme.border }}
-                      >
-                        <Icon name="content_copy" size={14} className="me-1" /> Copy
-                      </Button>
-                    )}
-                    <small style={{ color: theme.textMuted }}>
-                      Powered by Claude
-                    </small>
-                  </div>
-
-                  {aiError && (
-                    <Alert variant="danger" className="py-2" style={{ fontSize: '0.85rem' }}>
-                      <Icon name="error" size={16} className="me-1" /> {String(aiError)}
-                    </Alert>
-                  )}
-
-                  {aiReport && (
-                    <div
-                      className="p-3 rounded"
-                      style={{
-                        background: theme.surfaceAlt,
-                        border: '1px solid ' + (theme.border || '#dee2e6'),
-                        fontSize: '0.88rem',
-                        lineHeight: 1.65,
-                        whiteSpace: 'pre-wrap',
-                      }}
-                    >
-                      {aiReport}
-                    </div>
-                  )}
-
-                  {!aiReport && !aiLoading && !aiError && (
-                    <div className="text-center py-4" style={{ color: theme.textMuted, fontSize: '0.85rem' }}>
-                      Click "Generate Report" to get AI-powered insights on your {summary.filmCount || 0} films
-                      and {summary.trackedVenues || 0} tracked venues.
-                    </div>
-                  )}
-                </>
-              )}
+      {/* ── TAB: AI Insights ── */}
+      {activeTab === 'ai' && (
+        <div className="cs-tp__ai-section">
+          {!hasApiKey ? (
+            <div className="cs-tp__ai-prompt">
+              <span className="cs-tp__ai-prompt-icon material-symbols-rounded">key</span>
+              <p>Add your Anthropic API key in <strong>Settings</strong> to enable AI-powered insights.</p>
+              <p style={{ fontSize: '0.85rem' }}>
+                Claude will analyse your trend data and write a concise report highlighting
+                marketing opportunities, improving venues, and actionable recommendations.
+              </p>
             </div>
-          </Tab>
+          ) : (
+            <>
+              <div className="cs-tp__ai-actions">
+                <button
+                  className="cs-tp__btn cs-tp__btn--primary"
+                  onClick={handleGenerateReport}
+                  disabled={aiLoading}
+                >
+                  {aiLoading ? (
+                    <><Icon name="progress_activity" size={16} /> Analysing...</>
+                  ) : (
+                    <><Icon name="auto_awesome" size={16} /> Generate Report</>
+                  )}
+                </button>
+                {aiReport && !aiLoading && (
+                  <button
+                    className="cs-tp__btn"
+                    onClick={() => navigator.clipboard.writeText(aiReport)}
+                  >
+                    <Icon name="content_copy" size={14} /> Copy
+                  </button>
+                )}
+                <span className="cs-tp__ai-powered">Powered by Claude</span>
+              </div>
 
-        </Tabs>
-    </>
+              {aiError && (
+                <div className="cs-tp__ai-error">
+                  <Icon name="error" size={16} /> {String(aiError)}
+                </div>
+              )}
+
+              {aiReport && (
+                <div className="cs-tp__ai-report">{aiReport}</div>
+              )}
+
+              {!aiReport && !aiLoading && !aiError && (
+                <div className="cs-tp__ai-prompt">
+                  Click "Generate Report" to get AI-powered insights on your {summary.filmCount || 0} films
+                  and {summary.trackedVenues || 0} tracked venues.
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
   )
 
   const footerContent = (
-    <div style={{ fontSize: '0.75rem', color: theme.textMuted }}>
+    <div className="cs-tp__footer">
       Trends based on {summary.filmCount || 0} films: {filmTitles.join(' \u2192 ')}
     </div>
   )
 
-  // ── INLINE MODE ──
+
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER — INLINE vs MODAL
+  // ═══════════════════════════════════════════════════════════════
+
   if (inline) {
     return (
-      <div className="d-flex flex-column h-100" style={{ background: theme.surface, color: theme.text }}>
-        <div
-          className="d-flex align-items-center justify-content-between px-3 py-2"
-          style={{ borderBottom: `1px solid ${theme.border}`, background: theme.surfaceAlt, flexShrink: 0 }}
-        >
-          {headerContent}
-          <div className="d-flex align-items-center gap-2">
-            <ExportMenu />
-          </div>
+      <div className="d-flex flex-column h-100" style={{ background: 'var(--cs-body)', color: 'var(--cs-text)' }}>
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {mainContent}
         </div>
-        <div className="flex-grow-1 overflow-auto p-3">
-          {bodyContent}
-        </div>
-        <div
-          className="px-3 py-2 d-flex align-items-center justify-content-between"
-          style={{ borderTop: `1px solid ${theme.border}`, background: theme.surfaceAlt, flexShrink: 0 }}
-        >
-          {footerContent}
-        </div>
+        {footerContent}
       </div>
     )
   }
 
-  // ── MODAL MODE ──
   return (
     <Modal show={show} onHide={onHide} size="xl" centered scrollable>
-      <Modal.Header closeButton style={{ background: 'var(--cs-header, #1a365d)', color: 'white' }}>
-        <Modal.Title className="d-flex align-items-center gap-2">
-          {headerContent}
+      <Modal.Header closeButton style={{ background: theme.header, borderBottom: `1px solid ${theme.border}` }}>
+        <Modal.Title style={{ color: theme.headerText || '#fff' }}>
+          <div className="d-flex align-items-center gap-2">
+            <Icon name="insights" size={22} />
+            <span className="fw-bold">Trend Analysis</span>
+          </div>
         </Modal.Title>
       </Modal.Header>
-      <Modal.Body style={{ maxHeight: '75vh', overflowY: 'auto', background: theme.surface, color: theme.text }}>
-        {bodyContent}
+      <Modal.Body style={{ maxHeight: '75vh', overflowY: 'auto', background: 'var(--cs-body)', color: 'var(--cs-text)', padding: 0 }}>
+        {mainContent}
       </Modal.Body>
-      <Modal.Footer style={{ background: theme.surfaceAlt, borderColor: theme.border }}>
+      <Modal.Footer style={{ background: 'var(--cs-surface-alt)', borderColor: 'var(--cs-border)', padding: 0 }}>
         {footerContent}
-        <Button variant="secondary" size="sm" onClick={onHide}>Close</Button>
       </Modal.Footer>
     </Modal>
   )
 }
 
 
-// ─── Helper Components ────────────────────────────────────────
+// ─── Helper: Trend direction icon ────────────────────────────
 
-function SummaryCard({ label, value, color, icon }) {
+function TrendIcon({ direction }) {
+  const config = {
+    improving: { icon: 'trending_up',   color: '#27ae60' },
+    declining: { icon: 'trending_down',  color: '#e74c3c' },
+    stable:    { icon: 'trending_flat',  color: '#95a5a6' },
+  }
+  const c = config[direction] || config.stable
   return (
-    <div
-      className="text-center px-3 py-2 rounded flex-fill"
-      style={{ border: `2px solid ${color}`, minWidth: 90 }}
-    >
-      <Icon name={icon} size={18} style={{ color }} />
-      <div style={{ fontSize: '1.4rem', fontWeight: 700, color }}>{value}</div>
-      <div style={{ fontSize: '0.72rem', color: '#888' }}>{label}</div>
-    </div>
-  )
-}
-
-function TrendBadge({ direction }) {
-  const info = DIRECTION_ICONS[direction] || DIRECTION_ICONS.stable
-  return (
-    <span
-      style={{
-        color: info.color,
-        fontSize: '0.78rem',
-        fontWeight: 600,
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 2,
-      }}
-      title={info.label}
-    >
-      <Icon name={info.icon} size={16} />
+    <span className="cs-tp__trend-icon" style={{ color: c.color }} title={direction}>
+      <Icon name={c.icon} size={18} />
     </span>
   )
 }
