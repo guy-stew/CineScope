@@ -278,7 +278,7 @@ function TrendPanelInner({ show, onHide }) {
                             const filmRevenue = (v.appearances || [])[i]?.revenue
                             const position = i + 1
                             const tooltipText = filmName
-                              ? `${position}. ${filmName}${filmRevenue != null ? ` — £${Number(filmRevenue).toLocaleString()}` : ''}`
+                              ? `${position}. ${filmName}${filmRevenue != null ? ` — ${formatRevenue(filmRevenue, revenueFormat)}` : ''}`
                               : `Film ${position}`
 
                             return (
