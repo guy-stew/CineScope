@@ -10,6 +10,7 @@ import { generateAIReport } from '../utils/aiReport'
 import { buildFilmProfileForAI } from '../utils/aiReport'
 import { formatRevenue } from '../utils/formatRevenue'
 import Icon from './Icon'
+import ExportMenu from './ExportMenu'
 
 const DIRECTION_ICONS = {
   improving: { icon: 'trending_up', color: '#27ae60', label: 'Improving' },
@@ -630,6 +631,9 @@ function TrendPanelInner({ show, onHide, inline = false }) {
           style={{ borderBottom: `1px solid ${theme.border}`, background: theme.surfaceAlt, flexShrink: 0 }}
         >
           {headerContent}
+          <div className="d-flex align-items-center gap-2">
+            <ExportMenu />
+          </div>
         </div>
         <div className="flex-grow-1 overflow-auto p-3">
           {bodyContent}
