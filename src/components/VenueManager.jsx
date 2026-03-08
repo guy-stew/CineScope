@@ -1,8 +1,8 @@
 /**
- * CineScope — Venue Manager Modal
+ * CineScope — Venue Manager (Restyled v3.3)
  *
- * Full-screen modal for browsing, adding, editing, and importing venues.
- * Accessed via the storefront icon in the header bar.
+ * Full-screen modal or inline view for browsing, adding, editing,
+ * and importing venues. Matches the cinescope_redesign_v2 mockup.
  *
  * Internal view states:
  *   'list'   — searchable/sortable venue table with pagination
@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { Modal, Form, Button, Badge, Spinner, Table, InputGroup, OverlayTrigger, Tooltip } from 'react-bootstrap'
+import { Modal } from 'react-bootstrap'
 import { useAuth } from '@clerk/clerk-react'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
@@ -22,11 +22,6 @@ import VenueImport from './VenueImport'
 import * as venueApi from '../utils/venueApi'
 
 const PAGE_SIZE = 25
-
-const STATUS_BADGES = {
-  open: { bg: 'success', label: 'Open' },
-  closed: { bg: 'secondary', label: 'Closed' },
-}
 
 const CATEGORY_LABELS = {
   'Large Chain': 'Large',
@@ -152,6 +147,19 @@ export default function VenueManager({ show, onHide, inline = false }) {
     return { open, closed: venues.length - open, all: venues.length }
   }, [venues])
 
+  // Stat card data
+  const stats = useMemo(() => {
+    const chains = new Set(venues.map(v => v.chain).filter(Boolean))
+    const indieCount = venues.filter(v => !v.chain || v.chain === 'Independent').length
+    return {
+      total: venues.length,
+      chains: chains.size,
+      open: statusCounts.open,
+      closed: statusCounts.closed,
+      indie: indieCount,
+    }
+  }, [venues, statusCounts])
+
 
   // ═══════════════════════════════════════════════════════════════
   // ACTIONS
@@ -184,13 +192,11 @@ export default function VenueManager({ show, onHide, inline = false }) {
     e.stopPropagation()
     try {
       await venueApi.toggleVenueStatus(venue.id, getToken)
-      // Update local state immediately
       setVenues(prev => prev.map(v =>
         v.id === venue.id
           ? { ...v, status: v.status === 'open' ? 'closed' : 'open' }
           : v
       ))
-      // Refresh map venues
       refreshVenues()
     } catch (err) {
       console.error('Failed to toggle status:', err)
@@ -198,9 +204,7 @@ export default function VenueManager({ show, onHide, inline = false }) {
   }
 
   const handleFormSave = async (savedVenue) => {
-    // Reload the full list to pick up the new/updated venue
     await loadVenues()
-    // Also refresh AppContext venues so the map updates
     await refreshVenues()
     setView('list')
     setEditVenue(null)
@@ -216,7 +220,6 @@ export default function VenueManager({ show, onHide, inline = false }) {
 
   const handleImportComplete = async (result) => {
     await loadVenues()
-    // Also refresh AppContext venues so the map updates
     await refreshVenues()
     setView('list')
     const count = result?.imported ?? 0
@@ -224,383 +227,370 @@ export default function VenueManager({ show, onHide, inline = false }) {
     setTimeout(() => setSaveMessage(null), 5000)
   }
 
-  const SortIcon = ({ field }) => {
-    if (sortField !== field) return <Icon name="unfold_more" size={14} style={{ opacity: 0.3 }} />
-    return <Icon name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'} size={14} />
+  // Sort icon helper
+  const SortArrow = ({ field }) => {
+    if (sortField !== field) {
+      return <Icon name="unfold_more" size={13} style={{ opacity: 0.3, verticalAlign: 'middle', marginLeft: 2 }} />
+    }
+    return (
+      <Icon
+        name={sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+        size={13}
+        style={{ verticalAlign: 'middle', marginLeft: 2 }}
+      />
+    )
   }
+
+  // Page number buttons
+  const pageButtons = useMemo(() => {
+    const btns = []
+    let start = Math.max(1, safePage - 2)
+    let end = Math.min(totalPages, start + 4)
+    if (end - start < 4) start = Math.max(1, end - 4)
+    for (let i = start; i <= end; i++) btns.push(i)
+    return btns
+  }, [safePage, totalPages])
 
 
   // ═══════════════════════════════════════════════════════════════
-  // RENDER
+  // COLUMN DEFINITIONS
   // ═══════════════════════════════════════════════════════════════
 
-  const viewTitle = {
-    list: 'Venue Manager',
-    add: 'Add New Venue',
-    edit: `Edit: ${editVenue?.name || 'Venue'}`,
-    import: 'Import Venues',
-  }
+  const columns = [
+    { field: 'name',     label: 'Venue' },
+    { field: 'chain',    label: 'Chain',    width: 130 },
+    { field: 'city',     label: 'City',     width: 140 },
+    { field: 'category', label: 'Category', width: 90 },
+    { field: 'country',  label: 'Country',  width: 90 },
+    { field: 'status',   label: 'Status',   width: 90 },
+  ]
 
-  // ── Shared header content ──
-  const headerContent = (
-    <div className="d-flex align-items-center gap-2" style={{ color: inline ? 'var(--cs-text, #fff)' : (theme.headerText || '#fff') }}>
-      {view !== 'list' && (
-        <Button
-          variant="link"
-          size="sm"
-          onClick={handleFormCancel}
-          style={{ color: 'inherit', padding: 0, marginRight: 4 }}
-          title="Back to list"
+
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER — LIST VIEW
+  // ═══════════════════════════════════════════════════════════════
+
+  const listContent = (
+    <div className="cs-vm">
+      {/* ── Toolbar ── */}
+      <div className="cs-vm__toolbar">
+        <h1 className="cs-vm__title">
+          Venue Manager
+          <span className="cs-vm__count-badge">{venues.length} venues</span>
+        </h1>
+        <div className="cs-vm__toolbar-right">
+          <button className="cs-vm__btn" onClick={handleImport}>
+            <Icon name="upload_file" size={16} /> Import
+          </button>
+          <button className="cs-vm__btn cs-vm__btn--primary" onClick={handleAdd}>
+            <Icon name="add" size={16} /> Add Venue
+          </button>
+        </div>
+      </div>
+
+      {/* ── Stat Cards ── */}
+      <div className="cs-vm__stats">
+        <div className="cs-vm__stat-card">
+          <div className="cs-vm__stat-label">Total Venues</div>
+          <div className="cs-vm__stat-value">{stats.total}</div>
+          <div className="cs-vm__stat-sub">Master list</div>
+        </div>
+        <div className="cs-vm__stat-card">
+          <div className="cs-vm__stat-label">Chains</div>
+          <div className="cs-vm__stat-value">{stats.chains}</div>
+          <div className="cs-vm__stat-sub">Cinema groups</div>
+        </div>
+        <div className="cs-vm__stat-card">
+          <div className="cs-vm__stat-label">Open</div>
+          <div className="cs-vm__stat-value">{stats.open}</div>
+          <div className="cs-vm__stat-sub">Active venues</div>
+        </div>
+        <div className="cs-vm__stat-card">
+          <div className="cs-vm__stat-label">Closed</div>
+          <div className="cs-vm__stat-value cs-vm__stat-value--red">{stats.closed}</div>
+          <div className="cs-vm__stat-sub">Venues marked closed</div>
+        </div>
+      </div>
+
+      {/* ── Filter Row ── */}
+      <div className="cs-vm__filters">
+        <div className="cs-vm__search-wrap">
+          <Icon name="search" size={18} />
+          <input
+            type="text"
+            className="cs-vm__search"
+            placeholder="Search name, city, or chain..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+
+        <div className="cs-vm__status-pills">
+          {[
+            { key: 'open', label: 'Open', count: statusCounts.open },
+            { key: 'closed', label: 'Closed', count: statusCounts.closed },
+            { key: 'all', label: 'All', count: statusCounts.all },
+          ].map(({ key, label, count }) => (
+            <button
+              key={key}
+              className={`cs-vm__pill ${statusFilter === key ? 'cs-vm__pill--active' : ''}`}
+              onClick={() => setStatusFilter(key)}
+            >
+              {label}
+              <span className="cs-vm__pill-count">{count}</span>
+            </button>
+          ))}
+        </div>
+
+        <select
+          className="cs-vm__select"
+          value={categoryFilter}
+          onChange={e => setCategoryFilter(e.target.value)}
         >
-          <Icon name="arrow_back" size={20} />
-        </Button>
+          <option value="">All Categories</option>
+          {categories.map(c => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+
+        <div className="cs-vm__spacer" />
+
+        {saveMessage && (
+          <div className="cs-vm__save-msg">
+            <Icon name="check_circle" size={14} /> {saveMessage}
+          </div>
+        )}
+      </div>
+
+      {/* ── Loading ── */}
+      {loading && (
+        <div className="cs-vm__loading">
+          <Icon name="progress_activity" size={20} /> Loading venues...
+        </div>
       )}
-      <Icon name="storefront" size={22} />
-      <span className="fw-bold" style={{ fontSize: '1.1rem' }}>{viewTitle[view]}</span>
-      {view === 'list' && (
-        <Badge bg="secondary" className="ms-2 fw-normal" style={{ fontSize: '0.7rem' }}>
-          {venues.length} venues
-        </Badge>
+
+      {/* ── Error ── */}
+      {error && (
+        <div className="cs-vm__error">
+          <Icon name="error" size={18} /> {error}
+          <br />
+          <button
+            className="cs-vm__btn"
+            style={{ margin: '12px auto 0', display: 'inline-flex' }}
+            onClick={loadVenues}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* ── Table ── */}
+      {!loading && !error && (
+        <div className="cs-vm__table-wrap">
+          <div className="cs-vm__table-scroll">
+            <table className="cs-vm__table">
+              <thead>
+                <tr>
+                  {columns.map(({ field, label, width }) => (
+                    <th
+                      key={field}
+                      className={field ? 'cs-vm__sortable' : ''}
+                      style={width ? { width } : undefined}
+                      onClick={() => field && handleSort(field)}
+                    >
+                      {label}
+                      {field && <SortArrow field={field} />}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pageVenues.length === 0 && (
+                  <tr>
+                    <td colSpan={columns.length} className="cs-vm__empty">
+                      {search || statusFilter !== 'open' || categoryFilter
+                        ? 'No venues match your filters'
+                        : 'No venues found'}
+                    </td>
+                  </tr>
+                )}
+                {pageVenues.map(venue => {
+                  const status = venue.status || 'open'
+                  const isChain = venue.chain && venue.chain !== 'Independent'
+
+                  return (
+                    <tr
+                      key={venue.id}
+                      className={status === 'closed' ? 'cs-vm__row--closed' : ''}
+                      onClick={() => handleEdit(venue)}
+                    >
+                      {/* Venue name */}
+                      <td>
+                        <span className="cs-vm__venue-name">{venue.name}</span>
+                        {venue.source === 'manual' && (
+                          <span className="cs-vm__source-tag cs-vm__source-tag--manual">Manual</span>
+                        )}
+                        {venue.source === 'import' && (
+                          <span className="cs-vm__source-tag cs-vm__source-tag--import">Import</span>
+                        )}
+                      </td>
+
+                      {/* Chain */}
+                      <td>
+                        {isChain ? (
+                          <span className="cs-vm__chain-badge">{venue.chain}</span>
+                        ) : (
+                          <span className="cs-vm__chain-badge cs-vm__chain-badge--indie">Independent</span>
+                        )}
+                      </td>
+
+                      {/* City */}
+                      <td>{venue.city}</td>
+
+                      {/* Category */}
+                      <td>
+                        <span className="cs-vm__category">
+                          {CATEGORY_LABELS[venue.category] || venue.category}
+                        </span>
+                      </td>
+
+                      {/* Country */}
+                      <td>
+                        <span className="cs-vm__country">
+                          {venue.country === 'Ireland' ? '🇮🇪 IRE' : '🇬🇧 UK'}
+                        </span>
+                      </td>
+
+                      {/* Status */}
+                      <td>
+                        <span
+                          className={`cs-vm__status cs-vm__status--${status}`}
+                          onClick={(e) => handleToggleStatus(venue, e)}
+                          title={status === 'open' ? 'Click to mark Closed' : 'Click to mark Open'}
+                        >
+                          {status === 'open' ? 'Open' : 'Closed'}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ── Pagination ── */}
+          {filtered.length > PAGE_SIZE && (
+            <div className="cs-vm__pagination">
+              <span className="cs-vm__page-info">
+                Showing {((safePage - 1) * PAGE_SIZE) + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length} venues
+              </span>
+              <div className="cs-vm__page-btns">
+                <button
+                  className="cs-vm__page-btn"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage(1)}
+                  title="First page"
+                >
+                  <Icon name="first_page" size={16} />
+                </button>
+                <button
+                  className="cs-vm__page-btn"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage(p => p - 1)}
+                  title="Previous page"
+                >
+                  <Icon name="chevron_left" size={16} />
+                </button>
+
+                {pageButtons.map(i => (
+                  <button
+                    key={i}
+                    className={`cs-vm__page-btn ${i === safePage ? 'cs-vm__page-btn--active' : ''}`}
+                    onClick={() => setPage(i)}
+                  >
+                    {i}
+                  </button>
+                ))}
+
+                <button
+                  className="cs-vm__page-btn"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage(p => p + 1)}
+                  title="Next page"
+                >
+                  <Icon name="chevron_right" size={16} />
+                </button>
+                <button
+                  className="cs-vm__page-btn"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage(totalPages)}
+                  title="Last page"
+                >
+                  <Icon name="last_page" size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
 
-  // ── Shared body content ──
+
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER — ADD / EDIT / IMPORT (sub-views with back nav)
+  // ═══════════════════════════════════════════════════════════════
+
+  const subViewHeader = (title) => (
+    <div className="cs-vm__sub-header">
+      <button className="cs-vm__back-btn" onClick={handleFormCancel} title="Back to list">
+        <Icon name="arrow_back" size={18} />
+      </button>
+      <span className="cs-vm__sub-title">{title}</span>
+    </div>
+  )
+
   const bodyContent = (
     <>
-      {/* ── LIST VIEW ── */}
-      {view === 'list' && (
-        <div className="d-flex flex-column h-100">
-          {/* Toolbar */}
-          <div
-            className="d-flex flex-wrap align-items-center gap-2 px-3 py-2"
-            style={{ borderBottom: `1px solid ${theme.border}`, background: theme.surface }}
-          >
-            {/* Search */}
-            <InputGroup size="sm" style={{ width: 280 }}>
-              <InputGroup.Text style={{ background: theme.inputBg || '#fff' }}>
-                <Icon name="search" size={16} />
-              </InputGroup.Text>
-              <Form.Control
-                type="text"
-                placeholder="Search name, city, or chain..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                style={{ background: theme.inputBg || '#fff', color: theme.text }}
-              />
-              {search && (
-                <Button
-                  variant="outline-secondary"
-                  size="sm"
-                  onClick={() => setSearch('')}
-                  style={{ borderLeft: 'none' }}
-                >
-                  <Icon name="close" size={14} />
-                </Button>
-              )}
-            </InputGroup>
+      {view === 'list' && listContent}
 
-            {/* Status filter */}
-            <div className="d-flex gap-1">
-              {[
-                { key: 'open', label: 'Open', count: statusCounts.open },
-                { key: 'closed', label: 'Closed', count: statusCounts.closed },
-                { key: 'all', label: 'All', count: statusCounts.all },
-              ].map(({ key, label, count }) => (
-                  <Button
-                    key={key}
-                    size="sm"
-                    variant={statusFilter === key ? 'primary' : 'outline-secondary'}
-                    onClick={() => setStatusFilter(key)}
-                    className="d-flex align-items-center gap-1"
-                  >
-                    {label}
-                    <Badge
-                      bg={statusFilter === key ? 'light' : 'secondary'}
-                      text={statusFilter === key ? 'dark' : 'light'}
-                      pill
-                      style={{ fontSize: '0.65rem' }}
-                    >
-                      {count}
-                    </Badge>
-                  </Button>
-                ))}
-              </div>
-
-              {/* Category filter */}
-              <Form.Select
-                size="sm"
-                value={categoryFilter}
-                onChange={e => setCategoryFilter(e.target.value)}
-                style={{ width: 150 }}
-              >
-                <option value="">All Categories</option>
-                {categories.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </Form.Select>
-
-              {/* Spacer */}
-              <div className="flex-grow-1" />
-
-              {/* Save message */}
-              {saveMessage && (
-                <Badge bg="success" className="d-flex align-items-center gap-1">
-                  <Icon name="check_circle" size={14} /> {saveMessage}
-                </Badge>
-              )}
-
-              {/* Import button — NOW ENABLED */}
-              <Button size="sm" variant="outline-primary" onClick={handleImport}>
-                <Icon name="upload_file" size={16} className="me-1" /> Import
-              </Button>
-
-              {/* Add venue button */}
-              <Button size="sm" variant="success" onClick={handleAdd}>
-                <Icon name="add" size={16} className="me-1" /> Add Venue
-              </Button>
-            </div>
-
-            {/* Loading / Error */}
-            {loading && (
-              <div className="d-flex justify-content-center align-items-center py-5">
-                <Spinner animation="border" size="sm" className="me-2" />
-                <span>Loading venues...</span>
-              </div>
-            )}
-
-            {error && (
-              <div className="text-center py-4">
-                <div className="text-danger mb-2">
-                  <Icon name="error" size={20} className="me-1" /> {error}
-                </div>
-                <Button size="sm" variant="outline-primary" onClick={loadVenues}>
-                  Retry
-                </Button>
-              </div>
-            )}
-
-            {/* Venue table */}
-            {!loading && !error && (
-              <div className="flex-grow-1" style={{ overflowY: 'auto' }}>
-                <Table
-                  hover
-                  className="mb-0 venue-table"
-                  style={{ color: theme.text }}
-                >
-                  <thead style={{ position: 'sticky', top: 0, background: theme.surface, zIndex: 1 }}>
-                    <tr>
-                      {[
-                        { field: 'name', label: 'Venue Name', width: null },
-                        { field: 'city', label: 'City', width: 140 },
-                        { field: 'chain', label: 'Chain', width: 140 },
-                        { field: 'category', label: 'Category', width: 100 },
-                        { field: 'country', label: 'Country', width: 110 },
-                        { field: 'status', label: 'Status', width: 90 },
-                        { field: null, label: '', width: 50 }, // Actions
-                      ].map(({ field, label, width }, i) => (
-                        <th
-                          key={i}
-                          style={{
-                            width: width || 'auto',
-                            cursor: field ? 'pointer' : 'default',
-                            userSelect: 'none',
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                            color: theme.textMuted,
-                            borderBottom: `2px solid ${theme.border}`,
-                            whiteSpace: 'nowrap',
-                          }}
-                          onClick={() => field && handleSort(field)}
-                        >
-                          <span className="d-flex align-items-center gap-1">
-                            {label}
-                            {field && <SortIcon field={field} />}
-                          </span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pageVenues.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="text-center text-muted py-4">
-                          {search || statusFilter !== 'open' || categoryFilter
-                            ? 'No venues match your filters'
-                            : 'No venues found'}
-                        </td>
-                      </tr>
-                    )}
-                    {pageVenues.map(venue => {
-                      const status = venue.status || 'open'
-                      const badge = STATUS_BADGES[status] || STATUS_BADGES.open
-
-                      return (
-                        <tr
-                          key={venue.id}
-                          onClick={() => handleEdit(venue)}
-                          style={{
-                            cursor: 'pointer',
-                            opacity: status === 'closed' ? 0.6 : 1,
-                          }}
-                        >
-                          <td style={{ fontWeight: 500 }}>
-                            {venue.name}
-                            {venue.source === 'manual' && (
-                              <Badge bg="info" className="ms-2" style={{ fontSize: '0.6rem' }}>Manual</Badge>
-                            )}
-                            {venue.source === 'import' && (
-                              <Badge bg="primary" className="ms-2" style={{ fontSize: '0.6rem' }}>Imported</Badge>
-                            )}
-                          </td>
-                          <td>{venue.city}</td>
-                          <td>{venue.chain || <span className="text-muted" style={{ fontSize: '0.8rem' }}>Independent</span>}</td>
-                          <td>
-                            <span style={{ fontSize: '0.8rem' }}>
-                              {CATEGORY_LABELS[venue.category] || venue.category}
-                            </span>
-                          </td>
-                          <td style={{ fontSize: '0.8rem' }}>{venue.country === 'Ireland' ? '🇮🇪' : '🇬🇧'} {venue.country === 'Ireland' ? 'IRE' : 'UK'}</td>
-                          <td>
-                            <Badge bg={badge.bg} style={{ fontSize: '0.7rem', cursor: 'pointer' }}>
-                              {badge.label}
-                            </Badge>
-                          </td>
-                          <td className="text-end">
-                            <OverlayTrigger
-                              placement="left"
-                              overlay={<Tooltip>{status === 'open' ? 'Mark as Closed' : 'Mark as Open'}</Tooltip>}
-                            >
-                              <span
-                                role="button"
-                                onClick={(e) => handleToggleStatus(venue, e)}
-                                style={{ opacity: 0.5, padding: '2px 4px' }}
-                                onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                                onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
-                              >
-                                <Icon name={status === 'open' ? 'block' : 'check_circle'} size={16} />
-                              </span>
-                            </OverlayTrigger>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </Table>
-              </div>
-            )}
-
-            {/* Pagination footer */}
-            {!loading && filtered.length > PAGE_SIZE && (
-              <div
-                className="d-flex justify-content-between align-items-center px-3 py-2"
-                style={{
-                  borderTop: `1px solid ${theme.border}`,
-                  background: theme.surface,
-                  fontSize: '0.82rem',
-                }}
-              >
-                <span style={{ color: theme.textMuted }}>
-                  Showing {((safePage - 1) * PAGE_SIZE) + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length} venues
-                </span>
-                <div className="d-flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline-secondary"
-                    disabled={safePage <= 1}
-                    onClick={() => setPage(1)}
-                    title="First page"
-                  >
-                    <Icon name="first_page" size={16} />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline-secondary"
-                    disabled={safePage <= 1}
-                    onClick={() => setPage(p => p - 1)}
-                  >
-                    <Icon name="chevron_left" size={16} />
-                  </Button>
-
-                  {/* Page number buttons */}
-                  {(() => {
-                    const pages = []
-                    let start = Math.max(1, safePage - 2)
-                    let end = Math.min(totalPages, start + 4)
-                    if (end - start < 4) start = Math.max(1, end - 4)
-
-                    for (let i = start; i <= end; i++) {
-                      pages.push(
-                        <Button
-                          key={i}
-                          size="sm"
-                          variant={i === safePage ? 'primary' : 'outline-secondary'}
-                          onClick={() => setPage(i)}
-                          style={{ minWidth: 32 }}
-                        >
-                          {i}
-                        </Button>
-                      )
-                    }
-                    return pages
-                  })()}
-
-                  <Button
-                    size="sm"
-                    variant="outline-secondary"
-                    disabled={safePage >= totalPages}
-                    onClick={() => setPage(p => p + 1)}
-                  >
-                    <Icon name="chevron_right" size={16} />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline-secondary"
-                    disabled={safePage >= totalPages}
-                    onClick={() => setPage(totalPages)}
-                    title="Last page"
-                  >
-                    <Icon name="last_page" size={16} />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── ADD / EDIT VIEW ── */}
-        {(view === 'add' || view === 'edit') && (
+      {(view === 'add' || view === 'edit') && (
+        <div className="cs-vm">
+          {subViewHeader(view === 'add' ? 'Add New Venue' : `Edit: ${editVenue?.name || 'Venue'}`)}
           <VenueForm
             venue={editVenue}
             onSave={handleFormSave}
             onCancel={handleFormCancel}
           />
-        )}
+        </div>
+      )}
 
-        {/* ── IMPORT VIEW ── */}
-        {view === 'import' && (
+      {view === 'import' && (
+        <div className="cs-vm">
+          {subViewHeader('Import Venues')}
           <VenueImport
             existingVenues={venues}
             onImportComplete={handleImportComplete}
             onCancel={handleFormCancel}
           />
-        )}
+        </div>
+      )}
     </>
   )
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER — INLINE vs MODAL wrapper
+  // ═══════════════════════════════════════════════════════════════
 
   // ── INLINE MODE: render as a div ──
   if (inline) {
     return (
-      <div className="venue-manager-modal d-flex flex-column h-100" style={{ background: theme.body, color: theme.text }}>
-        <div
-          className="d-flex align-items-center justify-content-between px-3 py-2"
-          style={{ borderBottom: `1px solid ${theme.border}`, background: theme.surface, flexShrink: 0 }}
-        >
-          {headerContent}
-        </div>
-        <div className="flex-grow-1 overflow-auto" style={{ padding: 0 }}>
-          {bodyContent}
-        </div>
+      <div
+        className="d-flex flex-column h-100"
+        style={{ background: 'var(--cs-body)', color: 'var(--cs-text)' }}
+      >
+        {bodyContent}
       </div>
     )
   }
@@ -620,9 +610,14 @@ export default function VenueManager({ show, onHide, inline = false }) {
           borderBottom: `1px solid ${theme.border}`,
         }}
       >
-        <Modal.Title>{headerContent}</Modal.Title>
+        <Modal.Title style={{ color: theme.headerText || '#fff' }}>
+          <div className="d-flex align-items-center gap-2">
+            <Icon name="storefront" size={22} />
+            <span className="fw-bold">Venue Manager</span>
+          </div>
+        </Modal.Title>
       </Modal.Header>
-      <Modal.Body style={{ background: theme.background, color: theme.text, padding: 0 }}>
+      <Modal.Body style={{ background: 'var(--cs-body)', color: 'var(--cs-text)', padding: 0 }}>
         {bodyContent}
       </Modal.Body>
     </Modal>
