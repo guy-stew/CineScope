@@ -56,15 +56,15 @@ class TrendErrorBoundary extends Component {
   }
 }
 
-export default function TrendPanel({ show, onHide }) {
+export default function TrendPanel({ show, onHide, inline = false }) {
   return (
     <TrendErrorBoundary>
-      <TrendPanelInner show={show} onHide={onHide} />
+      <TrendPanelInner show={show} onHide={onHide} inline={inline} />
     </TrendErrorBoundary>
   )
 }
 
-function TrendPanelInner({ show, onHide }) {
+function TrendPanelInner({ show, onHide, inline = false }) {
   const { importedFilms, baseVenues, gradeSettings, revenueFormat, hasApiKey, selectedFilmId, setAiReportText, setAiReportFilmId, catalogue, apiClient } = useApp()
   const { theme } = useTheme()
   const { getToken } = useAuth()
@@ -80,14 +80,14 @@ function TrendPanelInner({ show, onHide }) {
 
   // Compute trends — wrapped in try/catch to prevent crash
   const trendData = useMemo(() => {
-    if (!show || importedFilms.length < 2) return null
+    if ((!show && !inline) || importedFilms.length < 2) return null
     try {
       return computeTrends(importedFilms, baseVenues, gradeSettings)
     } catch (err) {
       console.error('[CineScope] Trend computation failed:', err)
       return { error: String(err.message || 'Unknown error') }
     }
-  }, [show, importedFilms, baseVenues, gradeSettings])
+  }, [show, inline, importedFilms, baseVenues, gradeSettings])
 
   // Generate AI report
   const handleGenerateReport = useCallback(async () => {
@@ -137,21 +137,41 @@ function TrendPanelInner({ show, onHide }) {
   }, [trendData, getToken, selectedFilmId, setAiReportText, setAiReportFilmId, importedFilms, catalogue, apiClient])
 
   // ── Not enough films ──
-  if (!show) return null
+  if (!show && !inline) return null
 
   if (!trendData || importedFilms.length < 2) {
+    const notEnoughContent = (
+      <div className="text-center py-5" style={{ color: theme.textMuted }}>
+        <Icon name="trending_up" size={48} />
+        <p className="mt-3">Import at least 2 Comscore files to see trend analysis.</p>
+        <p style={{ fontSize: '0.85rem' }}>
+          Trends track how each venue's grade changes across film releases,
+          helping you spot improving and declining cinemas.
+        </p>
+      </div>
+    )
+
+    if (inline) {
+      return (
+        <div className="d-flex flex-column h-100" style={{ background: theme.surface, color: theme.text }}>
+          <div className="px-3 py-2 d-flex align-items-center gap-2" style={{ borderBottom: `1px solid ${theme.border}`, background: theme.surfaceAlt }}>
+            <Icon name="insights" size={22} style={{ color: theme.headerBorder }} />
+            <span className="fw-bold" style={{ fontSize: '1.1rem' }}>Trend Analysis</span>
+          </div>
+          <div className="flex-grow-1 d-flex align-items-center justify-content-center" style={{ background: theme.surface }}>
+            {notEnoughContent}
+          </div>
+        </div>
+      )
+    }
+
     return (
       <Modal show={show} onHide={onHide} size="lg" centered>
         <Modal.Header closeButton style={{ background: 'var(--cs-header, #1a365d)', color: 'white' }}>
           <Modal.Title><Icon name="insights" size={22} className="me-2" /> Trend Analysis</Modal.Title>
         </Modal.Header>
-        <Modal.Body className="text-center py-5" style={{ background: theme.surface, color: theme.textMuted }}>
-          <Icon name="trending_up" size={48} />
-          <p className="mt-3">Import at least 2 Comscore files to see trend analysis.</p>
-          <p style={{ fontSize: '0.85rem' }}>
-            Trends track how each venue's grade changes across film releases,
-            helping you spot improving and declining cinemas.
-          </p>
+        <Modal.Body style={{ background: theme.surface }}>
+          {notEnoughContent}
         </Modal.Body>
       </Modal>
     )
@@ -159,15 +179,35 @@ function TrendPanelInner({ show, onHide }) {
 
   // ── Computation error ──
   if (trendData.error) {
+    const errorContent = (
+      <div className="text-center py-5">
+        <Icon name="error" size={40} style={{ color: '#e74c3c' }} />
+        <p className="mt-3 text-danger">Could not compute trends</p>
+        <p className="text-muted" style={{ fontSize: '0.85rem' }}>{String(trendData.error)}</p>
+      </div>
+    )
+
+    if (inline) {
+      return (
+        <div className="d-flex flex-column h-100" style={{ background: theme.surface, color: theme.text }}>
+          <div className="px-3 py-2 d-flex align-items-center gap-2" style={{ borderBottom: `1px solid ${theme.border}`, background: theme.surfaceAlt }}>
+            <Icon name="insights" size={22} style={{ color: theme.headerBorder }} />
+            <span className="fw-bold" style={{ fontSize: '1.1rem' }}>Trend Analysis</span>
+          </div>
+          <div className="flex-grow-1 d-flex align-items-center justify-content-center" style={{ background: theme.surface }}>
+            {errorContent}
+          </div>
+        </div>
+      )
+    }
+
     return (
       <Modal show={show} onHide={onHide} size="lg" centered>
         <Modal.Header closeButton style={{ background: 'var(--cs-header, #1a365d)', color: 'white' }}>
           <Modal.Title><Icon name="insights" size={22} className="me-2" /> Trend Analysis</Modal.Title>
         </Modal.Header>
-        <Modal.Body className="text-center py-5" style={{ background: theme.surface }}>
-          <Icon name="error" size={40} style={{ color: '#e74c3c' }} />
-          <p className="mt-3 text-danger">Could not compute trends</p>
-          <p className="text-muted" style={{ fontSize: '0.85rem' }}>{String(trendData.error)}</p>
+        <Modal.Body style={{ background: theme.surface }}>
+          {errorContent}
         </Modal.Body>
       </Modal>
     )
@@ -193,30 +233,29 @@ function TrendPanelInner({ show, onHide }) {
     return true
   })
 
-  return (
-    <Modal show={show} onHide={onHide} size="xl" centered scrollable>
-      <Modal.Header closeButton style={{ background: 'var(--cs-header, #1a365d)', color: 'white' }}>
-        <Modal.Title className="d-flex align-items-center gap-2">
-          <Icon name="insights" size={22} /> Trend Analysis
-          <Badge bg="light" text="dark" style={{ fontSize: '0.7rem', fontWeight: 'normal' }}>
-            {summary.filmCount || 0} films
-          </Badge>
-        </Modal.Title>
-      </Modal.Header>
+  const headerContent = (
+    <div className="d-flex align-items-center gap-2" style={{ color: inline ? 'var(--cs-text, #fff)' : 'white' }}>
+      <Icon name="insights" size={22} style={{ color: inline ? theme.headerBorder : 'inherit' }} />
+      <span className="fw-bold" style={{ fontSize: '1.1rem' }}>Trend Analysis</span>
+      <Badge bg="light" text="dark" style={{ fontSize: '0.7rem', fontWeight: 'normal' }}>
+        {summary.filmCount || 0} films
+      </Badge>
+    </div>
+  )
 
-      <Modal.Body style={{ maxHeight: '75vh', overflowY: 'auto', background: theme.surface, color: theme.text }}>
+  const bodyContent = (
+    <>
+      {/* ── Summary Bar ── */}
+      <div className="d-flex gap-3 mb-3 flex-wrap">
+        <SummaryCard label="Films Analysed" value={summary.filmCount || 0} color="#6c757d" icon="movie" />
+        <SummaryCard label="Venues Tracked" value={summary.trackedVenues || 0} color="#17a2b8" icon="location_on" />
+        <SummaryCard label="Improving" value={summary.improving || 0} color="#27ae60" icon="trending_up" />
+        <SummaryCard label="Stable" value={summary.stable || 0} color="#95a5a6" icon="trending_flat" />
+        <SummaryCard label="Declining" value={summary.declining || 0} color="#e74c3c" icon="trending_down" />
+      </div>
 
-        {/* ── Summary Bar ── */}
-        <div className="d-flex gap-3 mb-3 flex-wrap">
-          <SummaryCard label="Films Analysed" value={summary.filmCount || 0} color="#6c757d" icon="movie" />
-          <SummaryCard label="Venues Tracked" value={summary.trackedVenues || 0} color="#17a2b8" icon="location_on" />
-          <SummaryCard label="Improving" value={summary.improving || 0} color="#27ae60" icon="trending_up" />
-          <SummaryCard label="Stable" value={summary.stable || 0} color="#95a5a6" icon="trending_flat" />
-          <SummaryCard label="Declining" value={summary.declining || 0} color="#e74c3c" icon="trending_down" />
-        </div>
-
-        {/* ── Tabs ── */}
-        <Tabs defaultActiveKey="venues" className="mb-3">
+      {/* ── Tabs ── */}
+      <Tabs defaultActiveKey="venues" className="mb-3">
 
           {/* ─── Venue Trends ─── */}
           <Tab eventKey="venues" title={<span><Icon name="location_on" size={16} className="me-1" />Venues</span>}>
@@ -573,12 +612,51 @@ function TrendPanelInner({ show, onHide }) {
           </Tab>
 
         </Tabs>
-      </Modal.Body>
+    </>
+  )
 
-      <Modal.Footer style={{ background: theme.surfaceAlt, borderColor: theme.border }}>
-        <div style={{ fontSize: '0.75rem', color: theme.textMuted }}>
-          Trends based on {summary.filmCount || 0} films: {filmTitles.join(' \u2192 ')}
+  const footerContent = (
+    <div style={{ fontSize: '0.75rem', color: theme.textMuted }}>
+      Trends based on {summary.filmCount || 0} films: {filmTitles.join(' \u2192 ')}
+    </div>
+  )
+
+  // ── INLINE MODE ──
+  if (inline) {
+    return (
+      <div className="d-flex flex-column h-100" style={{ background: theme.surface, color: theme.text }}>
+        <div
+          className="d-flex align-items-center justify-content-between px-3 py-2"
+          style={{ borderBottom: `1px solid ${theme.border}`, background: theme.surfaceAlt, flexShrink: 0 }}
+        >
+          {headerContent}
         </div>
+        <div className="flex-grow-1 overflow-auto p-3">
+          {bodyContent}
+        </div>
+        <div
+          className="px-3 py-2 d-flex align-items-center justify-content-between"
+          style={{ borderTop: `1px solid ${theme.border}`, background: theme.surfaceAlt, flexShrink: 0 }}
+        >
+          {footerContent}
+        </div>
+      </div>
+    )
+  }
+
+  // ── MODAL MODE ──
+  return (
+    <Modal show={show} onHide={onHide} size="xl" centered scrollable>
+      <Modal.Header closeButton style={{ background: 'var(--cs-header, #1a365d)', color: 'white' }}>
+        <Modal.Title className="d-flex align-items-center gap-2">
+          {headerContent}
+        </Modal.Title>
+      </Modal.Header>
+      <Modal.Body style={{ maxHeight: '75vh', overflowY: 'auto', background: theme.surface, color: theme.text }}>
+        {bodyContent}
+      </Modal.Body>
+      <Modal.Footer style={{ background: theme.surfaceAlt, borderColor: theme.border }}>
+        {footerContent}
         <Button variant="secondary" size="sm" onClick={onHide}>Close</Button>
       </Modal.Footer>
     </Modal>

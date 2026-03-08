@@ -142,7 +142,7 @@ function AppContent() {
             <VenueManager inline />
           )}
 
-          {/* ══════ TRENDS — not enough data placeholder ══════ */}
+          {/* ══════ TRENDS VIEW — inline trend panel ══════ */}
           {currentView === 'trends' && !hasTrendData && (
             <PlaceholderView
               title="Performance & Trends"
@@ -153,6 +153,9 @@ function AppContent() {
               }
               stage={`${importedFilms.length} of 2 films imported`}
             />
+          )}
+          {currentView === 'trends' && hasTrendData && (
+            <TrendPanel inline />
           )}
 
           {/* ══════ PROMOTE VIEW (placeholder — future) ══════ */}
@@ -166,12 +169,6 @@ function AppContent() {
           )}
         </main>
       </div>
-
-      {/* ══════ TREND PANEL — opens when Trends tab active AND has data ══════ */}
-      <TrendPanel
-        show={currentView === 'trends' && hasTrendData}
-        onHide={handleReturnToMap}
-      />
 
       {/* ── Other modals / overlays (unchanged) ── */}
       <SettingsPanel />
