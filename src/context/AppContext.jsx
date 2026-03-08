@@ -793,8 +793,15 @@ export function AppProvider({ children }) {
     const { result, fileName } = pendingImport
 
     try {
+      // If linking to a catalogue entry, use its title (not whatever's in the text box)
+      let finalTitle = confirmedTitle
+      if (catalogueId) {
+        const catEntry = catalogue.find(c => c.id === catalogueId)
+        if (catEntry?.title) finalTitle = catEntry.title
+      }
+
       // Transform to cloud format and save (now includes catalogueId)
-      const cloudData = appFilmToCloud(result, confirmedTitle, catalogueId)
+      const cloudData = appFilmToCloud(result, finalTitle, catalogueId)
       const { film: savedFilm } = await api.saveFilm(cloudData, getTokenRef.current)
 
       // Now load the full film data back (to get the server-generated ID and clean data)
@@ -824,7 +831,7 @@ export function AppProvider({ children }) {
       setImportStatus({
         loading: false,
         error: null,
-        success: `Imported ${result.venues.length} venues — "${confirmedTitle}"` +
+        success: `Imported ${result.venues.length} venues — "${finalTitle}"` +
           (result.stats.aggregatedCount > 0
             ? ` (${result.stats.aggregatedCount} multi-screen rows combined)`
             : ''),
@@ -839,7 +846,7 @@ export function AppProvider({ children }) {
         success: null,
       })
     }
-  }, [pendingImport, setSelectedFilmId, refreshCatalogue])
+  }, [pendingImport, setSelectedFilmId, refreshCatalogue, catalogue])
 
   // Cancel pending import
   const cancelImport = useCallback(() => {
