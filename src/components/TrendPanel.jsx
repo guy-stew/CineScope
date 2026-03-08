@@ -7,6 +7,7 @@ import { useAuth } from '@clerk/clerk-react'
 import { GRADES } from '../utils/grades'
 import { computeTrends, buildTrendSummaryForAI } from '../utils/trendAnalysis'
 import { generateAIReport } from '../utils/aiReport'
+import { buildFilmProfileForAI } from '../utils/aiReport'
 import { formatRevenue } from '../utils/formatRevenue'
 import Icon from './Icon'
 
@@ -64,7 +65,7 @@ export default function TrendPanel({ show, onHide }) {
 }
 
 function TrendPanelInner({ show, onHide }) {
-  const { importedFilms, baseVenues, gradeSettings, revenueFormat, hasApiKey, selectedFilmId, setAiReportText, setAiReportFilmId } = useApp()
+  const { importedFilms, baseVenues, gradeSettings, revenueFormat, hasApiKey, selectedFilmId, setAiReportText, setAiReportFilmId, catalogue, apiClient } = useApp()
   const { theme } = useTheme()
   const { getToken } = useAuth()
 
@@ -97,9 +98,34 @@ function TrendPanelInner({ show, onHide }) {
 
     try {
       const summary = buildTrendSummaryForAI(trendData)
+
+      // Build film profiles from catalogue entries (where available)
+      let filmProfile = ''
+      try {
+        // Look up full catalogue entries for the imported films
+        const catEntries = []
+        for (const film of importedFilms) {
+          if (film.catalogueId) {
+            // Try lightweight catalogue list first
+            const catMatch = catalogue.find(c => c.id === film.catalogueId)
+            if (catMatch) {
+              // Fetch full entry with tmdb_data for richer profile
+              const fullEntry = await apiClient.getCatalogueEntry(film.catalogueId)
+              if (fullEntry) catEntries.push(fullEntry)
+            }
+          }
+        }
+        if (catEntries.length > 0) {
+          filmProfile = buildFilmProfileForAI(catEntries)
+        }
+      } catch (profileErr) {
+        console.warn('CineScope: Could not load film profiles for AI', profileErr)
+        // Continue without profiles — not a fatal error
+      }
+
       const fullReport = await generateAIReport(getToken, summary, (chunk) => {
         setAiReport(prev => prev + chunk)
-      })
+      }, filmProfile || undefined)
       // Save to shared context so ExportMenu can include it in PDF
       setAiReportText(fullReport)
       setAiReportFilmId(selectedFilmId)
@@ -108,7 +134,7 @@ function TrendPanelInner({ show, onHide }) {
     } finally {
       setAiLoading(false)
     }
-  }, [trendData, getToken, selectedFilmId, setAiReportText, setAiReportFilmId])
+  }, [trendData, getToken, selectedFilmId, setAiReportText, setAiReportFilmId, importedFilms, catalogue, apiClient])
 
   // ── Not enough films ──
   if (!show) return null

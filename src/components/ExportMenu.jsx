@@ -32,6 +32,8 @@ export default function ExportMenu() {
     setAiReportText,
     setAiReportFilmId,
     setAiReportChainName,
+    catalogue,        // ← for looking up film profile for AI
+    apiClient,        // ← for fetching full catalogue entry with tmdb_data
   } = useApp()
 
   const { theme } = useTheme()
@@ -74,6 +76,18 @@ export default function ExportMenu() {
       // Get all venues for this chain (including E-grade)
       const chainVenues = venues.filter(v => v.chain === effectiveChain)
 
+      // Look up catalogue entry for the selected film (for film profile enrichment)
+      let catalogueEntry = null
+      try {
+        const catId = selectedFilm.catalogueId
+        if (catId) {
+          catalogueEntry = await apiClient.getCatalogueEntry(catId)
+        }
+      } catch (profileErr) {
+        console.warn('CineScope: Could not load film profile for chain AI report', profileErr)
+        // Continue without profile — not fatal
+      }
+
       const fullReport = await generateChainAIReport(
         getToken,
         effectiveChain,
@@ -82,7 +96,8 @@ export default function ExportMenu() {
         selectedFilm,
         (chunk) => {
           setChainReportText(prev => prev + chunk)
-        }
+        },
+        catalogueEntry
       )
 
       // Save to shared context (replaces any existing AI report)
@@ -94,7 +109,7 @@ export default function ExportMenu() {
     } finally {
       setChainReportLoading(false)
     }
-  }, [effectiveChain, hasApiKey, getToken, selectedFilm, selectedFilmId, venues, setAiReportText, setAiReportFilmId, setAiReportChainName])
+  }, [effectiveChain, hasApiKey, getToken, selectedFilm, selectedFilmId, venues, setAiReportText, setAiReportFilmId, setAiReportChainName, apiClient])
 
   // ── Handlers ─────────────────────────────────────────────────
 
