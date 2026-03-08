@@ -1,11 +1,11 @@
 /**
- * CineScope — Sidebar Navigation (v3.0)
+ * CineScope — Sidebar Navigation (v3.3)
  *
  * Collapsible left sidebar with icon + label navigation.
  * Neon-style: expanded shows icons + labels, collapsed shows icons only with tooltips.
  *
  * Props:
- *   currentView  - string: 'map' | 'films' | 'venues' | 'trends' | 'promote'
+ *   currentView  - string: 'map' | 'films' | 'venues' | 'matching' | 'trends' | 'promote'
  *   onViewChange - function(viewId): called when a nav item is clicked
  *   collapsed    - boolean: whether sidebar is in collapsed (icons-only) mode
  *   onToggle     - function(): toggle collapsed state
@@ -22,6 +22,7 @@ const NAV_SECTIONS = [
     items: [
       { id: 'films', icon: 'movie', label: 'Films' },
       { id: 'venues', icon: 'storefront', label: 'Venues', badge: 'count' },
+      { id: 'matching', icon: 'link', label: 'Matching', badge: 'matching' },
     ],
   },
   {
@@ -40,10 +41,15 @@ const NAV_SECTIONS = [
 ]
 
 export default function Sidebar({ currentView, onViewChange, collapsed, onToggle }) {
-  const { filteredVenues } = useApp()
+  const { filteredVenues, matchDetails, selectedFilm } = useApp()
   const { theme } = useTheme()
 
   const venueCount = filteredVenues?.length || 0
+
+  // Count matches needing attention (medium + low confidence)
+  const matchReviewCount = selectedFilm && matchDetails.length > 0
+    ? matchDetails.filter(m => m.confidence.key === 'medium' || m.confidence.key === 'low').length
+    : 0
 
   return (
     <aside
@@ -79,7 +85,8 @@ export default function Sidebar({ currentView, onViewChange, collapsed, onToggle
                     <Icon name={item.icon} size={20} />
                   </span>
                   <span className="cs-sidebar__label">{item.label}</span>
-                  {/* Badge */}
+
+                  {/* Venue count badge */}
                   {item.badge === 'count' && !collapsed && (
                     <span
                       className="cs-sidebar__badge"
@@ -91,6 +98,21 @@ export default function Sidebar({ currentView, onViewChange, collapsed, onToggle
                       {venueCount}
                     </span>
                   )}
+
+                  {/* Match review attention badge */}
+                  {item.badge === 'matching' && !collapsed && matchReviewCount > 0 && (
+                    <span
+                      className="cs-sidebar__badge"
+                      style={{
+                        background: '#f5c54233',
+                        color: '#f5c542',
+                      }}
+                    >
+                      {matchReviewCount}
+                    </span>
+                  )}
+
+                  {/* Coming soon badge */}
                   {item.badge === 'soon' && !collapsed && (
                     <span
                       className="cs-sidebar__badge cs-sidebar__badge--soon"

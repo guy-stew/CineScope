@@ -1,9 +1,11 @@
 /**
- * CineScope — Header (v3.0 Final)
+ * CineScope — Header (v3.3)
  *
- * Minimal header matching mockup:
+ * Minimal header:
  *   Left:  CineScope logo + current view name
- *   Right: Match Review (conditional) + Settings + Theme toggle
+ *   Right: Settings + Theme toggle
+ *
+ * Match Review has moved to sidebar nav (inline view).
  */
 
 import React from 'react'
@@ -15,23 +17,14 @@ const VIEW_LABELS = {
   map: 'Map',
   films: 'Film Catalogue',
   venues: 'Venue Manager',
+  matching: 'Venue Matching',
   trends: 'Performance & Trends',
   promote: 'Promote',
 }
 
 export default function Header({ currentView }) {
-  const {
-    selectedFilm,
-    showSettings, setShowSettings,
-    showMatchReview, setShowMatchReview,
-    matchDetails,
-  } = useApp()
-
+  const { showSettings, setShowSettings } = useApp()
   const { themeName, toggleTheme } = useTheme()
-
-  const reviewCount = selectedFilm && matchDetails.length > 0
-    ? matchDetails.filter(m => m.confidence.key === 'medium' || m.confidence.key === 'low').length
-    : 0
 
   return (
     <header className="cs-header">
@@ -53,20 +46,6 @@ export default function Header({ currentView }) {
 
       {/* Right: Action icons */}
       <div className="cs-header__right">
-        {/* Match review — only when film loaded and matches exist */}
-        {selectedFilm && matchDetails.length > 0 && (
-          <button
-            className={`cs-header__icon-btn ${reviewCount > 0 ? 'cs-header__icon-btn--warn' : ''}`}
-            onClick={() => setShowMatchReview(true)}
-            title={`Review venue matching${reviewCount > 0 ? ` (${reviewCount} need attention)` : ''}`}
-          >
-            <Icon name="link" size={18} />
-            {reviewCount > 0 && (
-              <span className="cs-header__badge">{reviewCount}</span>
-            )}
-          </button>
-        )}
-
         {/* Settings */}
         <button
           className="cs-header__icon-btn"

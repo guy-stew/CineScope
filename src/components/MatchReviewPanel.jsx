@@ -1,197 +1,204 @@
+/**
+ * CineScope — Match Review Panel (v3.3 — inline view support)
+ *
+ * Shows matching results after Comscore import with confidence tiers.
+ * Allows manual reassignment of medium/unmatched venues.
+ * Now supports inline rendering as a sidebar view (same pattern as other views).
+ *
+ * Props:
+ *   inline - boolean: render as inline div (sidebar view) vs modal overlay
+ */
+
 import React, { useState, useMemo } from 'react'
-import { Modal, Badge, Button, Form, Tab, Tabs, OverlayTrigger, Tooltip } from 'react-bootstrap'
+import { Modal, Badge, Button, Form, OverlayTrigger, Tooltip } from 'react-bootstrap'
 import { useApp } from '../context/AppContext'
+import { useTheme } from '../context/ThemeContext'
 import { CONFIDENCE, makeOverrideKey } from '../utils/venueMatcher'
 import Icon from './Icon'
 
-/**
- * MatchReviewPanel — Shows matching results after import with confidence tiers.
- * Allows manual reassignment of medium/unmatched venues.
- *
- * v2.0 changes:
- *   - Overrides save/delete through cloud API (via AppContext)
- *   - Removed direct localStorage imports from venueMatcher
- *   - Override changes trigger automatic re-matching via state dependency
- */
-export default function MatchReviewPanel() {
+export default function MatchReviewPanel({ inline = false }) {
   const {
     matchDetails, baseVenues, selectedFilm, rerunMatching,
     showMatchReview, setShowMatchReview,
     cloudSaveOverride, cloudDeleteOverride,
   } = useApp()
+  const { theme } = useTheme()
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState(null)
 
   const show = showMatchReview
   const onHide = () => setShowMatchReview(false)
-
-  if (!matchDetails || matchDetails.length === 0) {
-    return (
-      <Modal show={show} onHide={onHide} size="lg" centered>
-        <Modal.Header closeButton>
-          <Modal.Title><Icon name="link" size={22} className="me-2" />Venue Matching</Modal.Title>
-        </Modal.Header>
-        <Modal.Body className="text-center text-muted py-5">
-          Import a Comscore file to see matching results.
-        </Modal.Body>
-      </Modal>
-    )
-  }
 
   // Categorise matches by confidence
   const high = matchDetails.filter(m => m.confidence.key === 'high')
   const medium = matchDetails.filter(m => m.confidence.key === 'medium')
   const low = matchDetails.filter(m => m.confidence.key === 'low')
   const chainWarnings = matchDetails.filter(m => !m.chainOk)
-
   const totalComscore = matchDetails.length
-  const matchedCount = high.length + medium.length
-  const unmatchedCount = low.length
   const overrideCount = matchDetails.filter(m => m.method === 'manual_override').length
 
-  return (
-    <Modal show={show} onHide={onHide} size="xl" centered scrollable>
-      <Modal.Header closeButton style={{ background: 'var(--cs-header, #1a365d)', color: 'white' }}>
-        <Modal.Title className="d-flex align-items-center gap-2">
-          <Icon name="link" size={22} className="me-2" /> Venue Matching Review
+  // Default tab to the most relevant one
+  const effectiveTab = activeTab || (medium.length > 0 ? 'medium' : low.length > 0 ? 'low' : 'high')
+
+  const tabData = {
+    medium: { details: medium, label: 'Needs Review', icon: 'warning', color: CONFIDENCE.MEDIUM?.color || '#f5c542', emptyMsg: 'No venues need review — all matches are high confidence!' },
+    low:    { details: low, label: 'Unmatched', icon: 'cancel', color: CONFIDENCE.LOW?.color || '#e74c3c', emptyMsg: 'All Comscore venues matched successfully!' },
+    high:   { details: high, label: 'Matched', icon: 'check_circle', color: CONFIDENCE.HIGH?.color || '#27ae60', emptyMsg: '' },
+  }
+
+  const currentTabData = tabData[effectiveTab] || tabData.high
+
+  // ── No match data at all (modal-only fallback) ──
+  if (!inline && (!matchDetails || matchDetails.length === 0)) {
+    return (
+      <Modal show={show} onHide={onHide} size="lg" centered>
+        <Modal.Header closeButton style={{ background: theme.header, borderBottom: `1px solid ${theme.border}` }}>
+          <Modal.Title style={{ color: theme.headerText || '#fff' }}>
+            <div className="d-flex align-items-center gap-2">
+              <Icon name="link" size={22} /> Venue Matching
+            </div>
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center py-5" style={{ background: 'var(--cs-body)', color: 'var(--cs-text-muted)' }}>
+          Import a Comscore file to see matching results.
+        </Modal.Body>
+      </Modal>
+    )
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // MAIN CONTENT
+  // ═══════════════════════════════════════════════════════════════
+
+  const mainContent = (
+    <div className="cs-tp">
+      {/* ── Toolbar ── */}
+      <div className="cs-tp__toolbar">
+        <h1 className="cs-tp__title">
+          Venue Matching
           {selectedFilm && (
-            <Badge bg="light" text="dark" style={{ fontSize: '0.7rem', fontWeight: 'normal' }}>
+            <span className="cs-tp__count-badge">
               {selectedFilm.filmInfo.title || selectedFilm.filmInfo.fileName}
-            </Badge>
+            </span>
           )}
-        </Modal.Title>
-      </Modal.Header>
+        </h1>
+      </div>
 
-      <Modal.Body style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-
-        {/* ── Summary Stats Bar ── */}
-        <div className="d-flex gap-3 mb-3 flex-wrap">
-          <StatBox
-            label="Comscore Venues"
-            value={totalComscore}
-            color="#6c757d"
-          />
-          <StatBox
-            label="High Confidence"
-            value={high.length}
-            color={CONFIDENCE.HIGH.color}
-            pct={Math.round((high.length / totalComscore) * 100)}
-          />
-          <StatBox
-            label="Needs Review"
-            value={medium.length}
-            color={CONFIDENCE.MEDIUM.color}
-            pct={Math.round((medium.length / totalComscore) * 100)}
-          />
-          <StatBox
-            label="Unmatched"
-            value={low.length}
-            color={CONFIDENCE.LOW.color}
-            pct={Math.round((low.length / totalComscore) * 100)}
-          />
-          {overrideCount > 0 && (
-            <StatBox
-              label="Manual Overrides"
-              value={overrideCount}
-              color="#17a2b8"
-            />
-          )}
-          {chainWarnings.length > 0 && (
-            <StatBox
-              label="Chain Warnings"
-              value={chainWarnings.length}
-              color="#fd7e14"
-            />
-          )}
+      {/* ── Summary Cards ── */}
+      <div className="cs-tp__stats">
+        <div className="cs-tp__stat-card">
+          <Icon name="format_list_numbered" size={18} className="cs-tp__stat-icon" style={{ color: 'var(--cs-text-muted)' }} />
+          <div className="cs-tp__stat-value" style={{ color: 'var(--cs-text)' }}>{totalComscore}</div>
+          <div className="cs-tp__stat-label">Comscore Venues</div>
         </div>
+        <div className="cs-tp__stat-card cs-tp__stat-card--highlight">
+          <Icon name="check_circle" size={18} className="cs-tp__stat-icon" style={{ color: CONFIDENCE.HIGH?.color || '#27ae60' }} />
+          <div className="cs-tp__stat-value" style={{ color: CONFIDENCE.HIGH?.color || '#27ae60' }}>{high.length}</div>
+          <div className="cs-tp__stat-label">High Confidence</div>
+        </div>
+        <div className="cs-tp__stat-card">
+          <Icon name="warning" size={18} className="cs-tp__stat-icon" style={{ color: CONFIDENCE.MEDIUM?.color || '#f5c542' }} />
+          <div className="cs-tp__stat-value" style={{ color: CONFIDENCE.MEDIUM?.color || '#f5c542' }}>{medium.length}</div>
+          <div className="cs-tp__stat-label">Needs Review</div>
+        </div>
+        <div className="cs-tp__stat-card">
+          <Icon name="cancel" size={18} className="cs-tp__stat-icon" style={{ color: CONFIDENCE.LOW?.color || '#e74c3c' }} />
+          <div className="cs-tp__stat-value" style={{ color: CONFIDENCE.LOW?.color || '#e74c3c' }}>{low.length}</div>
+          <div className="cs-tp__stat-label">Unmatched</div>
+        </div>
+        {overrideCount > 0 && (
+          <div className="cs-tp__stat-card">
+            <Icon name="edit" size={18} className="cs-tp__stat-icon" style={{ color: '#17a2b8' }} />
+            <div className="cs-tp__stat-value" style={{ color: '#17a2b8' }}>{overrideCount}</div>
+            <div className="cs-tp__stat-label">Manual Overrides</div>
+          </div>
+        )}
+        {chainWarnings.length > 0 && (
+          <div className="cs-tp__stat-card">
+            <Icon name="warning" size={18} className="cs-tp__stat-icon" style={{ color: '#fd7e14' }} />
+            <div className="cs-tp__stat-value" style={{ color: '#fd7e14' }}>{chainWarnings.length}</div>
+            <div className="cs-tp__stat-label">Chain Warnings</div>
+          </div>
+        )}
+      </div>
 
-        {/* ── Tabs for each tier ── */}
-        <Tabs defaultActiveKey={medium.length > 0 ? 'medium' : low.length > 0 ? 'low' : 'high'} className="mb-3">
-
-          {/* Needs Review tab */}
-          <Tab
-            eventKey="medium"
-            title={<><Icon name="warning" size={16} className="me-1" /> Needs Review <Badge bg="warning" text="dark">{medium.length}</Badge></>}
+      {/* ── Tabs ── */}
+      <div className="cs-tp__tabs">
+        {[
+          { key: 'medium', icon: 'warning',      label: `Needs Review (${medium.length})` },
+          { key: 'low',    icon: 'cancel',        label: `Unmatched (${low.length})` },
+          { key: 'high',   icon: 'check_circle',  label: `Matched (${high.length})` },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            className={`cs-tp__tab ${effectiveTab === tab.key ? 'cs-tp__tab--active' : ''}`}
+            onClick={() => setActiveTab(tab.key)}
           >
-            {medium.length === 0 ? (
-              <EmptyState message="No venues need review — all matches are high confidence!" />
-            ) : (
-              <MatchTable
-                details={medium}
-                baseVenues={baseVenues}
-                showReassign
-                showAccept
-                cloudSaveOverride={cloudSaveOverride}
-                cloudDeleteOverride={cloudDeleteOverride}
-              />
-            )}
-          </Tab>
+            <Icon name={tab.icon} size={16} /> {tab.label}
+          </button>
+        ))}
+      </div>
 
-          {/* Unmatched tab */}
-          <Tab
-            eventKey="low"
-            title={<><Icon name="cancel" size={16} className="me-1" /> Unmatched <Badge bg="danger">{low.length}</Badge></>}
-          >
-            {low.length === 0 ? (
-              <EmptyState message="All Comscore venues matched successfully!" />
-            ) : (
-              <MatchTable
-                details={low}
-                baseVenues={baseVenues}
-                showReassign
-                cloudSaveOverride={cloudSaveOverride}
-                cloudDeleteOverride={cloudDeleteOverride}
-              />
-            )}
-          </Tab>
-
-          {/* High Confidence tab */}
-          <Tab
-            eventKey="high"
-            title={<><Icon name="check_circle" size={16} className="me-1" /> Matched <Badge bg="success">{high.length}</Badge></>}
-          >
+      {/* ── Tab Content ── */}
+      {currentTabData.details.length === 0 ? (
+        <div className="cs-tp__empty" style={{ padding: '32px 20px' }}>
+          {currentTabData.emptyMsg}
+        </div>
+      ) : (
+        <div className="cs-tp__table-wrap">
+          <div className="cs-tp__table-scroll" style={{ maxHeight: 'none' }}>
             <MatchTable
-              details={high}
+              details={currentTabData.details}
               baseVenues={baseVenues}
               showReassign
+              showAccept={effectiveTab === 'medium'}
               cloudSaveOverride={cloudSaveOverride}
               cloudDeleteOverride={cloudDeleteOverride}
             />
-          </Tab>
-
-        </Tabs>
-
-      </Modal.Body>
-
-      <Modal.Footer className="justify-content-between">
-        <div className="text-muted" style={{ fontSize: '0.75rem' }}>
-          Overrides are saved automatically to the cloud and apply to all future imports.
+          </div>
         </div>
-        <Button variant="secondary" onClick={onHide}>
-          Close
-        </Button>
+      )}
+    </div>
+  )
+
+  const footerContent = (
+    <div className="cs-tp__footer">
+      Overrides are saved automatically to the cloud and apply to all future imports.
+    </div>
+  )
+
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER — INLINE vs MODAL
+  // ═══════════════════════════════════════════════════════════════
+
+  if (inline) {
+    return (
+      <div className="d-flex flex-column h-100" style={{ background: 'var(--cs-body)', color: 'var(--cs-text)' }}>
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {mainContent}
+        </div>
+        {footerContent}
+      </div>
+    )
+  }
+
+  return (
+    <Modal show={show} onHide={onHide} size="xl" centered scrollable>
+      <Modal.Header closeButton style={{ background: theme.header, borderBottom: `1px solid ${theme.border}` }}>
+        <Modal.Title style={{ color: theme.headerText || '#fff' }}>
+          <div className="d-flex align-items-center gap-2">
+            <Icon name="link" size={22} /> Venue Matching Review
+          </div>
+        </Modal.Title>
+      </Modal.Header>
+      <Modal.Body style={{ maxHeight: '75vh', overflowY: 'auto', background: 'var(--cs-body)', color: 'var(--cs-text)', padding: 0 }}>
+        {mainContent}
+      </Modal.Body>
+      <Modal.Footer style={{ background: 'var(--cs-surface-alt)', borderColor: 'var(--cs-border)', padding: 0 }}>
+        {footerContent}
       </Modal.Footer>
     </Modal>
-  )
-}
-
-
-// ─── Summary Stat Box ──────────────────────────────────────
-
-function StatBox({ label, value, color, pct }) {
-  return (
-    <div
-      className="text-center px-3 py-2 rounded"
-      style={{
-        border: `2px solid ${color}`,
-        minWidth: 100,
-        flex: '1 1 0',
-      }}
-    >
-      <div style={{ fontSize: '1.5rem', fontWeight: 700, color }}>{value}</div>
-      <div style={{ fontSize: '0.72rem', color: '#666' }}>
-        {label}
-        {pct != null && <span className="ms-1">({pct}%)</span>}
-      </div>
-    </div>
   )
 }
 
@@ -200,8 +207,8 @@ function StatBox({ label, value, color, pct }) {
 
 function MatchTable({ details, baseVenues, showReassign = false, showAccept = false, cloudSaveOverride, cloudDeleteOverride }) {
   return (
-    <div className="table-responsive" style={{ fontSize: '0.82rem' }}>
-      <table className="table table-sm table-hover align-middle mb-0">
+    <div style={{ fontSize: '0.82rem' }}>
+      <table className="cs-tp__table">
         <thead>
           <tr>
             <th style={{ width: '25%' }}>Comscore Theater</th>
@@ -252,11 +259,10 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
         (v.city || '').toLowerCase().includes(term) ||
         (v.chain || '').toLowerCase().includes(term)
       )
-      .slice(0, 15) // Limit results for performance
+      .slice(0, 15)
   }, [search, baseVenues])
 
   const handleAssign = (assignVenue) => {
-    // Fire-and-forget: cloudSaveOverride does optimistic state update + rollback on error
     cloudSaveOverride({
       comscoreTheater: comscore.theater,
       comscoreCity: comscore.city,
@@ -268,7 +274,6 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
     setSearch('')
   }
 
-  // Quick accept — confirms the current auto-matched venue as correct
   const handleAcceptMatch = () => {
     if (!venue) return
     cloudSaveOverride({
@@ -302,7 +307,6 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
 
   const isOverride = method === 'manual_override' || method === 'manual_dismiss'
 
-  // Method badge
   const methodLabels = {
     exact_name: 'Exact',
     name_city: 'Name+City',
@@ -319,7 +323,7 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
       <tr style={{ borderLeft: `3px solid ${confidence.color}` }}>
         {/* Comscore info */}
         <td>
-          <strong>{comscore.theater}</strong>
+          <span className="cs-tp__cell-name" style={{ display: 'inline' }}>{comscore.theater}</span>
           {!chainOk && (
             <OverlayTrigger
               placement="top"
@@ -329,24 +333,26 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
             </OverlayTrigger>
           )}
         </td>
-        <td className="text-muted">{comscore.city}</td>
-        <td className="text-muted" style={{ fontSize: '0.75rem' }}>{comscore.circuit}</td>
+        <td>{comscore.city}</td>
+        <td style={{ fontSize: '0.75rem' }}>{comscore.circuit}</td>
         <td>£{(comscore.revenue || 0).toLocaleString()}</td>
 
         {/* Arrow */}
-        <td className="text-center">{venue ? <Icon name="arrow_forward" size={16} /> : <Icon name="close" size={16} style={{ color: '#dc3545' }} />}</td>
+        <td style={{ textAlign: 'center' }}>
+          {venue ? <Icon name="arrow_forward" size={16} /> : <Icon name="close" size={16} style={{ color: '#e74c3c' }} />}
+        </td>
 
         {/* Matched venue */}
         <td>
           {venue ? (
             <>
-              <span>{venue.name}</span>
-              <span className="text-muted ms-1" style={{ fontSize: '0.75rem' }}>
+              <span style={{ fontWeight: 500, color: 'var(--cs-text)' }}>{venue.name}</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--cs-text-muted)', marginLeft: 6 }}>
                 {venue.city} · {venue.chain}
               </span>
             </>
           ) : (
-            <span className="text-muted fst-italic">No match found</span>
+            <span style={{ fontStyle: 'italic', color: 'var(--cs-text-muted)' }}>No match found</span>
           )}
         </td>
 
@@ -359,7 +365,7 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
           >
             {score}
           </Badge>
-          <div style={{ fontSize: '0.65rem', color: '#999' }}>
+          <div style={{ fontSize: '0.65rem', color: 'var(--cs-text-muted)' }}>
             {methodLabels[method] || method}
           </div>
         </td>
@@ -410,7 +416,7 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
       {/* Reassignment dropdown row */}
       {showDropdown && (
         <tr>
-          <td colSpan={showReassign ? 8 : 7} style={{ background: '#f8f9fa' }}>
+          <td colSpan={showReassign ? 8 : 7} style={{ background: 'var(--cs-surface-alt)' }}>
             <div className="p-2">
               <div className="d-flex gap-2 align-items-center mb-2">
                 <Form.Control
@@ -420,14 +426,14 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   autoFocus
-                  style={{ maxWidth: 400 }}
+                  style={{ maxWidth: 400, background: 'var(--cs-surface)', color: 'var(--cs-text)', borderColor: 'var(--cs-border)' }}
                 />
                 <Button
                   size="sm"
                   variant="outline-danger"
                   onClick={handleDismiss}
                   disabled={saving}
-                  title="Mark as intentionally unmatched (e.g. venue not in our database)"
+                  title="Mark as intentionally unmatched"
                 >
                   <Icon name="block" size={14} className="me-1" /> Dismiss
                 </Button>
@@ -441,14 +447,14 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
               </div>
 
               {search.trim() && filteredVenues.length === 0 && (
-                <div className="text-muted" style={{ fontSize: '0.8rem' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--cs-text-muted)' }}>
                   No venues match "{search}"
                 </div>
               )}
 
               {filteredVenues.length > 0 && (
                 <div style={{ maxHeight: 200, overflowY: 'auto', fontSize: '0.8rem' }}>
-                  <table className="table table-sm table-hover mb-0">
+                  <table className="cs-tp__table">
                     <thead>
                       <tr>
                         <th>Venue</th>
@@ -461,10 +467,10 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
                     <tbody>
                       {filteredVenues.map((v, i) => (
                         <tr key={i}>
-                          <td>{v.name}</td>
+                          <td style={{ fontWeight: 500, color: 'var(--cs-text)' }}>{v.name}</td>
                           <td>{v.city}</td>
                           <td>{v.chain}</td>
-                          <td className="text-muted">{v.category}</td>
+                          <td style={{ color: 'var(--cs-text-muted)' }}>{v.category}</td>
                           <td>
                             <Button
                               size="sm"
@@ -487,14 +493,5 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
         </tr>
       )}
     </>
-  )
-}
-
-
-function EmptyState({ message }) {
-  return (
-    <div className="text-center text-muted py-4" style={{ fontSize: '0.9rem' }}>
-      {message}
-    </div>
   )
 }

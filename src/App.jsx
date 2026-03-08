@@ -1,5 +1,5 @@
 /**
- * CineScope — App Shell (v3.0 Stage 6 — Final Polish)
+ * CineScope — App Shell (v3.3 — Match Review inline)
  *
  * All views render inline with persistent header + sidebar.
  * Header is slim (logo + view name + icon buttons).
@@ -69,7 +69,7 @@ function PlaceholderView({ title, icon, description, stage }) {
 }
 
 function AppContent() {
-  const { pendingImport, confirmImport, cancelImport, importedFilms } = useApp()
+  const { pendingImport, confirmImport, cancelImport, importedFilms, selectedFilm, matchDetails } = useApp()
 
   // ── View switching state ──
   const [currentView, setCurrentView] = useState('map')
@@ -89,6 +89,7 @@ function AppContent() {
   }, [])
 
   const hasTrendData = importedFilms.length >= 2
+  const hasMatchData = selectedFilm && matchDetails && matchDetails.length > 0
 
   return (
     <div className="cs-app-shell">
@@ -135,6 +136,23 @@ function AppContent() {
             <VenueManager inline />
           )}
 
+          {/* ══════ MATCHING VIEW — inline match review ══════ */}
+          {currentView === 'matching' && hasMatchData && (
+            <MatchReviewPanel inline />
+          )}
+          {currentView === 'matching' && !hasMatchData && (
+            <PlaceholderView
+              title="Venue Matching"
+              icon="link"
+              description={
+                !selectedFilm
+                  ? "Select a film from the Film Catalogue and import Comscore data to see venue matching results here."
+                  : "No matching data available for the current film. Import a Comscore file to generate matches."
+              }
+              stage={selectedFilm ? '1 film selected — awaiting Comscore import' : 'No film selected'}
+            />
+          )}
+
           {/* ══════ TRENDS VIEW — inline trend panel ══════ */}
           {currentView === 'trends' && !hasTrendData && (
             <PlaceholderView
@@ -165,7 +183,6 @@ function AppContent() {
 
       {/* ── Other modals / overlays (unchanged) ── */}
       <SettingsPanel />
-      <MatchReviewPanel />
       <FilmNameDialog
         show={!!pendingImport}
         onConfirm={confirmImport}
