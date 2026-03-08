@@ -34,7 +34,7 @@ const CATEGORY_LABELS = {
   'Independent': 'Indie',
 }
 
-export default function VenueManager({ show, onHide }) {
+export default function VenueManager({ show, onHide, inline = false }) {
   const { getToken } = useAuth()
   const { refreshVenues } = useApp()
   const { theme } = useTheme()
@@ -82,9 +82,9 @@ export default function VenueManager({ show, onHide }) {
     }
   }, [getToken])
 
-  // Load venues when modal opens
+  // Load venues when modal opens or inline view mounts
   useEffect(() => {
-    if (show) {
+    if (show || inline) {
       loadVenues()
       setView('list')
       setEditVenue(null)
@@ -92,7 +92,7 @@ export default function VenueManager({ show, onHide }) {
       setPage(1)
       setSaveMessage(null)
     }
-  }, [show, loadVenues])
+  }, [show, inline, loadVenues])
 
 
   // ═══════════════════════════════════════════════════════════════
@@ -241,82 +241,72 @@ export default function VenueManager({ show, onHide }) {
     import: 'Import Venues',
   }
 
-  return (
-    <Modal
-      show={show}
-      onHide={onHide}
-      fullscreen
-      className="venue-manager-modal"
-    >
-      <Modal.Header
-        closeButton
-        style={{
-          background: theme.header,
-          borderBottom: `1px solid ${theme.border}`,
-        }}
-      >
-        <Modal.Title className="d-flex align-items-center gap-2" style={{ color: theme.headerText || '#fff' }}>
-          {view !== 'list' && (
-            <Button
-              variant="link"
-              size="sm"
-              onClick={handleFormCancel}
-              style={{ color: theme.headerText || '#fff', padding: 0, marginRight: 4 }}
-              title="Back to list"
-            >
-              <Icon name="arrow_back" size={20} />
-            </Button>
-          )}
-          <Icon name="storefront" size={22} />
-          <span>{viewTitle[view]}</span>
-          {view === 'list' && (
-            <Badge bg="secondary" className="ms-2 fw-normal" style={{ fontSize: '0.7rem' }}>
-              {venues.length} venues
-            </Badge>
-          )}
-        </Modal.Title>
-      </Modal.Header>
+  // ── Shared header content ──
+  const headerContent = (
+    <div className="d-flex align-items-center gap-2" style={{ color: inline ? 'var(--cs-text, #fff)' : (theme.headerText || '#fff') }}>
+      {view !== 'list' && (
+        <Button
+          variant="link"
+          size="sm"
+          onClick={handleFormCancel}
+          style={{ color: 'inherit', padding: 0, marginRight: 4 }}
+          title="Back to list"
+        >
+          <Icon name="arrow_back" size={20} />
+        </Button>
+      )}
+      <Icon name="storefront" size={22} />
+      <span className="fw-bold" style={{ fontSize: '1.1rem' }}>{viewTitle[view]}</span>
+      {view === 'list' && (
+        <Badge bg="secondary" className="ms-2 fw-normal" style={{ fontSize: '0.7rem' }}>
+          {venues.length} venues
+        </Badge>
+      )}
+    </div>
+  )
 
-      <Modal.Body style={{ background: theme.background, color: theme.text, padding: 0 }}>
-        {/* ── LIST VIEW ── */}
-        {view === 'list' && (
-          <div className="d-flex flex-column h-100">
-            {/* Toolbar */}
-            <div
-              className="d-flex flex-wrap align-items-center gap-2 px-3 py-2"
-              style={{ borderBottom: `1px solid ${theme.border}`, background: theme.surface }}
-            >
-              {/* Search */}
-              <InputGroup size="sm" style={{ width: 280 }}>
-                <InputGroup.Text style={{ background: theme.inputBg || '#fff' }}>
-                  <Icon name="search" size={16} />
-                </InputGroup.Text>
-                <Form.Control
-                  type="text"
-                  placeholder="Search name, city, or chain..."
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  style={{ background: theme.inputBg || '#fff', color: theme.text }}
-                />
-                {search && (
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    onClick={() => setSearch('')}
-                    style={{ borderLeft: 'none' }}
-                  >
-                    <Icon name="close" size={14} />
-                  </Button>
-                )}
-              </InputGroup>
+  // ── Shared body content ──
+  const bodyContent = (
+    <>
+      {/* ── LIST VIEW ── */}
+      {view === 'list' && (
+        <div className="d-flex flex-column h-100">
+          {/* Toolbar */}
+          <div
+            className="d-flex flex-wrap align-items-center gap-2 px-3 py-2"
+            style={{ borderBottom: `1px solid ${theme.border}`, background: theme.surface }}
+          >
+            {/* Search */}
+            <InputGroup size="sm" style={{ width: 280 }}>
+              <InputGroup.Text style={{ background: theme.inputBg || '#fff' }}>
+                <Icon name="search" size={16} />
+              </InputGroup.Text>
+              <Form.Control
+                type="text"
+                placeholder="Search name, city, or chain..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{ background: theme.inputBg || '#fff', color: theme.text }}
+              />
+              {search && (
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={() => setSearch('')}
+                  style={{ borderLeft: 'none' }}
+                >
+                  <Icon name="close" size={14} />
+                </Button>
+              )}
+            </InputGroup>
 
-              {/* Status filter */}
-              <div className="d-flex gap-1">
-                {[
-                  { key: 'open', label: 'Open', count: statusCounts.open },
-                  { key: 'closed', label: 'Closed', count: statusCounts.closed },
-                  { key: 'all', label: 'All', count: statusCounts.all },
-                ].map(({ key, label, count }) => (
+            {/* Status filter */}
+            <div className="d-flex gap-1">
+              {[
+                { key: 'open', label: 'Open', count: statusCounts.open },
+                { key: 'closed', label: 'Closed', count: statusCounts.closed },
+                { key: 'all', label: 'All', count: statusCounts.all },
+              ].map(({ key, label, count }) => (
                   <Button
                     key={key}
                     size="sm"
@@ -595,6 +585,45 @@ export default function VenueManager({ show, onHide }) {
             onCancel={handleFormCancel}
           />
         )}
+    </>
+  )
+
+  // ── INLINE MODE: render as a div ──
+  if (inline) {
+    return (
+      <div className="venue-manager-modal d-flex flex-column h-100" style={{ background: theme.body, color: theme.text }}>
+        <div
+          className="d-flex align-items-center justify-content-between px-3 py-2"
+          style={{ borderBottom: `1px solid ${theme.border}`, background: theme.surface, flexShrink: 0 }}
+        >
+          {headerContent}
+        </div>
+        <div className="flex-grow-1 overflow-auto" style={{ padding: 0 }}>
+          {bodyContent}
+        </div>
+      </div>
+    )
+  }
+
+  // ── MODAL MODE: existing behaviour ──
+  return (
+    <Modal
+      show={show}
+      onHide={onHide}
+      fullscreen
+      className="venue-manager-modal"
+    >
+      <Modal.Header
+        closeButton
+        style={{
+          background: theme.header,
+          borderBottom: `1px solid ${theme.border}`,
+        }}
+      >
+        <Modal.Title>{headerContent}</Modal.Title>
+      </Modal.Header>
+      <Modal.Body style={{ background: theme.background, color: theme.text, padding: 0 }}>
+        {bodyContent}
       </Modal.Body>
     </Modal>
   )

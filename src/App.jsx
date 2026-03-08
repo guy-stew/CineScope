@@ -137,6 +137,11 @@ function AppContent() {
             <FilmCatalogue inline />
           )}
 
+          {/* ══════ VENUES VIEW — inline venue manager ══════ */}
+          {currentView === 'venues' && (
+            <VenueManager inline />
+          )}
+
           {/* ══════ TRENDS — not enough data placeholder ══════ */}
           {currentView === 'trends' && !hasTrendData && (
             <PlaceholderView
@@ -161,12 +166,6 @@ function AppContent() {
           )}
         </main>
       </div>
-
-      {/* ══════ VENUE MANAGER — opens when Venues tab active ══════ */}
-      <VenueManager
-        show={currentView === 'venues'}
-        onHide={handleReturnToMap}
-      />
 
       {/* ══════ TREND PANEL — opens when Trends tab active AND has data ══════ */}
       <TrendPanel
