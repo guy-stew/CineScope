@@ -1,33 +1,39 @@
 // src/components/FilmCatalogue.jsx
-// Full-screen overlay displaying all films in a Netflix-style poster grid
-// Replaces the old "Import" button — this is the central film management hub
+// Film management hub — Netflix-style poster grid (Restyled v3.3)
+// Matches cinescope_redesign_v2 mockup design language
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Modal, Button, Form, InputGroup, Badge, Spinner, Dropdown } from 'react-bootstrap';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Modal } from 'react-bootstrap';
 import { useApp } from '../context/AppContext';
+import { useTheme } from '../context/ThemeContext';
 import { tmdbImageUrl } from '../utils/apiClient';
+import Icon from './Icon';
 import AddFilmModal from './AddFilmModal';
 import FilmDetailView from './FilmDetailView';
 
 // ─── Status config ───
 const STATUS_CONFIG = {
-  pre_release: { label: 'Pre-release', bg: 'info', icon: 'schedule' },
-  released:    { label: 'Released',    bg: 'primary', icon: 'movie' },
-  screening:   { label: 'Screening',   bg: 'warning', icon: 'theaters' },
-  completed:   { label: 'Completed',   bg: 'success', icon: 'check_circle' },
+  pre_release: { label: 'Pre-release',  cssClass: 'pre_release' },
+  released:    { label: 'Released',      cssClass: 'released'    },
+  screening:   { label: 'Screening',     cssClass: 'screening'   },
+  completed:   { label: 'Completed',     cssClass: 'completed'   },
 };
 
 const SORT_OPTIONS = [
-  { value: 'updated', label: 'Recently Updated' },
-  { value: 'title', label: 'Title A–Z' },
-  { value: 'title_desc', label: 'Title Z–A' },
-  { value: 'release', label: 'Release Date (Newest)' },
+  { value: 'updated',     label: 'Recently Updated' },
+  { value: 'title',       label: 'Title A–Z' },
+  { value: 'title_desc',  label: 'Title Z–A' },
+  { value: 'release',     label: 'Release Date (Newest)' },
   { value: 'release_asc', label: 'Release Date (Oldest)' },
-  { value: 'revenue', label: 'Revenue (Highest)' },
+  { value: 'revenue',     label: 'Revenue (Highest)' },
 ];
+
+// Poster placeholder gradient cycle
+const POSTER_GRADIENTS = ['--1', '--2', '--3', '--4'];
 
 export default function FilmCatalogue({ show, onHide, inline = false }) {
   const { apiClient, catalogue, refreshCatalogue, analysisSet, toggleAnalysisFilm, selectAllAnalysis, clearAllAnalysis } = useApp();
+  const { theme } = useTheme();
 
   // ─── State ───
   const [loading, setLoading] = useState(false);
@@ -47,12 +53,10 @@ export default function FilmCatalogue({ show, onHide, inline = false }) {
   const filteredFilms = useMemo(() => {
     let films = [...catalogue];
 
-    // Status filter
     if (statusFilter !== 'all') {
       films = films.filter(f => f.status === statusFilter);
     }
 
-    // Search filter
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       films = films.filter(f =>
@@ -61,21 +65,14 @@ export default function FilmCatalogue({ show, onHide, inline = false }) {
       );
     }
 
-    // Sort
     films.sort((a, b) => {
       switch (sortBy) {
-        case 'title':
-          return a.title.localeCompare(b.title);
-        case 'title_desc':
-          return b.title.localeCompare(a.title);
-        case 'release':
-          return (b.release_date || '').localeCompare(a.release_date || '');
-        case 'release_asc':
-          return (a.release_date || '').localeCompare(b.release_date || '');
-        case 'revenue':
-          return (parseFloat(b.total_uk_revenue) || 0) - (parseFloat(a.total_uk_revenue) || 0);
-        default: // updated
-          return new Date(b.updated_at) - new Date(a.updated_at);
+        case 'title':       return a.title.localeCompare(b.title);
+        case 'title_desc':  return b.title.localeCompare(a.title);
+        case 'release':     return (b.release_date || '').localeCompare(a.release_date || '');
+        case 'release_asc': return (a.release_date || '').localeCompare(b.release_date || '');
+        case 'revenue':     return (parseFloat(b.total_uk_revenue) || 0) - (parseFloat(a.total_uk_revenue) || 0);
+        default:            return new Date(b.updated_at) - new Date(a.updated_at);
       }
     });
 
@@ -83,21 +80,19 @@ export default function FilmCatalogue({ show, onHide, inline = false }) {
   }, [catalogue, statusFilter, searchTerm, sortBy]);
 
   // ─── Handlers ───
-  const handleFilmAdded = (newEntry) => {
+  const handleFilmAdded = () => {
     refreshCatalogue();
     setShowAddFilm(false);
   };
 
-  const handleFilmUpdated = (updated) => {
-    refreshCatalogue();
-  };
+  const handleFilmUpdated = () => refreshCatalogue();
 
-  const handleFilmDeleted = (deletedId) => {
+  const handleFilmDeleted = () => {
     refreshCatalogue();
     setSelectedFilmId(null);
   };
 
-  // ─── Count badges ───
+  // ─── Derived data ───
   const statusCounts = useMemo(() => {
     const counts = { all: catalogue.length };
     for (const f of catalogue) {
@@ -106,608 +101,306 @@ export default function FilmCatalogue({ show, onHide, inline = false }) {
     return counts;
   }, [catalogue]);
 
-  // How many films have Comscore data (eligible for analysis set)
   const filmsWithDataCount = useMemo(() =>
     catalogue.filter(f => parseInt(f.import_count) > 0).length,
     [catalogue]
   );
+
   const analysisCount = analysisSet.length;
 
-  // ─── Render: Film detail sub-view ───
-  if (selectedFilmId) {
-    // FilmDetailView always opens as a modal overlay (drill-down from card click)
-    return (
-      <>
-        {/* If inline mode, render the grid behind the detail modal */}
-        {inline && <CatalogueShell inline={inline} onHide={onHide} catalogue={catalogue}
-          searchTerm={searchTerm} setSearchTerm={setSearchTerm}
-          statusFilter={statusFilter} setStatusFilter={setStatusFilter}
-          sortBy={sortBy} setSortBy={setSortBy}
-          statusCounts={statusCounts} filmsWithDataCount={filmsWithDataCount}
-          analysisCount={analysisCount} selectAllAnalysis={selectAllAnalysis}
-          clearAllAnalysis={clearAllAnalysis} setShowAddFilm={setShowAddFilm}
-        >
-          <CatalogueBody loading={loading} error={error} filteredFilms={filteredFilms}
-            catalogue={catalogue} setSelectedFilmId={setSelectedFilmId}
-            analysisSet={analysisSet} toggleAnalysisFilm={toggleAnalysisFilm}
-            setShowAddFilm={setShowAddFilm}
-          />
-        </CatalogueShell>}
 
-        <Modal show={true} onHide={() => setSelectedFilmId(null)} fullscreen dialogClassName="film-catalogue-modal">
-          <FilmDetailView
-            filmId={selectedFilmId}
-            onBack={() => setSelectedFilmId(null)}
-            onClose={inline ? () => setSelectedFilmId(null) : onHide}
-            onFilmUpdated={handleFilmUpdated}
-            onFilmDeleted={handleFilmDeleted}
-          />
-        </Modal>
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER — CATALOGUE CONTENT
+  // ═══════════════════════════════════════════════════════════════
 
-        <AddFilmModal show={showAddFilm} onHide={() => setShowAddFilm(false)} onFilmAdded={handleFilmAdded} />
-        <CatalogueStyles />
-      </>
-    );
-  }
-
-  // ─── Render: Main catalogue grid ───
-  return (
-    <>
-      <CatalogueShell inline={inline} show={show} onHide={onHide} catalogue={catalogue}
-        searchTerm={searchTerm} setSearchTerm={setSearchTerm}
-        statusFilter={statusFilter} setStatusFilter={setStatusFilter}
-        sortBy={sortBy} setSortBy={setSortBy}
-        statusCounts={statusCounts} filmsWithDataCount={filmsWithDataCount}
-        analysisCount={analysisCount} selectAllAnalysis={selectAllAnalysis}
-        clearAllAnalysis={clearAllAnalysis} setShowAddFilm={setShowAddFilm}
-      >
-        <CatalogueBody loading={loading} error={error} filteredFilms={filteredFilms}
-          catalogue={catalogue} setSelectedFilmId={setSelectedFilmId}
-          analysisSet={analysisSet} toggleAnalysisFilm={toggleAnalysisFilm}
-          setShowAddFilm={setShowAddFilm}
-        />
-      </CatalogueShell>
-
-      <AddFilmModal show={showAddFilm} onHide={() => setShowAddFilm(false)} onFilmAdded={handleFilmAdded} />
-      <CatalogueStyles />
-    </>
-  );
-}
-
-
-// ─── Shell: wraps content in either a Modal or a div ───
-function CatalogueShell({ inline, show, onHide, catalogue, children,
-  searchTerm, setSearchTerm, statusFilter, setStatusFilter,
-  sortBy, setSortBy, statusCounts, filmsWithDataCount,
-  analysisCount, selectAllAnalysis, clearAllAnalysis, setShowAddFilm
-}) {
-  const header = (
-    <div className="w-100">
-      <div className="d-flex align-items-center justify-content-between mb-3">
-        <div className="d-flex align-items-center gap-2">
-          <span className="material-symbols-rounded fs-3" style={{ color: '#e50914' }}>movie</span>
-          <h4 className="mb-0 fw-bold" style={{ color: 'var(--cs-text, #f0f0f0)' }}>Film Catalogue</h4>
-          <Badge bg="secondary" pill className="ms-1">{catalogue.length}</Badge>
-        </div>
-        <div className="d-flex align-items-center gap-2">
-          <Button
-            variant="danger"
-            className="d-flex align-items-center gap-1"
-            onClick={() => setShowAddFilm(true)}
-          >
-            <span className="material-symbols-rounded" style={{ fontSize: '18px' }}>add</span>
-            Add Film
-          </Button>
-          {!inline && (
-            <button className="catalogue-close-btn" onClick={onHide} aria-label="Close catalogue">
-              <span className="material-symbols-rounded" style={{ fontSize: '20px' }}>close</span>
-            </button>
-          )}
+  const catalogueContent = (
+    <div className="cs-fc">
+      {/* ── Toolbar ── */}
+      <div className="cs-fc__toolbar">
+        <h1 className="cs-fc__title">Film Catalogue</h1>
+        <div className="cs-fc__toolbar-right">
+          <div className="cs-fc__search-wrap">
+            <Icon name="search" size={18} />
+            <input
+              type="text"
+              className="cs-fc__search"
+              placeholder="Search films..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button className="cs-fc__btn" onClick={() => {}}>
+            <Icon name="tune" size={16} /> Filter
+          </button>
+          <button className="cs-fc__btn cs-fc__btn--primary" onClick={() => setShowAddFilm(true)}>
+            <Icon name="add" size={16} /> Add Film
+          </button>
         </div>
       </div>
 
-      {/* Toolbar: Search + Filters + Sort */}
-      <div className="d-flex flex-wrap gap-2 align-items-center mb-2">
-        <InputGroup style={{ maxWidth: '300px' }}>
-          <InputGroup.Text>
-            <span className="material-symbols-rounded" style={{ fontSize: '18px' }}>search</span>
-          </InputGroup.Text>
-          <Form.Control
-            placeholder="Search films..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-          />
-          {searchTerm && (
-            <Button variant="outline-secondary" size="sm" onClick={() => setSearchTerm('')}>
-              <span className="material-symbols-rounded" style={{ fontSize: '16px' }}>close</span>
-            </Button>
-          )}
-        </InputGroup>
-
-        {/* Status filter pills */}
-        <div className="d-flex gap-1 flex-wrap">
+      {/* ── Filter Bar ── */}
+      <div className="cs-fc__filter-bar">
+        <div className="cs-fc__status-pills">
           {['all', 'pre_release', 'released', 'screening', 'completed'].map(status => {
-            const isActive = statusFilter === status;
             const config = STATUS_CONFIG[status];
             const count = statusCounts[status] || 0;
             if (status !== 'all' && count === 0) return null;
+            const isActive = statusFilter === status;
             return (
-              <Button
+              <button
                 key={status}
-                size="sm"
-                variant={isActive ? (status === 'all' ? 'light' : config?.bg || 'light') : 'outline-secondary'}
-                className="d-flex align-items-center gap-1"
+                className={`cs-fc__pill ${isActive ? 'cs-fc__pill--active' : ''}`}
                 onClick={() => setStatusFilter(status)}
               >
                 {status === 'all' ? 'All' : config.label}
-                <Badge bg={isActive ? 'dark' : 'secondary'} pill className="ms-1" style={{ fontSize: '0.7em' }}>
-                  {count}
-                </Badge>
-              </Button>
+                <span className="cs-fc__pill-count">{count}</span>
+              </button>
             );
           })}
         </div>
 
-        <Form.Select
-          size="sm"
-          style={{ width: 'auto', minWidth: '180px' }}
+        <select
+          className="cs-fc__select"
           value={sortBy}
           onChange={e => setSortBy(e.target.value)}
         >
           {SORT_OPTIONS.map(opt => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
-        </Form.Select>
+        </select>
 
         {filmsWithDataCount > 1 && (
-          <div className="d-flex align-items-center gap-2 ms-auto">
-            <span style={{ fontSize: '0.75rem', color: '#aaa', whiteSpace: 'nowrap' }}>
-              Analysis: {analysisCount} of {filmsWithDataCount}
-            </span>
-            <Button size="sm" variant="outline-success"
-              className="d-flex align-items-center gap-1"
-              style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
-              onClick={selectAllAnalysis} disabled={analysisCount === filmsWithDataCount}
+          <div className="cs-fc__analysis-bar">
+            <span>Analysis: {analysisCount} of {filmsWithDataCount}</span>
+            <button
+              className="cs-fc__analysis-btn"
+              onClick={selectAllAnalysis}
+              disabled={analysisCount === filmsWithDataCount}
             >
-              <span className="material-symbols-rounded" style={{ fontSize: '14px' }}>check_box</span>
-              Select All
-            </Button>
-            <Button size="sm" variant="outline-secondary"
-              className="d-flex align-items-center gap-1"
-              style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
-              onClick={clearAllAnalysis} disabled={analysisCount === 0}
+              <Icon name="check_box" size={14} /> Select All
+            </button>
+            <button
+              className="cs-fc__analysis-btn"
+              onClick={clearAllAnalysis}
+              disabled={analysisCount === 0}
             >
-              <span className="material-symbols-rounded" style={{ fontSize: '14px' }}>check_box_outline_blank</span>
-              Deselect All
-            </Button>
+              <Icon name="check_box_outline_blank" size={14} /> Deselect
+            </button>
           </div>
         )}
       </div>
+
+      {/* ── Loading ── */}
+      {loading && (
+        <div className="cs-fc__loading">
+          <Icon name="progress_activity" size={24} />
+          Loading catalogue...
+        </div>
+      )}
+
+      {/* ── Error ── */}
+      {error && (
+        <div className="cs-fc__error">
+          <Icon name="error" size={20} /> {error}
+        </div>
+      )}
+
+      {/* ── Empty state ── */}
+      {!loading && !error && filteredFilms.length === 0 && (
+        <div className="cs-fc__empty">
+          <span className="cs-fc__empty-icon material-symbols-rounded">movie</span>
+          <div className="cs-fc__empty-title">
+            {catalogue.length === 0 ? 'No films yet' : 'No films match your filters'}
+          </div>
+          <div className="cs-fc__empty-desc">
+            {catalogue.length === 0 ? 'Add your first film to get started' : 'Try adjusting your search or filters'}
+          </div>
+          {catalogue.length === 0 && (
+            <button
+              className="cs-fc__btn cs-fc__btn--primary"
+              style={{ margin: '16px auto 0', display: 'inline-flex' }}
+              onClick={() => setShowAddFilm(true)}
+            >
+              <Icon name="add" size={16} /> Add Your First Film
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Film Grid ── */}
+      {!loading && !error && filteredFilms.length > 0 && (
+        <div className="cs-fc__grid">
+          {filteredFilms.map((film, idx) => (
+            <FilmCard
+              key={film.id}
+              film={film}
+              gradientIdx={idx % 4}
+              onClick={() => setSelectedFilmId(film.id)}
+              isInAnalysis={analysisSet.includes(film.id)}
+              onToggleAnalysis={toggleAnalysisFilm}
+            />
+          ))}
+
+          {/* Add Film placeholder card */}
+          <div className="cs-fc__add-card" onClick={() => setShowAddFilm(true)}>
+            <div className="cs-fc__add-card-inner">
+              <div className="cs-fc__add-card-icon">+</div>
+              <div className="cs-fc__add-card-label">Import Comscore Data</div>
+              <div className="cs-fc__add-card-sub">or add from TMDB</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER — DETAIL VIEW (modal overlay)
+  // ═══════════════════════════════════════════════════════════════
+
+  const detailModal = selectedFilmId ? (
+    <Modal show onHide={() => setSelectedFilmId(null)} fullscreen dialogClassName="film-catalogue-modal">
+      <FilmDetailView
+        filmId={selectedFilmId}
+        onBack={() => setSelectedFilmId(null)}
+        onClose={inline ? () => setSelectedFilmId(null) : onHide}
+        onFilmUpdated={handleFilmUpdated}
+        onFilmDeleted={handleFilmDeleted}
+      />
+    </Modal>
+  ) : null;
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER — INLINE vs MODAL wrapper
+  // ═══════════════════════════════════════════════════════════════
 
   if (inline) {
     return (
-      <div className="film-catalogue-modal h-100 d-flex flex-column" style={{ background: 'var(--cs-body, #1a1a2e)', color: 'var(--cs-text, #e0e0e0)' }}>
-        <div className="catalogue-header border-0 pb-0">{header}</div>
-        <div className="catalogue-body pt-2 flex-grow-1 overflow-auto">{children}</div>
-      </div>
+      <>
+        <div
+          className="d-flex flex-column h-100"
+          style={{ background: 'var(--cs-body)', color: 'var(--cs-text)' }}
+        >
+          {catalogueContent}
+        </div>
+        {detailModal}
+        <AddFilmModal show={showAddFilm} onHide={() => setShowAddFilm(false)} onFilmAdded={handleFilmAdded} />
+      </>
     );
   }
 
   return (
-    <Modal show={show} onHide={onHide} fullscreen dialogClassName="film-catalogue-modal">
-      <Modal.Header className="catalogue-header border-0 pb-0">{header}</Modal.Header>
-      <Modal.Body className="catalogue-body pt-2">{children}</Modal.Body>
-    </Modal>
+    <>
+      <Modal show={show} onHide={onHide} fullscreen dialogClassName="film-catalogue-modal">
+        <Modal.Header
+          closeButton
+          style={{
+            background: theme.header,
+            borderBottom: `1px solid ${theme.border}`,
+          }}
+        >
+          <Modal.Title style={{ color: theme.headerText || '#fff' }}>
+            <div className="d-flex align-items-center gap-2">
+              <Icon name="movie" size={22} />
+              <span className="fw-bold">Film Catalogue</span>
+            </div>
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ background: 'var(--cs-body)', color: 'var(--cs-text)', padding: 0 }}>
+          {catalogueContent}
+        </Modal.Body>
+      </Modal>
+      {detailModal}
+      <AddFilmModal show={showAddFilm} onHide={() => setShowAddFilm(false)} onFilmAdded={handleFilmAdded} />
+    </>
   );
 }
 
 
-// ─── Body: loading / error / empty / grid ───
-function CatalogueBody({ loading, error, filteredFilms, catalogue, setSelectedFilmId, analysisSet, toggleAnalysisFilm, setShowAddFilm }) {
-  if (loading) {
-    return (
-      <div className="d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '300px' }}>
-        <Spinner animation="border" variant="danger" />
-        <p className="mt-3 text-muted">Loading catalogue...</p>
-      </div>
-    );
-  }
+// ═══════════════════════════════════════════════════════════════
+// FILM CARD COMPONENT
+// ═══════════════════════════════════════════════════════════════
 
-  if (error) {
-    return (
-      <div className="text-center text-danger py-5">
-        <span className="material-symbols-rounded fs-1">error</span>
-        <p className="mt-2">{error}</p>
-      </div>
-    );
-  }
-
-  if (filteredFilms.length === 0) {
-    return (
-      <div className="text-center py-5">
-        <span className="material-symbols-rounded" style={{ fontSize: '64px', color: '#666' }}>movie</span>
-        <h5 className="mt-3 text-muted">
-          {catalogue.length === 0 ? 'No films yet' : 'No films match your filters'}
-        </h5>
-        <p className="text-muted">
-          {catalogue.length === 0 ? 'Add your first film to get started' : 'Try adjusting your search or filters'}
-        </p>
-        {catalogue.length === 0 && (
-          <Button variant="danger" onClick={() => setShowAddFilm(true)}>
-            <span className="material-symbols-rounded me-1" style={{ fontSize: '18px' }}>add</span>
-            Add Your First Film
-          </Button>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="catalogue-grid">
-      {filteredFilms.map(film => (
-        <FilmCard
-          key={film.id}
-          film={film}
-          onClick={() => setSelectedFilmId(film.id)}
-          isInAnalysis={analysisSet.includes(film.id)}
-          onToggleAnalysis={toggleAnalysisFilm}
-        />
-      ))}
-    </div>
-  );
-}
-
-
-// ─── Styles (extracted so they're not duplicated) ───
-function CatalogueStyles() {
-  return (
-    <style>{`
-        .film-catalogue-modal .modal-content {
-          background: var(--cs-bg, #1a1a2e);
-          color: var(--cs-text, #e0e0e0);
-        }
-        .catalogue-header {
-          background: transparent;
-          padding: 1rem 1.5rem 0;
-        }
-        .catalogue-close-btn {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          border: 2px solid rgba(255,255,255,0.5);
-          background: rgba(255,255,255,0.1);
-          color: #fff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: all 0.15s ease;
-        }
-        .catalogue-close-btn:hover {
-          background: rgba(255,255,255,0.25);
-          border-color: #fff;
-        }
-        .catalogue-body {
-          padding: 0.5rem 1.5rem 1.5rem;
-          overflow-y: auto;
-        }
-        .catalogue-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-          gap: 1.25rem;
-        }
-        @media (min-width: 992px) {
-          .catalogue-grid {
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-          }
-        }
-
-        /* Card styles */
-        .film-card {
-          cursor: pointer;
-          border-radius: 8px;
-          overflow: hidden;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-          background: var(--cs-card-bg, #16213e);
-          border: 1px solid var(--cs-border, rgba(255,255,255,0.08));
-        }
-        .film-card:hover {
-          transform: translateY(-4px) scale(1.02);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-          border-color: rgba(229, 9, 20, 0.4);
-        }
-        .film-card-poster {
-          position: relative;
-          aspect-ratio: 2/3;
-          background: linear-gradient(135deg, #2a2a4a 0%, #1a1a2e 100%);
-          overflow: hidden;
-        }
-        .film-card-poster img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-        .film-card-poster .placeholder-title {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 1rem;
-          text-align: center;
-          font-weight: 600;
-          font-size: 0.95rem;
-          color: rgba(255,255,255,0.6);
-          background: linear-gradient(135deg, #2d1f3d 0%, #1a1a2e 50%, #1f2d3d 100%);
-        }
-        .film-card-status {
-          position: absolute;
-          top: 8px;
-          right: 8px;
-        }
-        .film-card-checkbox {
-          position: absolute;
-          top: 6px;
-          left: 6px;
-          z-index: 2;
-          cursor: pointer;
-          width: 28px;
-          height: 28px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 4px;
-          background: rgba(0,0,0,0.45);
-          backdrop-filter: blur(2px);
-          transition: background 0.15s ease;
-        }
-        .film-card-checkbox:hover {
-          background: rgba(0,0,0,0.65);
-        }
-        .film-card--selected {
-          border-color: rgba(74, 222, 128, 0.5) !important;
-          box-shadow: 0 0 12px rgba(74, 222, 128, 0.2), inset 0 0 0 1px rgba(74, 222, 128, 0.15);
-        }
-        .film-card--selected:hover {
-          border-color: rgba(74, 222, 128, 0.7) !important;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 16px rgba(74, 222, 128, 0.25);
-        }
-        .film-card-comscore {
-          position: absolute;
-          bottom: 8px;
-          left: 8px;
-        }
-        .film-card-info {
-          padding: 0.6rem 0.75rem;
-        }
-        .film-card-title {
-          font-size: 0.85rem;
-          font-weight: 600;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          margin-bottom: 0.15rem;
-        }
-        .film-card-meta {
-          font-size: 0.75rem;
-          color: var(--cs-text-muted, #888);
-          display: flex;
-          align-items: center;
-          gap: 0.4rem;
-          flex-wrap: wrap;
-        }
-        .film-card-genres {
-          font-size: 0.7rem;
-          color: var(--cs-text-muted, #888);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          margin-top: 0.15rem;
-        }
-        .film-card-revenue {
-          font-size: 0.8rem;
-          font-weight: 600;
-          color: #4ade80;
-          margin-top: 0.25rem;
-        }
-
-        /* ── Form contrast fixes (covers FilmDetailView edit mode) ── */
-        .film-catalogue-modal .form-label,
-        .film-catalogue-modal h6 {
-          color: #ccc !important;
-        }
-        .film-catalogue-modal .form-control,
-        .film-catalogue-modal .form-select {
-          background: rgba(255,255,255,0.08);
-          border-color: rgba(255,255,255,0.15);
-          color: #f0f0f0;
-        }
-        .film-catalogue-modal .form-control::placeholder {
-          color: #888;
-        }
-        .film-catalogue-modal .form-control:focus,
-        .film-catalogue-modal .form-select:focus {
-          background: rgba(255,255,255,0.12);
-          border-color: #e50914;
-          color: #f0f0f0;
-          box-shadow: 0 0 0 0.2rem rgba(229, 9, 20, 0.15);
-        }
-        .film-catalogue-modal .input-group-text {
-          background: rgba(255,255,255,0.06);
-          border-color: rgba(255,255,255,0.15);
-          color: #aaa;
-        }
-        .film-catalogue-modal .nav-tabs .nav-link {
-          color: #999;
-        }
-        .film-catalogue-modal .nav-tabs .nav-link.active {
-          color: #f0f0f0;
-          background: transparent;
-          border-bottom-color: #e50914;
-        }
-        .film-catalogue-modal .form-select option {
-          background: #1a1a2e;
-          color: #e0e0e0;
-        }
-
-        /* Light theme overrides */
-        [data-theme="light"] .film-catalogue-modal .modal-content {
-          background: #f8f9fa;
-          color: #212529;
-        }
-        [data-theme="light"] .film-catalogue-modal h4 {
-          color: #212529 !important;
-        }
-        [data-theme="light"] .catalogue-close-btn {
-          border-color: rgba(0,0,0,0.3);
-          background: rgba(0,0,0,0.05);
-          color: #333;
-        }
-        [data-theme="light"] .catalogue-close-btn:hover {
-          background: rgba(0,0,0,0.12);
-          border-color: #333;
-        }
-        [data-theme="light"] .film-card {
-          background: #fff;
-          border-color: #dee2e6;
-        }
-        [data-theme="light"] .film-card:hover {
-          border-color: rgba(229, 9, 20, 0.3);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-        }
-        [data-theme="light"] .film-card--selected {
-          border-color: rgba(34, 160, 80, 0.5) !important;
-          box-shadow: 0 0 12px rgba(34, 160, 80, 0.15), inset 0 0 0 1px rgba(34, 160, 80, 0.1);
-        }
-        [data-theme="light"] .film-card--selected:hover {
-          border-color: rgba(34, 160, 80, 0.7) !important;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 0 16px rgba(34, 160, 80, 0.2);
-        }
-        [data-theme="light"] .film-card-checkbox {
-          background: rgba(255,255,255,0.7);
-        }
-        [data-theme="light"] .film-card-checkbox:hover {
-          background: rgba(255,255,255,0.9);
-        }
-        [data-theme="light"] .film-card-poster .placeholder-title {
-          background: linear-gradient(135deg, #e8e0f0 0%, #f0f0f5 50%, #e0e8f0 100%);
-          color: rgba(0,0,0,0.4);
-        }
-        [data-theme="light"] .film-catalogue-modal .form-label,
-        [data-theme="light"] .film-catalogue-modal h6 {
-          color: #495057 !important;
-        }
-        [data-theme="light"] .film-catalogue-modal .form-control,
-        [data-theme="light"] .film-catalogue-modal .form-select {
-          background: #fff;
-          border-color: #ced4da;
-          color: #212529;
-        }
-        [data-theme="light"] .film-catalogue-modal .input-group-text {
-          background: #e9ecef;
-          border-color: #ced4da;
-          color: #495057;
-        }
-        [data-theme="light"] .film-catalogue-modal .nav-tabs .nav-link {
-          color: #6c757d;
-        }
-        [data-theme="light"] .film-catalogue-modal .nav-tabs .nav-link.active {
-          color: #212529;
-        }
-        [data-theme="light"] .film-catalogue-modal .form-select option {
-          background: #fff;
-          color: #212529;
-        }
-      `}</style>
-  );
-}
-
-
-// ─── Film Card Component ───
-function FilmCard({ film, onClick, isInAnalysis, onToggleAnalysis }) {
+function FilmCard({ film, gradientIdx, onClick, isInAnalysis, onToggleAnalysis }) {
   const posterUrl = tmdbImageUrl(film.poster_path, 'w342');
   const statusConf = STATUS_CONFIG[film.status] || STATUS_CONFIG.pre_release;
   const hasComscore = parseInt(film.import_count) > 0;
   const revenue = parseFloat(film.total_uk_revenue) || 0;
+  const venueCount = parseInt(film.import_count) || 0;
 
   const handleCheckboxClick = (e) => {
-    e.stopPropagation(); // Don't open detail view
+    e.stopPropagation();
     onToggleAnalysis(film.id);
   };
 
   return (
     <div
-      className={`film-card${isInAnalysis ? ' film-card--selected' : ''}`}
+      className={`cs-fc__card${isInAnalysis ? ' cs-fc__card--selected' : ''}`}
       onClick={onClick}
       title={film.title}
     >
-      <div className="film-card-poster">
+      {/* Poster */}
+      <div className="cs-fc__poster">
         {posterUrl ? (
           <img src={posterUrl} alt={film.title} loading="lazy" />
         ) : (
-          <div className="placeholder-title">
+          <div className={`cs-fc__poster-placeholder cs-fc__poster-placeholder${POSTER_GRADIENTS[gradientIdx]}`}>
             <span>{film.title}</span>
           </div>
         )}
 
-        {/* Analysis checkbox overlay — top-left, only for films with Comscore data */}
+        {/* Checkbox — only for films with Comscore data */}
         {hasComscore && (
-          <div className="film-card-checkbox" onClick={handleCheckboxClick}>
-            <span
-              className="material-symbols-rounded"
-              style={{
-                fontSize: '22px',
-                color: isInAnalysis ? '#4ade80' : 'rgba(255,255,255,0.5)',
-                filter: isInAnalysis ? 'drop-shadow(0 0 3px rgba(74, 222, 128, 0.5))' : 'none',
-              }}
-            >
-              {isInAnalysis ? 'check_box' : 'check_box_outline_blank'}
-            </span>
+          <div
+            className={`cs-fc__checkbox${isInAnalysis ? ' cs-fc__checkbox--checked' : ''}`}
+            onClick={handleCheckboxClick}
+          >
+            {!isInAnalysis && (
+              <span className="material-symbols-rounded" style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)' }}>
+                check_box_outline_blank
+              </span>
+            )}
           </div>
         )}
 
         {/* Status badge */}
-        <div className="film-card-status">
-          <Badge bg={statusConf.bg} style={{ fontSize: '0.65rem' }}>
-            {statusConf.label}
-          </Badge>
-        </div>
+        <span className={`cs-fc__status-badge cs-fc__status-badge--${statusConf.cssClass}`}>
+          {statusConf.label}
+        </span>
 
-        {/* Comscore data indicator */}
-        <div className="film-card-comscore">
+        {/* Comscore indicator */}
+        <span className={`cs-fc__comscore cs-fc__comscore--${hasComscore ? 'yes' : 'no'}`}>
           {hasComscore ? (
-            <Badge bg="success" style={{ fontSize: '0.6rem' }} className="d-flex align-items-center gap-1">
-              <span className="material-symbols-rounded" style={{ fontSize: '12px' }}>check</span>
-              Comscore
-            </Badge>
+            <><span className="material-symbols-rounded" style={{ fontSize: '10px' }}>check</span> Comscore</>
           ) : (
-            <Badge bg="dark" style={{ fontSize: '0.6rem', opacity: 0.7 }}>No data</Badge>
+            'No data'
           )}
-        </div>
+        </span>
       </div>
 
-      <div className="film-card-info">
-        <div className="film-card-title">{film.title}</div>
-        <div className="film-card-meta">
+      {/* Info */}
+      <div className="cs-fc__info">
+        <div className="cs-fc__film-title">{film.title}</div>
+        <div className="cs-fc__film-meta">
           {film.year && <span>{film.year}</span>}
-          {film.certification && (
-            <Badge bg="outline-light" style={{
-              fontSize: '0.65rem', border: '1px solid rgba(255,255,255,0.3)',
-              background: 'transparent', color: 'inherit', padding: '0.1rem 0.3rem'
-            }}>
-              {film.certification}
-            </Badge>
+          {film.year && film.genres && <span className="cs-fc__separator">·</span>}
+          {film.genres && <span>{film.genres}</span>}
+          {hasComscore && venueCount > 0 && (
+            <>
+              <span className="cs-fc__separator">·</span>
+              <span>{venueCount} venues</span>
+            </>
           )}
-          {film.runtime && <span>{film.runtime}m</span>}
         </div>
-        {film.genres && (
-          <div className="film-card-genres">{film.genres}</div>
-        )}
-        {revenue > 0 && (
-          <div className="film-card-revenue">
+        {revenue > 0 ? (
+          <div className="cs-fc__film-revenue">
             £{revenue.toLocaleString('en-GB', { maximumFractionDigits: 0 })}
+          </div>
+        ) : (
+          <div className="cs-fc__film-revenue cs-fc__film-revenue--empty">
+            No data
           </div>
         )}
       </div>

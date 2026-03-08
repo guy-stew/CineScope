@@ -1503,6 +1503,584 @@ body {
   margin-left: 2px;
 }
 
+/* ═══════════════════════════════════════════════════════════ */
+/* ── Film Catalogue Restyle (v3.3) ──────────────────────── */
+/* ═══════════════════════════════════════════════════════════ */
+
+.cs-fc {
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ── Toolbar ── */
+.cs-fc__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cs-fc__title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--cs-text);
+}
+
+.cs-fc__toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Search box */
+.cs-fc__search-wrap {
+  position: relative;
+}
+
+.cs-fc__search-wrap .material-symbols-rounded {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: var(--cs-text-muted);
+  pointer-events: none;
+}
+
+.cs-fc__search {
+  width: 240px;
+  padding: 8px 12px 8px 36px;
+  border-radius: 8px;
+  border: 1px solid var(--cs-border);
+  background: var(--cs-surface);
+  color: var(--cs-text);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.cs-fc__search:focus {
+  border-color: var(--cs-header-border);
+}
+
+.cs-fc__search::placeholder {
+  color: var(--cs-text-muted);
+}
+
+/* Buttons (reuse VM pattern) */
+.cs-fc__btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--cs-border);
+  background: var(--cs-surface);
+  color: var(--cs-text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.cs-fc__btn:hover {
+  background: var(--cs-surface-alt);
+  border-color: var(--cs-text-muted);
+}
+
+.cs-fc__btn--primary {
+  background: var(--cs-header-border);
+  border-color: var(--cs-header-border);
+  color: #fff;
+}
+
+.cs-fc__btn--primary:hover {
+  opacity: 0.9;
+  border-color: var(--cs-header-border);
+}
+
+.cs-fc__btn .material-symbols-rounded {
+  font-size: 16px;
+}
+
+/* ── Filter Bar (below toolbar) ── */
+.cs-fc__filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+/* Status pills */
+.cs-fc__status-pills {
+  display: flex;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.cs-fc__pill {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--cs-text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+
+.cs-fc__pill:hover {
+  color: var(--cs-text);
+  background: var(--cs-surface-alt);
+}
+
+.cs-fc__pill--active {
+  background: var(--cs-header-border);
+  color: #fff;
+}
+
+.cs-fc__pill--active:hover {
+  background: var(--cs-header-border);
+  color: #fff;
+  opacity: 0.9;
+}
+
+.cs-fc__pill-count {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.2);
+  padding: 1px 5px;
+  border-radius: 8px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.cs-fc__pill--active .cs-fc__pill-count {
+  background: rgba(255,255,255,0.3);
+}
+
+/* Sort dropdown */
+.cs-fc__select {
+  padding: 6px 28px 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--cs-border);
+  background: var(--cs-surface);
+  color: var(--cs-text);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+  appearance: auto;
+}
+
+.cs-fc__select:focus {
+  border-color: var(--cs-header-border);
+}
+
+/* Analysis bar */
+.cs-fc__analysis-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--cs-text-muted);
+  white-space: nowrap;
+}
+
+.cs-fc__analysis-btn {
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--cs-border);
+  background: transparent;
+  color: var(--cs-text-muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.12s ease;
+}
+
+.cs-fc__analysis-btn:hover:not(:disabled) {
+  border-color: var(--cs-header-border);
+  color: var(--cs-header-border);
+}
+
+.cs-fc__analysis-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.cs-fc__analysis-btn .material-symbols-rounded {
+  font-size: 14px;
+}
+
+/* ── Film Grid ── */
+.cs-fc__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 20px;
+}
+
+@media (min-width: 992px) {
+  .cs-fc__grid {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  }
+}
+
+/* ── Film Card ── */
+.cs-fc__card {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cs-fc__card:hover {
+  border-color: var(--cs-header-border);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.cs-fc__card--selected {
+  border-color: #34d399 !important;
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.2), inset 0 0 0 1px rgba(52, 211, 153, 0.1);
+}
+
+.cs-fc__card--selected:hover {
+  border-color: #34d399 !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2), 0 0 16px rgba(52, 211, 153, 0.25);
+}
+
+/* Poster area */
+.cs-fc__poster {
+  position: relative;
+  aspect-ratio: 2/3;
+  overflow: hidden;
+}
+
+.cs-fc__poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cs-fc__poster-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.5);
+}
+
+/* Poster gradients (cycle through them) */
+.cs-fc__poster-placeholder--1 { background: linear-gradient(135deg, #1e3a5f, #0f1b2d); }
+.cs-fc__poster-placeholder--2 { background: linear-gradient(135deg, #3a1e5f, #1b0f2d); }
+.cs-fc__poster-placeholder--3 { background: linear-gradient(135deg, #5f1e3a, #2d0f1b); }
+.cs-fc__poster-placeholder--4 { background: linear-gradient(135deg, #1e5f3a, #0f2d1b); }
+
+/* Checkbox overlay */
+.cs-fc__checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  border: 2px solid rgba(255,255,255,0.35);
+  transition: all 0.15s ease;
+}
+
+.cs-fc__checkbox:hover {
+  background: rgba(0,0,0,0.6);
+  border-color: rgba(255,255,255,0.5);
+}
+
+.cs-fc__checkbox--checked {
+  background: var(--cs-header-border);
+  border-color: var(--cs-header-border);
+}
+
+.cs-fc__checkbox--checked::after {
+  content: '\2713';
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Status badge */
+.cs-fc__status-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cs-fc__status-badge--screening {
+  background: rgba(245, 197, 66, 0.15);
+  color: #f5c542;
+}
+
+.cs-fc__status-badge--completed {
+  background: rgba(108, 138, 255, 0.15);
+  color: #6c8aff;
+}
+
+.cs-fc__status-badge--pre_release {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.cs-fc__status-badge--released {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+}
+
+/* Comscore indicator */
+.cs-fc__comscore {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.cs-fc__comscore--yes {
+  background: rgba(52, 211, 153, 0.2);
+  color: #34d399;
+}
+
+.cs-fc__comscore--no {
+  background: rgba(0,0,0,0.4);
+  color: rgba(255,255,255,0.45);
+}
+
+/* Card info */
+.cs-fc__info {
+  padding: 12px 14px;
+}
+
+.cs-fc__film-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-bottom: 3px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--cs-text);
+}
+
+.cs-fc__film-meta {
+  font-size: 11.5px;
+  color: var(--cs-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.cs-fc__film-meta .cs-fc__separator {
+  color: var(--cs-text-muted);
+  opacity: 0.5;
+}
+
+.cs-fc__film-revenue {
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: #34d399;
+  margin-top: 6px;
+}
+
+.cs-fc__film-revenue--empty {
+  color: var(--cs-text-muted);
+  font-style: italic;
+  font-family: inherit;
+  font-weight: 400;
+}
+
+/* ── Add Film Placeholder Card ── */
+.cs-fc__add-card {
+  border: 2px dashed var(--cs-border);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cs-fc__add-card:hover {
+  border-color: var(--cs-text-muted);
+  background: var(--cs-surface-alt);
+}
+
+.cs-fc__add-card-inner {
+  text-align: center;
+  color: var(--cs-text-muted);
+  padding: 20px;
+}
+
+.cs-fc__add-card-icon {
+  font-size: 32px;
+  opacity: 0.4;
+  margin-bottom: 8px;
+}
+
+.cs-fc__add-card-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cs-fc__add-card-sub {
+  font-size: 11px;
+  margin-top: 4px;
+  opacity: 0.7;
+}
+
+/* ── Loading / Error / Empty ── */
+.cs-fc__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  gap: 12px;
+  color: var(--cs-text-muted);
+  font-size: 13px;
+}
+
+.cs-fc__error {
+  text-align: center;
+  padding: 48px 0;
+  color: #ef4444;
+  font-size: 13px;
+}
+
+.cs-fc__empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--cs-text-muted);
+}
+
+.cs-fc__empty-icon {
+  font-size: 64px;
+  opacity: 0.3;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.cs-fc__empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--cs-text);
+}
+
+.cs-fc__empty-desc {
+  font-size: 13px;
+}
+
+/* ── Form fixes for FilmDetailView modal overlay ── */
+.film-catalogue-modal .modal-content {
+  background: var(--cs-body, #1a1a2e);
+  color: var(--cs-text, #e0e0e0);
+}
+
+.film-catalogue-modal .form-label,
+.film-catalogue-modal h6 {
+  color: var(--cs-text-muted) !important;
+}
+
+.film-catalogue-modal .form-control,
+.film-catalogue-modal .form-select {
+  background: var(--cs-surface);
+  border-color: var(--cs-border);
+  color: var(--cs-text);
+}
+
+.film-catalogue-modal .form-control::placeholder {
+  color: var(--cs-text-muted);
+}
+
+.film-catalogue-modal .form-control:focus,
+.film-catalogue-modal .form-select:focus {
+  background: var(--cs-surface);
+  border-color: var(--cs-header-border);
+  color: var(--cs-text);
+  box-shadow: 0 0 0 0.2rem rgba(56, 178, 172, 0.15);
+}
+
+.film-catalogue-modal .input-group-text {
+  background: var(--cs-surface-alt);
+  border-color: var(--cs-border);
+  color: var(--cs-text-muted);
+}
+
+.film-catalogue-modal .nav-tabs .nav-link {
+  color: var(--cs-text-muted);
+}
+
+.film-catalogue-modal .nav-tabs .nav-link.active {
+  color: var(--cs-text);
+  background: transparent;
+  border-bottom-color: var(--cs-header-border);
+}
+
+.film-catalogue-modal .form-select option {
+  background: var(--cs-surface);
+  color: var(--cs-text);
+}
+
 /* ── Responsive ──────────────────────────────────────────── */
 
 @media (max-width: 991.98px) {
@@ -1549,6 +2127,15 @@ body {
 
   .cs-vm__search-wrap {
     flex: 1 1 200px;
+  }
+
+  .cs-fc__search {
+    width: 200px;
+  }
+
+  .cs-fc__grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 14px;
   }
 }
 
