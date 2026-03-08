@@ -27,11 +27,10 @@ const SORT_OPTIONS = [
 ];
 
 export default function FilmCatalogue({ show, onHide }) {
-  const { apiClient } = useApp();
+  const { apiClient, catalogue, refreshCatalogue } = useApp();
 
   // ─── State ───
-  const [catalogue, setCatalogue] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -39,25 +38,10 @@ export default function FilmCatalogue({ show, onHide }) {
   const [showAddFilm, setShowAddFilm] = useState(false);
   const [selectedFilmId, setSelectedFilmId] = useState(null);
 
-  // ─── Load catalogue ───
-  const loadCatalogue = useCallback(async () => {
-    if (!apiClient) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await apiClient.getCatalogue();
-      setCatalogue(data.catalogue || []);
-    } catch (err) {
-      console.error('Failed to load catalogue:', err);
-      setError('Failed to load film catalogue');
-    } finally {
-      setLoading(false);
-    }
-  }, [apiClient]);
-
+  // Refresh catalogue when modal opens
   useEffect(() => {
-    if (show) loadCatalogue();
-  }, [show, loadCatalogue]);
+    if (show) refreshCatalogue();
+  }, [show, refreshCatalogue]);
 
   // ─── Filter & sort ───
   const filteredFilms = useMemo(() => {
@@ -100,16 +84,16 @@ export default function FilmCatalogue({ show, onHide }) {
 
   // ─── Handlers ───
   const handleFilmAdded = (newEntry) => {
-    setCatalogue(prev => [newEntry, ...prev]);
+    refreshCatalogue();
     setShowAddFilm(false);
   };
 
   const handleFilmUpdated = (updated) => {
-    setCatalogue(prev => prev.map(f => f.id === updated.id ? { ...f, ...updated } : f));
+    refreshCatalogue();
   };
 
   const handleFilmDeleted = (deletedId) => {
-    setCatalogue(prev => prev.filter(f => f.id !== deletedId));
+    refreshCatalogue();
     setSelectedFilmId(null);
   };
 

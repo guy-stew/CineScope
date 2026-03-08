@@ -54,6 +54,7 @@ function cloudFilmToApp(cloudFilm, cloudRevenues) {
 
   return {
     id: film.id, // Server-generated integer ID
+    catalogueId: film.catalogue_id || null, // Link to film_catalogue entry
     filmInfo: {
       title: film.title,
       year: film.year || null,
@@ -341,6 +342,52 @@ export function AppProvider({ children }) {
   // ── Pending import ──
   const [pendingImport, setPendingImport] = useState(null)
 
+  // ── Film Catalogue (master list — single source of truth) ──
+  const [catalogue, setCatalogue] = useState([])
+
+  // ── Analysis Set (which catalogue films to include in combined view) ──
+  const [analysisSet, setAnalysisSet] = useState(() => {
+    try {
+      const stored = localStorage.getItem('cinescope_analysis_set')
+      return stored ? JSON.parse(stored) : []
+    } catch { return [] }
+  })
+
+  // ── Analysis set helpers ──
+  const updateAnalysisSet = useCallback((newSet) => {
+    setAnalysisSet(newSet)
+    localStorage.setItem('cinescope_analysis_set', JSON.stringify(newSet))
+  }, [])
+
+  const toggleAnalysisFilm = useCallback((catalogueId) => {
+    setAnalysisSet(prev => {
+      const next = prev.includes(catalogueId)
+        ? prev.filter(id => id !== catalogueId)
+        : [...prev, catalogueId]
+      localStorage.setItem('cinescope_analysis_set', JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  const selectAllAnalysis = useCallback(() => {
+    const allWithData = catalogue.filter(f => parseInt(f.import_count) > 0).map(f => f.id)
+    updateAnalysisSet(allWithData)
+  }, [catalogue, updateAnalysisSet])
+
+  const clearAllAnalysis = useCallback(() => {
+    updateAnalysisSet([])
+  }, [updateAnalysisSet])
+
+  // Refresh catalogue (callable from FilmCatalogue after add/update/delete)
+  const refreshCatalogue = useCallback(async () => {
+    try {
+      const data = await api.getCatalogue(getTokenRef.current)
+      setCatalogue(data.catalogue || [])
+    } catch (err) {
+      console.warn('Failed to refresh catalogue:', err)
+    }
+  }, [])
+
 
   // ═══════════════════════════════════════════════════════════════
   // CLOUD DATA LOADING (on mount)
@@ -386,6 +433,26 @@ export function AppProvider({ children }) {
         if (cancelled) return
 
         setImportedFilms(fullFilms)
+
+        // 4b. Load film catalogue (master list)
+        const catData = await api.getCatalogue(getTokenRef.current)
+        if (cancelled) return
+        const catList = catData.catalogue || []
+        setCatalogue(catList)
+
+        // 4c. Initialise analysis set if empty (default: all films with Comscore data)
+        const storedSet = localStorage.getItem('cinescope_analysis_set')
+        if (!storedSet || JSON.parse(storedSet).length === 0) {
+          const defaultSet = catList.filter(f => parseInt(f.import_count) > 0).map(f => f.id)
+          setAnalysisSet(defaultSet)
+          localStorage.setItem('cinescope_analysis_set', JSON.stringify(defaultSet))
+        } else {
+          // Clean stale IDs from localStorage
+          const validIds = new Set(catList.map(f => f.id))
+          const cleaned = JSON.parse(storedSet).filter(id => validIds.has(id))
+          setAnalysisSet(cleaned)
+          localStorage.setItem('cinescope_analysis_set', JSON.stringify(cleaned))
+        }
 
         // 5. Validate selected film still exists
         if (settings.selectedFilmId && settings.selectedFilmId !== 'all-films') {
@@ -843,6 +910,16 @@ export function AppProvider({ children }) {
     pendingImport,
     confirmImport,
     cancelImport,
+
+    // Film Catalogue (master list)
+    catalogue,
+    refreshCatalogue,
+
+    // Analysis Set (which films to include in combined view)
+    analysisSet,
+    toggleAnalysisFilm,
+    selectAllAnalysis,
+    clearAllAnalysis,
 
     // Grade settings
     gradeSettings, updateGradeSettings, resetGradeSettings,

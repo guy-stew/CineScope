@@ -2,6 +2,7 @@ import React, { useRef, useState, useMemo } from 'react'
 import { Navbar, Nav, Form, Button, Badge, Spinner, OverlayTrigger, Tooltip, Dropdown } from 'react-bootstrap'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
+import { tmdbImageUrl } from '../utils/apiClient'
 import ExportMenu from './ExportMenu'
 import Icon from './Icon'
 import VenueManager from './VenueManager'
@@ -11,7 +12,6 @@ export default function Header() {
   const {
     filteredVenues,
     importedFilms, selectedFilmId, setSelectedFilmId, clearFilmSelection,
-    removeFilm, clearAllFilmsData,
     importComscoreFile, importStatus,
     chainFilter, setChainFilter, availableChains,
     categoryFilter, setCategoryFilter, availableCategories,
@@ -23,6 +23,8 @@ export default function Header() {
     matchDetails,
     populationMode, updatePopulationMode,
     heatmapIntensity, updateHeatmapIntensity,
+    catalogue,
+    analysisSet, toggleAnalysisFilm, selectAllAnalysis, clearAllAnalysis,
   } = useApp()
 
   const { themeName, toggleTheme } = useTheme()
@@ -82,13 +84,16 @@ export default function Header() {
         <Navbar.Collapse id="header-nav">
           <Nav className="me-auto d-flex align-items-center gap-2 flex-wrap">
 
-            {/* Film selector with search + year grouping */}
+            {/* Film selector with poster thumbnails + analysis checkboxes */}
             <FilmSelector
+              catalogue={catalogue}
               importedFilms={importedFilms}
               selectedFilmId={selectedFilmId}
               onSelect={handleFilmSelect}
-              onRemoveFilm={removeFilm}
-              onClearAll={clearAllFilmsData}
+              analysisSet={analysisSet}
+              onToggleAnalysis={toggleAnalysisFilm}
+              onSelectAll={selectAllAnalysis}
+              onClearAll={clearAllAnalysis}
             />
 
             {/* Chain filter */}
@@ -374,50 +379,41 @@ export default function Header() {
 
 
 /**
- * FilmSelector — searchable dropdown with year grouping, All Films aggregate,
- * and delete buttons for managing saved films.
+ * FilmSelector — redesigned dropdown with poster thumbnails, analysis checkboxes,
+ * and unified catalogue-based film list. No delete buttons (deletion via Catalogue only).
  */
-function FilmSelector({ importedFilms, selectedFilmId, onSelect, onRemoveFilm, onClearAll }) {
+function FilmSelector({ catalogue, importedFilms, selectedFilmId, onSelect, analysisSet, onToggleAnalysis, onSelectAll, onClearAll }) {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
 
-  // Group films by year
-  const grouped = useMemo(() => {
-    if (importedFilms.length === 0) return {}
+  // Films with Comscore data (for checkbox eligibility)
+  const filmsWithData = useMemo(() =>
+    catalogue.filter(f => parseInt(f.import_count) > 0),
+    [catalogue]
+  )
 
-    const groups = {}
-    for (const film of importedFilms) {
-      // Try to extract year from dateRange, fileName, or import timestamp
-      const yearMatch = (film.filmInfo.dateRange || film.filmInfo.fileName || '').match(/20\d{2}/)
-      const year = yearMatch ? yearMatch[0] : 'Other'
-
-      if (!groups[year]) groups[year] = []
-      groups[year].push(film)
-    }
-
-    // Sort years descending
-    return Object.fromEntries(
-      Object.entries(groups).sort(([a], [b]) => b.localeCompare(a))
-    )
-  }, [importedFilms])
-
-  // Filter by search term
-  const filteredFilms = useMemo(() => {
-    if (!search.trim()) return importedFilms
+  // Filter catalogue by search term
+  const filteredCatalogue = useMemo(() => {
+    if (!search.trim()) return catalogue
     const term = search.toLowerCase()
-    return importedFilms.filter(f =>
-      (f.filmInfo.title || '').toLowerCase().includes(term) ||
-      (f.filmInfo.fileName || '').toLowerCase().includes(term)
+    return catalogue.filter(f =>
+      (f.title || '').toLowerCase().includes(term)
     )
-  }, [importedFilms, search])
+  }, [catalogue, search])
+
+  // Analysis set count
+  const analysisCount = analysisSet.length
+  const totalWithData = filmsWithData.length
 
   // Get selected film label
   const selectedLabel = useMemo(() => {
     if (!selectedFilmId) return 'All Venues (no film)'
-    if (selectedFilmId === 'all-films') return 'All Films (Combined)'
-    const film = importedFilms.find(f => f.id === selectedFilmId)
-    return film ? (film.filmInfo.title || film.filmInfo.fileName) : 'Select film...'
-  }, [selectedFilmId, importedFilms])
+    if (selectedFilmId === 'all-films') return `Selected Films (${analysisCount})`
+    const film = catalogue.find(f => f.id === selectedFilmId)
+    if (film) return film.title
+    const imp = importedFilms.find(f => f.id === selectedFilmId)
+    return imp ? (imp.filmInfo.title || 'Untitled') : 'Select film...'
+  }, [selectedFilmId, catalogue, importedFilms, analysisCount])
 
   const handleSelect = (id) => {
     onSelect(id)
@@ -425,28 +421,18 @@ function FilmSelector({ importedFilms, selectedFilmId, onSelect, onRemoveFilm, o
     setSearch('')
   }
 
-  const handleRemove = (e, filmId) => {
-    e.stopPropagation() // Don't select the film when clicking delete
-    if (onRemoveFilm) onRemoveFilm(filmId)
+  // Map catalogue IDs to importedFilm IDs for selection
+  const getImportedFilmId = (catEntry) => {
+    const imp = importedFilms.find(f => f.catalogueId === catEntry.id)
+    return imp ? imp.id : null
   }
 
-  const handleClearAll = (e) => {
-    e.stopPropagation()
-    if (onClearAll) onClearAll()
-    setOpen(false)
-  }
-
-  // If no films imported yet, show a simple disabled select
-  if (importedFilms.length === 0) {
+  if (catalogue.length === 0) {
     return (
-      <Form.Select
-        size="sm"
-        disabled
-        className="header-select"
-        style={{ width: 200 }}
-      >
-        <option>No films imported</option>
-      </Form.Select>
+      <Button size="sm" variant="dark" disabled
+        style={{ width: 240, backgroundColor: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.2)' }}>
+        No films yet
+      </Button>
     )
   }
 
@@ -456,21 +442,17 @@ function FilmSelector({ importedFilms, selectedFilmId, onSelect, onRemoveFilm, o
         size="sm"
         variant="dark"
         className="header-select text-start d-flex align-items-center justify-content-between"
-        style={{ width: 240, backgroundColor: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.2)' }}
+        style={{ width: 260, backgroundColor: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.2)' }}
       >
         <span className="text-truncate">{selectedLabel}</span>
       </Dropdown.Toggle>
 
       <Dropdown.Menu
-        style={{
-          minWidth: 300,
-          maxHeight: 400,
-          overflowY: 'auto',
-          fontSize: '0.85rem',
-        }}
+        className="film-selector-menu"
+        style={{ minWidth: 360, maxHeight: 480, overflowY: 'auto', fontSize: '0.85rem' }}
       >
-        {/* Search input */}
-        {importedFilms.length > 3 && (
+        {/* Search */}
+        {catalogue.length > 3 && (
           <div className="px-2 pb-2">
             <Form.Control
               size="sm"
@@ -487,91 +469,117 @@ function FilmSelector({ importedFilms, selectedFilmId, onSelect, onRemoveFilm, o
         <Dropdown.Item
           active={!selectedFilmId}
           onClick={() => handleSelect('')}
+          className="py-2"
         >
+          <Icon name="map" size={16} className="me-2 opacity-50" />
           All Venues (no film)
         </Dropdown.Item>
 
-        {/* All Films aggregate */}
-        {importedFilms.length > 1 && (
+        {/* Selected Films (Combined) — only if 2+ films in analysis set */}
+        {analysisCount >= 2 && (
           <Dropdown.Item
             active={selectedFilmId === 'all-films'}
             onClick={() => handleSelect('all-films')}
+            className="py-2"
           >
-            <Icon name="trending_up" size={16} className="me-1" /> All Films (Combined)
-            <span className="text-muted ms-1" style={{ fontSize: '0.75rem' }}>
-              {importedFilms.length} films
-            </span>
+            <Icon name="trending_up" size={16} className="me-2" />
+            Selected Films ({analysisCount} of {totalWithData})
           </Dropdown.Item>
         )}
 
-        <Dropdown.Divider />
+        <Dropdown.Divider className="my-1" />
 
-        {/* Films grouped by year — each with a delete button */}
-        {Object.entries(grouped).map(([year, films]) => {
-          const visibleFilms = films.filter(f => filteredFilms.includes(f))
-          if (visibleFilms.length === 0) return null
+        {/* Select All / Deselect All toggles */}
+        {totalWithData > 1 && (
+          <div className="d-flex gap-2 px-3 py-1 mb-1">
+            <button
+              className="btn btn-link btn-sm p-0 text-decoration-none"
+              style={{ fontSize: '0.72rem', color: '#4ade80' }}
+              onClick={(e) => { e.stopPropagation(); onSelectAll(); }}
+            >
+              <Icon name="check_box" size={14} className="me-1" />Select All
+            </button>
+            <button
+              className="btn btn-link btn-sm p-0 text-decoration-none"
+              style={{ fontSize: '0.72rem', color: '#aaa' }}
+              onClick={(e) => { e.stopPropagation(); onClearAll(); }}
+            >
+              <Icon name="check_box_outline_blank" size={14} className="me-1" />Deselect All
+            </button>
+          </div>
+        )}
+
+        {/* Film list */}
+        {filteredCatalogue.map(catFilm => {
+          const hasData = parseInt(catFilm.import_count) > 0
+          const isInAnalysis = analysisSet.includes(catFilm.id)
+          const importedFilmId = getImportedFilmId(catFilm)
+          const isActive = selectedFilmId === importedFilmId || selectedFilmId === catFilm.id
+          const posterUrl = catFilm.poster_path ? tmdbImageUrl(catFilm.poster_path, 'w92') : null
 
           return (
-            <React.Fragment key={year}>
-              <Dropdown.Header style={{ fontSize: '0.72rem', fontWeight: 700 }}>
-                {year}
-              </Dropdown.Header>
-              {visibleFilms.map(film => (
-                <Dropdown.Item
-                  key={film.id}
-                  active={selectedFilmId === film.id}
-                  onClick={() => handleSelect(film.id)}
-                  className="d-flex align-items-start justify-content-between"
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="text-truncate">{film.filmInfo.title || film.filmInfo.fileName}</div>
-                    <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-                      {film.stats.totalVenues} venues · £{film.stats.totalRevenue.toLocaleString()}
-                    </div>
+            <Dropdown.Item
+              key={catFilm.id}
+              active={isActive}
+              onClick={() => {
+                if (hasData && importedFilmId) {
+                  handleSelect(importedFilmId)
+                }
+              }}
+              className="d-flex align-items-center gap-2 py-2"
+              style={{ opacity: hasData ? 1 : 0.5, cursor: hasData ? 'pointer' : 'default' }}
+            >
+              {/* Poster thumbnail */}
+              <div style={{
+                width: 32, height: 48, borderRadius: 3, overflow: 'hidden', flexShrink: 0,
+                background: posterUrl ? 'transparent' : 'linear-gradient(135deg, #2d1f3d, #1f2d3d)',
+              }}>
+                {posterUrl ? (
+                  <img src={posterUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <div className="d-flex align-items-center justify-content-center h-100">
+                    <Icon name="movie" size={16} style={{ color: '#555' }} />
                   </div>
-                  <span
-                    role="button"
-                    title="Remove this film"
-                    onClick={(e) => handleRemove(e, film.id)}
-                    style={{
-                      marginLeft: 8,
-                      padding: '2px 4px',
-                      borderRadius: 4,
-                      fontSize: '0.7rem',
-                      color: '#dc3545',
-                      opacity: 0.6,
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                    onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
-                  >
-                    <Icon name="close" size={14} />
-                  </span>
-                </Dropdown.Item>
-              ))}
-            </React.Fragment>
+                )}
+              </div>
+
+              {/* Film info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="text-truncate fw-semibold" style={{ fontSize: '0.82rem' }}>
+                  {catFilm.title}
+                </div>
+                {hasData ? (
+                  <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                    {catFilm.import_count} import{catFilm.import_count > 1 ? 's' : ''} · £{parseInt(catFilm.total_uk_revenue).toLocaleString()}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '0.7rem', color: '#777' }}>No Comscore data</div>
+                )}
+              </div>
+
+              {/* Analysis checkbox (only for films with data) */}
+              {hasData && (
+                <span
+                  role="button"
+                  title={isInAnalysis ? 'Remove from combined analysis' : 'Add to combined analysis'}
+                  onClick={(e) => { e.stopPropagation(); onToggleAnalysis(catFilm.id); }}
+                  style={{ flexShrink: 0, cursor: 'pointer', fontSize: '18px' }}
+                >
+                  <Icon
+                    name={isInAnalysis ? 'check_box' : 'check_box_outline_blank'}
+                    size={18}
+                    style={{ color: isInAnalysis ? '#4ade80' : '#666' }}
+                  />
+                </span>
+              )}
+            </Dropdown.Item>
           )
         })}
 
-        {filteredFilms.length === 0 && search && (
+        {filteredCatalogue.length === 0 && search && (
           <Dropdown.ItemText className="text-muted text-center">
             No films match "{search}"
           </Dropdown.ItemText>
-        )}
-
-        {/* Clear all films option */}
-        {importedFilms.length > 0 && (
-          <>
-            <Dropdown.Divider />
-            <Dropdown.Item
-              className="text-danger"
-              style={{ fontSize: '0.78rem' }}
-              onClick={handleClearAll}
-            >
-              <Icon name="delete" size={14} className="me-1" /> Clear all saved films
-            </Dropdown.Item>
-          </>
         )}
       </Dropdown.Menu>
     </Dropdown>
