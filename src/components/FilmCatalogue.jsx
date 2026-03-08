@@ -26,7 +26,7 @@ const SORT_OPTIONS = [
   { value: 'revenue', label: 'Revenue (Highest)' },
 ];
 
-export default function FilmCatalogue({ show, onHide }) {
+export default function FilmCatalogue({ show, onHide, inline = false }) {
   const { apiClient, catalogue, refreshCatalogue, analysisSet, toggleAnalysisFilm, selectAllAnalysis, clearAllAnalysis } = useApp();
 
   // ─── State ───
@@ -38,10 +38,10 @@ export default function FilmCatalogue({ show, onHide }) {
   const [showAddFilm, setShowAddFilm] = useState(false);
   const [selectedFilmId, setSelectedFilmId] = useState(null);
 
-  // Refresh catalogue when modal opens
+  // Refresh catalogue when modal opens or inline view mounts
   useEffect(() => {
-    if (show) refreshCatalogue();
-  }, [show, refreshCatalogue]);
+    if (show || inline) refreshCatalogue();
+  }, [show, inline, refreshCatalogue]);
 
   // ─── Filter & sort ───
   const filteredFilms = useMemo(() => {
@@ -113,193 +113,257 @@ export default function FilmCatalogue({ show, onHide }) {
   );
   const analysisCount = analysisSet.length;
 
-  // ─── Render ───
+  // ─── Render: Film detail sub-view ───
   if (selectedFilmId) {
+    // FilmDetailView always opens as a modal overlay (drill-down from card click)
     return (
-      <Modal show={show} onHide={onHide} fullscreen dialogClassName="film-catalogue-modal">
-        <FilmDetailView
-          filmId={selectedFilmId}
-          onBack={() => setSelectedFilmId(null)}
-          onClose={onHide}
-          onFilmUpdated={handleFilmUpdated}
-          onFilmDeleted={handleFilmDeleted}
+      <>
+        {/* If inline mode, render the grid behind the detail modal */}
+        {inline && <CatalogueShell inline={inline} onHide={onHide} catalogue={catalogue}
+          searchTerm={searchTerm} setSearchTerm={setSearchTerm}
+          statusFilter={statusFilter} setStatusFilter={setStatusFilter}
+          sortBy={sortBy} setSortBy={setSortBy}
+          statusCounts={statusCounts} filmsWithDataCount={filmsWithDataCount}
+          analysisCount={analysisCount} selectAllAnalysis={selectAllAnalysis}
+          clearAllAnalysis={clearAllAnalysis} setShowAddFilm={setShowAddFilm}
+        >
+          <CatalogueBody loading={loading} error={error} filteredFilms={filteredFilms}
+            catalogue={catalogue} setSelectedFilmId={setSelectedFilmId}
+            analysisSet={analysisSet} toggleAnalysisFilm={toggleAnalysisFilm}
+            setShowAddFilm={setShowAddFilm}
+          />
+        </CatalogueShell>}
+
+        <Modal show={true} onHide={() => setSelectedFilmId(null)} fullscreen dialogClassName="film-catalogue-modal">
+          <FilmDetailView
+            filmId={selectedFilmId}
+            onBack={() => setSelectedFilmId(null)}
+            onClose={inline ? () => setSelectedFilmId(null) : onHide}
+            onFilmUpdated={handleFilmUpdated}
+            onFilmDeleted={handleFilmDeleted}
+          />
+        </Modal>
+
+        <AddFilmModal show={showAddFilm} onHide={() => setShowAddFilm(false)} onFilmAdded={handleFilmAdded} />
+        <CatalogueStyles />
+      </>
+    );
+  }
+
+  // ─── Render: Main catalogue grid ───
+  return (
+    <>
+      <CatalogueShell inline={inline} show={show} onHide={onHide} catalogue={catalogue}
+        searchTerm={searchTerm} setSearchTerm={setSearchTerm}
+        statusFilter={statusFilter} setStatusFilter={setStatusFilter}
+        sortBy={sortBy} setSortBy={setSortBy}
+        statusCounts={statusCounts} filmsWithDataCount={filmsWithDataCount}
+        analysisCount={analysisCount} selectAllAnalysis={selectAllAnalysis}
+        clearAllAnalysis={clearAllAnalysis} setShowAddFilm={setShowAddFilm}
+      >
+        <CatalogueBody loading={loading} error={error} filteredFilms={filteredFilms}
+          catalogue={catalogue} setSelectedFilmId={setSelectedFilmId}
+          analysisSet={analysisSet} toggleAnalysisFilm={toggleAnalysisFilm}
+          setShowAddFilm={setShowAddFilm}
         />
-      </Modal>
+      </CatalogueShell>
+
+      <AddFilmModal show={showAddFilm} onHide={() => setShowAddFilm(false)} onFilmAdded={handleFilmAdded} />
+      <CatalogueStyles />
+    </>
+  );
+}
+
+
+// ─── Shell: wraps content in either a Modal or a div ───
+function CatalogueShell({ inline, show, onHide, catalogue, children,
+  searchTerm, setSearchTerm, statusFilter, setStatusFilter,
+  sortBy, setSortBy, statusCounts, filmsWithDataCount,
+  analysisCount, selectAllAnalysis, clearAllAnalysis, setShowAddFilm
+}) {
+  const header = (
+    <div className="w-100">
+      <div className="d-flex align-items-center justify-content-between mb-3">
+        <div className="d-flex align-items-center gap-2">
+          <span className="material-symbols-rounded fs-3" style={{ color: '#e50914' }}>movie</span>
+          <h4 className="mb-0 fw-bold" style={{ color: 'var(--cs-text, #f0f0f0)' }}>Film Catalogue</h4>
+          <Badge bg="secondary" pill className="ms-1">{catalogue.length}</Badge>
+        </div>
+        <div className="d-flex align-items-center gap-2">
+          <Button
+            variant="danger"
+            className="d-flex align-items-center gap-1"
+            onClick={() => setShowAddFilm(true)}
+          >
+            <span className="material-symbols-rounded" style={{ fontSize: '18px' }}>add</span>
+            Add Film
+          </Button>
+          {!inline && (
+            <button className="catalogue-close-btn" onClick={onHide} aria-label="Close catalogue">
+              <span className="material-symbols-rounded" style={{ fontSize: '20px' }}>close</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Toolbar: Search + Filters + Sort */}
+      <div className="d-flex flex-wrap gap-2 align-items-center mb-2">
+        <InputGroup style={{ maxWidth: '300px' }}>
+          <InputGroup.Text>
+            <span className="material-symbols-rounded" style={{ fontSize: '18px' }}>search</span>
+          </InputGroup.Text>
+          <Form.Control
+            placeholder="Search films..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+          />
+          {searchTerm && (
+            <Button variant="outline-secondary" size="sm" onClick={() => setSearchTerm('')}>
+              <span className="material-symbols-rounded" style={{ fontSize: '16px' }}>close</span>
+            </Button>
+          )}
+        </InputGroup>
+
+        {/* Status filter pills */}
+        <div className="d-flex gap-1 flex-wrap">
+          {['all', 'pre_release', 'released', 'screening', 'completed'].map(status => {
+            const isActive = statusFilter === status;
+            const config = STATUS_CONFIG[status];
+            const count = statusCounts[status] || 0;
+            if (status !== 'all' && count === 0) return null;
+            return (
+              <Button
+                key={status}
+                size="sm"
+                variant={isActive ? (status === 'all' ? 'light' : config?.bg || 'light') : 'outline-secondary'}
+                className="d-flex align-items-center gap-1"
+                onClick={() => setStatusFilter(status)}
+              >
+                {status === 'all' ? 'All' : config.label}
+                <Badge bg={isActive ? 'dark' : 'secondary'} pill className="ms-1" style={{ fontSize: '0.7em' }}>
+                  {count}
+                </Badge>
+              </Button>
+            );
+          })}
+        </div>
+
+        <Form.Select
+          size="sm"
+          style={{ width: 'auto', minWidth: '180px' }}
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value)}
+        >
+          {SORT_OPTIONS.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </Form.Select>
+
+        {filmsWithDataCount > 1 && (
+          <div className="d-flex align-items-center gap-2 ms-auto">
+            <span style={{ fontSize: '0.75rem', color: '#aaa', whiteSpace: 'nowrap' }}>
+              Analysis: {analysisCount} of {filmsWithDataCount}
+            </span>
+            <Button size="sm" variant="outline-success"
+              className="d-flex align-items-center gap-1"
+              style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
+              onClick={selectAllAnalysis} disabled={analysisCount === filmsWithDataCount}
+            >
+              <span className="material-symbols-rounded" style={{ fontSize: '14px' }}>check_box</span>
+              Select All
+            </Button>
+            <Button size="sm" variant="outline-secondary"
+              className="d-flex align-items-center gap-1"
+              style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
+              onClick={clearAllAnalysis} disabled={analysisCount === 0}
+            >
+              <span className="material-symbols-rounded" style={{ fontSize: '14px' }}>check_box_outline_blank</span>
+              Deselect All
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (inline) {
+    return (
+      <div className="film-catalogue-modal h-100 d-flex flex-column" style={{ background: 'var(--cs-body, #1a1a2e)', color: 'var(--cs-text, #e0e0e0)' }}>
+        <div className="catalogue-header border-0 pb-0">{header}</div>
+        <div className="catalogue-body pt-2 flex-grow-1 overflow-auto">{children}</div>
+      </div>
     );
   }
 
   return (
-    <>
-      <Modal show={show} onHide={onHide} fullscreen dialogClassName="film-catalogue-modal">
-        <Modal.Header className="catalogue-header border-0 pb-0">
-          <div className="w-100">
-            <div className="d-flex align-items-center justify-content-between mb-3">
-              <div className="d-flex align-items-center gap-2">
-                <span className="material-symbols-rounded fs-3" style={{ color: '#e50914' }}>movie</span>
-                <h4 className="mb-0 fw-bold" style={{ color: '#f0f0f0' }}>Film Catalogue</h4>
-                <Badge bg="secondary" pill className="ms-1">{catalogue.length}</Badge>
-              </div>
-              <div className="d-flex align-items-center gap-2">
-                <Button
-                  variant="danger"
-                  className="d-flex align-items-center gap-1"
-                  onClick={() => setShowAddFilm(true)}
-                >
-                  <span className="material-symbols-rounded" style={{ fontSize: '18px' }}>add</span>
-                  Add Film
-                </Button>
-                <button
-                  className="catalogue-close-btn"
-                  onClick={onHide}
-                  aria-label="Close catalogue"
-                >
-                  <span className="material-symbols-rounded" style={{ fontSize: '20px' }}>close</span>
-                </button>
-              </div>
-            </div>
+    <Modal show={show} onHide={onHide} fullscreen dialogClassName="film-catalogue-modal">
+      <Modal.Header className="catalogue-header border-0 pb-0">{header}</Modal.Header>
+      <Modal.Body className="catalogue-body pt-2">{children}</Modal.Body>
+    </Modal>
+  );
+}
 
-            {/* Toolbar: Search + Filters + Sort */}
-            <div className="d-flex flex-wrap gap-2 align-items-center mb-2">
-              <InputGroup style={{ maxWidth: '300px' }}>
-                <InputGroup.Text>
-                  <span className="material-symbols-rounded" style={{ fontSize: '18px' }}>search</span>
-                </InputGroup.Text>
-                <Form.Control
-                  placeholder="Search films..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                />
-                {searchTerm && (
-                  <Button variant="outline-secondary" size="sm" onClick={() => setSearchTerm('')}>
-                    <span className="material-symbols-rounded" style={{ fontSize: '16px' }}>close</span>
-                  </Button>
-                )}
-              </InputGroup>
 
-              {/* Status filter pills */}
-              <div className="d-flex gap-1 flex-wrap">
-                {['all', 'pre_release', 'released', 'screening', 'completed'].map(status => {
-                  const isActive = statusFilter === status;
-                  const config = STATUS_CONFIG[status];
-                  const count = statusCounts[status] || 0;
-                  if (status !== 'all' && count === 0) return null;
-                  return (
-                    <Button
-                      key={status}
-                      size="sm"
-                      variant={isActive ? (status === 'all' ? 'light' : config?.bg || 'light') : 'outline-secondary'}
-                      className="d-flex align-items-center gap-1"
-                      onClick={() => setStatusFilter(status)}
-                    >
-                      {status === 'all' ? 'All' : config.label}
-                      <Badge bg={isActive ? 'dark' : 'secondary'} pill className="ms-1" style={{ fontSize: '0.7em' }}>
-                        {count}
-                      </Badge>
-                    </Button>
-                  );
-                })}
-              </div>
+// ─── Body: loading / error / empty / grid ───
+function CatalogueBody({ loading, error, filteredFilms, catalogue, setSelectedFilmId, analysisSet, toggleAnalysisFilm, setShowAddFilm }) {
+  if (loading) {
+    return (
+      <div className="d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '300px' }}>
+        <Spinner animation="border" variant="danger" />
+        <p className="mt-3 text-muted">Loading catalogue...</p>
+      </div>
+    );
+  }
 
-              <Form.Select
-                size="sm"
-                style={{ width: 'auto', minWidth: '180px' }}
-                value={sortBy}
-                onChange={e => setSortBy(e.target.value)}
-              >
-                {SORT_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </Form.Select>
+  if (error) {
+    return (
+      <div className="text-center text-danger py-5">
+        <span className="material-symbols-rounded fs-1">error</span>
+        <p className="mt-2">{error}</p>
+      </div>
+    );
+  }
 
-              {/* Analysis set controls — only show when there are films with data */}
-              {filmsWithDataCount > 1 && (
-                <div className="d-flex align-items-center gap-2 ms-auto">
-                  <span style={{ fontSize: '0.75rem', color: '#aaa', whiteSpace: 'nowrap' }}>
-                    Analysis: {analysisCount} of {filmsWithDataCount}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline-success"
-                    className="d-flex align-items-center gap-1"
-                    style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
-                    onClick={selectAllAnalysis}
-                    disabled={analysisCount === filmsWithDataCount}
-                  >
-                    <span className="material-symbols-rounded" style={{ fontSize: '14px' }}>check_box</span>
-                    Select All
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline-secondary"
-                    className="d-flex align-items-center gap-1"
-                    style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
-                    onClick={clearAllAnalysis}
-                    disabled={analysisCount === 0}
-                  >
-                    <span className="material-symbols-rounded" style={{ fontSize: '14px' }}>check_box_outline_blank</span>
-                    Deselect All
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        </Modal.Header>
+  if (filteredFilms.length === 0) {
+    return (
+      <div className="text-center py-5">
+        <span className="material-symbols-rounded" style={{ fontSize: '64px', color: '#666' }}>movie</span>
+        <h5 className="mt-3 text-muted">
+          {catalogue.length === 0 ? 'No films yet' : 'No films match your filters'}
+        </h5>
+        <p className="text-muted">
+          {catalogue.length === 0 ? 'Add your first film to get started' : 'Try adjusting your search or filters'}
+        </p>
+        {catalogue.length === 0 && (
+          <Button variant="danger" onClick={() => setShowAddFilm(true)}>
+            <span className="material-symbols-rounded me-1" style={{ fontSize: '18px' }}>add</span>
+            Add Your First Film
+          </Button>
+        )}
+      </div>
+    );
+  }
 
-        <Modal.Body className="catalogue-body pt-2">
-          {loading ? (
-            <div className="d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '300px' }}>
-              <Spinner animation="border" variant="danger" />
-              <p className="mt-3 text-muted">Loading catalogue...</p>
-            </div>
-          ) : error ? (
-            <div className="text-center text-danger py-5">
-              <span className="material-symbols-rounded fs-1">error</span>
-              <p className="mt-2">{error}</p>
-              <Button variant="outline-danger" size="sm" onClick={loadCatalogue}>Retry</Button>
-            </div>
-          ) : filteredFilms.length === 0 ? (
-            <div className="text-center py-5">
-              <span className="material-symbols-rounded" style={{ fontSize: '64px', color: '#666' }}>movie</span>
-              <h5 className="mt-3 text-muted">
-                {catalogue.length === 0 ? 'No films yet' : 'No films match your filters'}
-              </h5>
-              <p className="text-muted">
-                {catalogue.length === 0
-                  ? 'Add your first film to get started'
-                  : 'Try adjusting your search or filters'}
-              </p>
-              {catalogue.length === 0 && (
-                <Button variant="danger" onClick={() => setShowAddFilm(true)}>
-                  <span className="material-symbols-rounded me-1" style={{ fontSize: '18px' }}>add</span>
-                  Add Your First Film
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="catalogue-grid">
-              {filteredFilms.map(film => (
-                <FilmCard
-                  key={film.id}
-                  film={film}
-                  onClick={() => setSelectedFilmId(film.id)}
-                  isInAnalysis={analysisSet.includes(film.id)}
-                  onToggleAnalysis={toggleAnalysisFilm}
-                />
-              ))}
-            </div>
-          )}
-        </Modal.Body>
-      </Modal>
+  return (
+    <div className="catalogue-grid">
+      {filteredFilms.map(film => (
+        <FilmCard
+          key={film.id}
+          film={film}
+          onClick={() => setSelectedFilmId(film.id)}
+          isInAnalysis={analysisSet.includes(film.id)}
+          onToggleAnalysis={toggleAnalysisFilm}
+        />
+      ))}
+    </div>
+  );
+}
 
-      {/* Add Film sub-modal */}
-      <AddFilmModal
-        show={showAddFilm}
-        onHide={() => setShowAddFilm(false)}
-        onFilmAdded={handleFilmAdded}
-      />
 
-      {/* Catalogue-specific styles */}
-      <style>{`
+// ─── Styles (extracted so they're not duplicated) ───
+function CatalogueStyles() {
+  return (
+    <style>{`
         .film-catalogue-modal .modal-content {
           background: var(--cs-bg, #1a1a2e);
           color: var(--cs-text, #e0e0e0);
@@ -557,7 +621,6 @@ export default function FilmCatalogue({ show, onHide }) {
           color: #212529;
         }
       `}</style>
-    </>
   );
 }
 

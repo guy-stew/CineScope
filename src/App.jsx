@@ -132,6 +132,11 @@ function AppContent() {
             </div>
           )}
 
+          {/* ══════ FILMS VIEW — inline catalogue ══════ */}
+          {currentView === 'films' && (
+            <FilmCatalogue inline />
+          )}
+
           {/* ══════ TRENDS — not enough data placeholder ══════ */}
           {currentView === 'trends' && !hasTrendData && (
             <PlaceholderView
@@ -156,12 +161,6 @@ function AppContent() {
           )}
         </main>
       </div>
-
-      {/* ══════ FILM CATALOGUE — opens when Films tab active ══════ */}
-      <FilmCatalogue
-        show={currentView === 'films'}
-        onHide={handleReturnToMap}
-      />
 
       {/* ══════ VENUE MANAGER — opens when Venues tab active ══════ */}
       <VenueManager
