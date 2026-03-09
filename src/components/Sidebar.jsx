@@ -41,10 +41,10 @@ const NAV_SECTIONS = [
 ]
 
 export default function Sidebar({ currentView, onViewChange, collapsed, onToggle }) {
-  const { filteredVenues, matchDetails, selectedFilm } = useApp()
+  const { baseVenues, matchDetails, selectedFilm } = useApp()
   const { theme } = useTheme()
 
-  const venueCount = filteredVenues?.length || 0
+  const venueCount = baseVenues?.length || 0
 
   // Count matches needing attention (medium + low confidence)
   const matchReviewCount = selectedFilm && matchDetails.length > 0
