@@ -3106,6 +3106,35 @@ body {
   flex-shrink: 0;
 }
 
+/* ── Match Review: Film Badge ── */
+.cs-mr__film-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 3px;
+  padding: 1px 7px 1px 5px;
+  border-radius: 4px;
+  background: rgba(168, 85, 247, 0.1);
+  color: #a855f7;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  max-width: 180px;
+  cursor: default;
+  position: relative;
+}
+
+.cs-mr__film-badge .material-symbols-rounded {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.cs-mr__film-badge-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Empty / Loading / Error ── */
 .cs-tp__loading {
   display: flex;

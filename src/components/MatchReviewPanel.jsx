@@ -18,7 +18,7 @@ import Icon from './Icon'
 
 export default function MatchReviewPanel({ inline = false }) {
   const {
-    matchDetails, baseVenues, rerunMatching,
+    matchDetails, baseVenues, selectedFilm, rerunMatching,
     showMatchReview, setShowMatchReview,
     cloudSaveOverride, cloudDeleteOverride,
   } = useApp()
@@ -40,6 +40,9 @@ export default function MatchReviewPanel({ inline = false }) {
 
   // Default tab to the most relevant one
   const effectiveTab = activeTab || (medium.length > 0 ? 'medium' : low.length > 0 ? 'low' : 'high')
+
+  // Film name for row badges
+  const filmName = selectedFilm?.filmInfo?.title || selectedFilm?.filmInfo?.fileName || null
 
   const tabData = {
     medium: { details: medium, label: 'Needs Review', icon: 'warning', color: CONFIDENCE.MEDIUM?.color || '#f5c542', emptyMsg: 'No venues need review — all matches are high confidence!' },
@@ -146,6 +149,7 @@ export default function MatchReviewPanel({ inline = false }) {
             <MatchTable
               details={currentTabData.details}
               baseVenues={baseVenues}
+              filmName={filmName}
               showReassign
               showAccept={effectiveTab === 'medium'}
               cloudSaveOverride={cloudSaveOverride}
@@ -200,7 +204,7 @@ export default function MatchReviewPanel({ inline = false }) {
 
 // ─── Match Table ───────────────────────────────────────────
 
-function MatchTable({ details, baseVenues, showReassign = false, showAccept = false, cloudSaveOverride, cloudDeleteOverride }) {
+function MatchTable({ details, baseVenues, filmName, showReassign = false, showAccept = false, cloudSaveOverride, cloudDeleteOverride }) {
   return (
     <div style={{ fontSize: '0.82rem' }}>
       <table className="cs-tp__table">
@@ -221,6 +225,7 @@ function MatchTable({ details, baseVenues, showReassign = false, showAccept = fa
               key={idx}
               detail={detail}
               baseVenues={baseVenues}
+              filmName={filmName}
               showReassign={showReassign}
               showAccept={showAccept}
               cloudSaveOverride={cloudSaveOverride}
@@ -236,7 +241,7 @@ function MatchTable({ details, baseVenues, showReassign = false, showAccept = fa
 
 // ─── Individual Match Row ──────────────────────────────────
 
-function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverride, cloudDeleteOverride }) {
+function MatchRow({ detail, baseVenues, filmName, showReassign, showAccept, cloudSaveOverride, cloudDeleteOverride }) {
   const [showDropdown, setShowDropdown] = useState(false)
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
@@ -325,6 +330,12 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
             >
               <Badge bg="warning" text="dark" className="ms-1" style={{ fontSize: '0.65rem' }}><Icon name="warning" size={12} /> Chain</Badge>
             </OverlayTrigger>
+          )}
+          {filmName && (
+            <div className="cs-mr__film-badge" title={filmName}>
+              <Icon name="movie" size={11} />
+              <span className="cs-mr__film-badge-text">{filmName}</span>
+            </div>
           )}
         </td>
         <td>{comscore.city}</td>
