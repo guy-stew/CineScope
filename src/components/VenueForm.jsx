@@ -195,7 +195,7 @@ export default function VenueForm({ venue, onSave, onCancel }) {
     try {
       const payload = {
         name: form.name.trim(),
-        comscore_name: form.comscore_name.trim(),
+        comscoreName: form.comscore_name.trim(),
         city: form.city.trim(),
         country: form.country,
         chain: form.chain.trim() || null,
@@ -205,7 +205,7 @@ export default function VenueForm({ venue, onSave, onCancel }) {
         lat: form.lat ? parseFloat(form.lat) : null,
         lng: form.lng ? parseFloat(form.lng) : null,
         status: form.status,
-        place_id: form.place_id.trim() || null,
+        placeId: form.place_id.trim() || null,
         notes: form.notes.trim() || null,
       }
 

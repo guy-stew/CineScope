@@ -181,7 +181,8 @@ export default function VenueManager({ show, onHide, inline = false }) {
   const handleToggleStatus = async (venue, e) => {
     e.stopPropagation()
     try {
-      await venueApi.toggleVenueStatus(venue.id, getToken)
+      const newStatus = venue.status === 'open' ? 'closed' : 'open'
+      await venueApi.toggleVenueStatus(venue.id, newStatus, getToken)
       setVenues(prev => prev.map(v =>
         v.id === venue.id
           ? { ...v, status: v.status === 'open' ? 'closed' : 'open' }

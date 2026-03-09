@@ -63,7 +63,7 @@ export async function addVenue(data, getToken) {
  * Update an existing venue (partial update — send changed fields only).
  */
 export async function updateVenue(id, data, getToken) {
-  return authFetch(`${API_BASE}/venues/${id}`, getToken, {
+  return authFetch(`${API_BASE}/venues?id=${id}`, getToken, {
     method: 'PUT',
     body: JSON.stringify(data),
   })
@@ -71,10 +71,12 @@ export async function updateVenue(id, data, getToken) {
 
 /**
  * Toggle a venue's status between 'open' and 'closed'.
+ * Requires the new status in the request body.
  */
-export async function toggleVenueStatus(id, getToken) {
-  return authFetch(`${API_BASE}/venues/${id}/status`, getToken, {
+export async function toggleVenueStatus(id, newStatus, getToken) {
+  return authFetch(`${API_BASE}/venues?id=${id}`, getToken, {
     method: 'PATCH',
+    body: JSON.stringify({ status: newStatus }),
   })
 }
 
@@ -84,7 +86,7 @@ export async function toggleVenueStatus(id, getToken) {
  * Returns { imported: N, skipped: N, errors: [...] }
  */
 export async function importVenues(venues, getToken) {
-  return authFetch(`${API_BASE}/venues/import`, getToken, {
+  return authFetch(`${API_BASE}/venues?bulk=true`, getToken, {
     method: 'POST',
     body: JSON.stringify({ venues }),
   })
@@ -95,11 +97,25 @@ export async function importVenues(venues, getToken) {
 
 /**
  * Geocode an address via the server-side Nominatim proxy.
- * Returns { lat, lng, display_name } or { error }.
+ * Returns { results: [...], method } — caller picks the best result.
  */
 export async function geocodeAddress({ address, postcode, country }, getToken) {
-  return authFetch(`${API_BASE}/geocode`, getToken, {
-    method: 'POST',
-    body: JSON.stringify({ address, postcode, country }),
-  })
+  const params = new URLSearchParams()
+  if (address) params.set('address', address)
+  if (postcode) params.set('postcode', postcode)
+  if (country) params.set('country', country)
+
+  const data = await authFetch(`${API_BASE}/geocode?${params}`, getToken)
+
+  // Return the top result in the shape VenueForm expects
+  if (data.results && data.results.length > 0) {
+    const top = data.results[0]
+    return {
+      lat: top.lat,
+      lng: top.lng,
+      display_name: top.displayName,
+    }
+  }
+
+  return { error: 'No results found. Try a different address or postcode.' }
 }
