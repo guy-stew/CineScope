@@ -225,7 +225,7 @@ function MatchTable({ details, baseVenues, filmName, showReassign = false, showA
         <tbody>
           {details.map((detail, idx) => (
             <MatchRow
-              key={idx}
+              key={`${detail.comscore.theater}|${detail.comscore.city}`}
               detail={detail}
               baseVenues={baseVenues}
               filmName={filmName}
