@@ -964,6 +964,44 @@ export function AppProvider({ children }) {
     }
   }, [])
 
+  // Delete a specific Comscore theater's revenue records across ALL films
+  // (e.g. venue not in distribution network — remove entirely)
+  const deleteComscoreRecord = useCallback(async (comscoreTheater, comscoreCity) => {
+    try {
+      await api.deleteComscoreRevenue(comscoreTheater, comscoreCity, getTokenRef.current)
+
+      // Remove from local state: strip matching comscoreVenues from every imported film
+      const theaterLower = (comscoreTheater || '').toLowerCase()
+      const cityLower = (comscoreCity || '').toLowerCase()
+
+      setImportedFilms(prev => prev.map(film => {
+        const filtered = film.comscoreVenues.filter(v =>
+          !(v.theater.toLowerCase() === theaterLower && v.city.toLowerCase() === cityLower)
+        )
+        if (filtered.length === film.comscoreVenues.length) return film // no change
+        const totalRevenue = filtered.reduce((s, v) => s + v.revenue, 0)
+        return {
+          ...film,
+          comscoreVenues: filtered,
+          stats: {
+            ...film.stats,
+            totalVenues: filtered.length,
+            totalRevenue,
+            avgRevenue: filtered.length > 0 ? Math.round(totalRevenue / filtered.length) : 0,
+          },
+        }
+      }))
+
+      // Trigger re-matching so the table updates
+      setOverrides(prev => ({ ...prev }))
+
+      return { success: true }
+    } catch (err) {
+      console.error('CineScope: Failed to delete Comscore record', err)
+      throw err
+    }
+  }, [])
+
   // ── Unified delete: removes catalogue entry + linked Comscore imports + local state ──
   const deleteFilmUnified = useCallback(async (catalogueId) => {
     try {
@@ -1052,6 +1090,7 @@ export function AppProvider({ children }) {
     removeFilm,
     clearAllFilmsData,
     deleteFilmUnified,
+    deleteComscoreRecord,
     filmsLoaded: !isLoading, // backwards compat
     importStatus,
     pendingImport,

@@ -195,6 +195,21 @@ export async function deleteAllFilms(getToken) {
   return apiFetch('/films', { method: 'DELETE' }, getToken);
 }
 
+/**
+ * Delete all revenue records for a specific Comscore theater/city across all films.
+ * Used when a venue isn't in the distribution network and should be removed entirely.
+ * @param {string} comscoreTheater
+ * @param {string} comscoreCity
+ * @param {Function} getToken
+ * @returns {{ deleted, affectedFilms, message }}
+ */
+export async function deleteComscoreRevenue(comscoreTheater, comscoreCity, getToken) {
+  return apiFetch('/films?action=delete_revenue', {
+    method: 'PATCH',
+    body: JSON.stringify({ comscoreTheater, comscoreCity }),
+  }, getToken);
+}
+
 
 // ═══════════════════════════════════════════════
 // MATCH OVERRIDES

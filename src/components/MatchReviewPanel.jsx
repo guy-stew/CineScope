@@ -21,6 +21,7 @@ export default function MatchReviewPanel({ inline = false }) {
     matchDetails, baseVenues, selectedFilm, rerunMatching,
     showMatchReview, setShowMatchReview,
     cloudSaveOverride, cloudDeleteOverride,
+    deleteComscoreRecord,
   } = useApp()
   const { theme } = useTheme()
 
@@ -154,6 +155,7 @@ export default function MatchReviewPanel({ inline = false }) {
               showAccept={effectiveTab === 'medium'}
               cloudSaveOverride={cloudSaveOverride}
               cloudDeleteOverride={cloudDeleteOverride}
+              deleteComscoreRecord={deleteComscoreRecord}
             />
           </div>
         </div>
@@ -204,7 +206,7 @@ export default function MatchReviewPanel({ inline = false }) {
 
 // ─── Match Table ───────────────────────────────────────────
 
-function MatchTable({ details, baseVenues, filmName, showReassign = false, showAccept = false, cloudSaveOverride, cloudDeleteOverride }) {
+function MatchTable({ details, baseVenues, filmName, showReassign = false, showAccept = false, cloudSaveOverride, cloudDeleteOverride, deleteComscoreRecord }) {
   return (
     <div style={{ fontSize: '0.82rem' }}>
       <table className="cs-tp__table">
@@ -231,6 +233,7 @@ function MatchTable({ details, baseVenues, filmName, showReassign = false, showA
               showAccept={showAccept}
               cloudSaveOverride={cloudSaveOverride}
               cloudDeleteOverride={cloudDeleteOverride}
+              deleteComscoreRecord={deleteComscoreRecord}
             />
           ))}
         </tbody>
@@ -242,10 +245,12 @@ function MatchTable({ details, baseVenues, filmName, showReassign = false, showA
 
 // ─── Individual Match Row ──────────────────────────────────
 
-function MatchRow({ detail, baseVenues, filmName, showReassign, showAccept, cloudSaveOverride, cloudDeleteOverride }) {
+function MatchRow({ detail, baseVenues, filmName, showReassign, showAccept, cloudSaveOverride, cloudDeleteOverride, deleteComscoreRecord }) {
   const [showDropdown, setShowDropdown] = useState(false)
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const { comscore, venue, score, confidence, method, chainOk } = detail
 
@@ -427,75 +432,132 @@ function MatchRow({ detail, baseVenues, filmName, showReassign, showAccept, clou
         <tr>
           <td colSpan={showReassign ? 8 : 7} style={{ background: 'var(--cs-surface-alt)' }}>
             <div className="p-2">
-              <div className="d-flex gap-2 align-items-center mb-2">
-                <Form.Control
-                  size="sm"
-                  type="text"
-                  placeholder="Search venues by name, city, or chain..."
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  autoFocus
-                  style={{ maxWidth: 400, background: 'var(--cs-surface)', color: 'var(--cs-text)', borderColor: 'var(--cs-border)' }}
-                />
-                <Button
-                  size="sm"
-                  variant="outline-danger"
-                  onClick={handleDismiss}
-                  disabled={saving}
-                  title="Mark as intentionally unmatched"
-                >
-                  <Icon name="block" size={14} className="me-1" /> Dismiss
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline-secondary"
-                  onClick={() => { setShowDropdown(false); setSearch('') }}
-                >
-                  Cancel
-                </Button>
-              </div>
-
-              {search.trim() && filteredVenues.length === 0 && (
-                <div style={{ fontSize: '0.8rem', color: 'var(--cs-text-muted)' }}>
-                  No venues match "{search}"
+              {/* Confirm delete dialog */}
+              {confirmDelete ? (
+                <div className="cs-mr__confirm-delete">
+                  <div className="cs-mr__confirm-delete-icon">
+                    <Icon name="warning" size={20} />
+                  </div>
+                  <div className="cs-mr__confirm-delete-text">
+                    <strong>Delete "{comscore.theater}" ({comscore.city})?</strong>
+                    <p>This will permanently remove all box office revenue data for this venue across all films. This action is irreversible.</p>
+                  </div>
+                  <div className="cs-mr__confirm-delete-actions">
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={async () => {
+                        setDeleting(true)
+                        try {
+                          await deleteComscoreRecord(comscore.theater, comscore.city)
+                        } catch (err) {
+                          console.error('Delete failed:', err)
+                          setDeleting(false)
+                          setConfirmDelete(false)
+                        }
+                      }}
+                      disabled={deleting}
+                      style={{ fontSize: '0.75rem' }}
+                    >
+                      {deleting
+                        ? <><Icon name="progress_activity" size={14} /> Deleting...</>
+                        : <><Icon name="delete_forever" size={14} /> Yes, delete permanently</>
+                      }
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline-secondary"
+                      onClick={() => setConfirmDelete(false)}
+                      disabled={deleting}
+                      style={{ fontSize: '0.75rem' }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
-              )}
+              ) : (
+                <>
+                  <div className="d-flex gap-2 align-items-center mb-2">
+                    <Form.Control
+                      size="sm"
+                      type="text"
+                      placeholder="Search venues by name, city, or chain..."
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      autoFocus
+                      style={{ maxWidth: 400, background: 'var(--cs-surface)', color: 'var(--cs-text)', borderColor: 'var(--cs-border)' }}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline-danger"
+                      onClick={handleDismiss}
+                      disabled={saving}
+                      title="Mark as intentionally unmatched"
+                    >
+                      <Icon name="block" size={14} className="me-1" /> Dismiss
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => setConfirmDelete(true)}
+                      disabled={saving}
+                      title="Permanently delete this venue's revenue data from all films"
+                      style={{ fontSize: '0.75rem' }}
+                    >
+                      <Icon name="delete" size={14} className="me-1" /> Delete
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline-secondary"
+                      onClick={() => { setShowDropdown(false); setSearch(''); setConfirmDelete(false) }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
 
-              {filteredVenues.length > 0 && (
-                <div style={{ maxHeight: 200, overflowY: 'auto', fontSize: '0.8rem' }}>
-                  <table className="cs-tp__table">
-                    <thead>
-                      <tr>
-                        <th>Venue</th>
-                        <th>City</th>
-                        <th>Chain</th>
-                        <th>Category</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredVenues.map((v, i) => (
-                        <tr key={i}>
-                          <td style={{ fontWeight: 500, color: 'var(--cs-text)' }}>{v.name}</td>
-                          <td>{v.city}</td>
-                          <td>{v.chain}</td>
-                          <td style={{ color: 'var(--cs-text-muted)' }}>{v.category}</td>
-                          <td>
-                            <Button
-                              size="sm"
-                              variant="success"
-                              onClick={() => handleAssign(v)}
-                              disabled={saving}
-                              style={{ fontSize: '0.7rem', padding: '1px 8px' }}
-                            >
-                              {saving ? '...' : 'Assign'}
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                  {search.trim() && filteredVenues.length === 0 && (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--cs-text-muted)' }}>
+                      No venues match "{search}"
+                    </div>
+                  )}
+
+                  {filteredVenues.length > 0 && (
+                    <div style={{ maxHeight: 200, overflowY: 'auto', fontSize: '0.8rem' }}>
+                      <table className="cs-tp__table">
+                        <thead>
+                          <tr>
+                            <th>Venue</th>
+                            <th>City</th>
+                            <th>Chain</th>
+                            <th>Category</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredVenues.map((v, i) => (
+                            <tr key={i}>
+                              <td style={{ fontWeight: 500, color: 'var(--cs-text)' }}>{v.name}</td>
+                              <td>{v.city}</td>
+                              <td>{v.chain}</td>
+                              <td style={{ color: 'var(--cs-text-muted)' }}>{v.category}</td>
+                              <td>
+                                <Button
+                                  size="sm"
+                                  variant="success"
+                                  onClick={() => handleAssign(v)}
+                                  disabled={saving}
+                                  style={{ fontSize: '0.7rem', padding: '1px 8px' }}
+                                >
+                                  {saving ? '...' : 'Assign'}
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </td>
