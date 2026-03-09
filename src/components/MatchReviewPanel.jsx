@@ -210,13 +210,14 @@ function MatchTable({ details, baseVenues, filmName, showReassign = false, showA
       <table className="cs-tp__table">
         <thead>
           <tr>
-            <th style={{ width: '25%' }}>Comscore Theater</th>
-            <th style={{ width: '12%' }}>City</th>
-            <th style={{ width: '14%' }}>Circuit</th>
+            <th style={{ width: '22%' }}>Comscore Theater</th>
+            <th style={{ width: '13%' }}>Film</th>
+            <th style={{ width: '10%' }}>City</th>
+            <th style={{ width: '12%' }}>Circuit</th>
             <th style={{ width: '3%' }}></th>
-            <th style={{ width: '28%' }}>Matched Venue</th>
+            <th style={{ width: '24%' }}>Matched Venue</th>
             <th style={{ width: '8%' }}>Score</th>
-            {showReassign && <th style={{ width: '10%' }}>Action</th>}
+            {showReassign && <th style={{ width: '8%' }}>Action</th>}
           </tr>
         </thead>
         <tbody>
@@ -331,6 +332,10 @@ function MatchRow({ detail, baseVenues, filmName, showReassign, showAccept, clou
               <Badge bg="warning" text="dark" className="ms-1" style={{ fontSize: '0.65rem' }}><Icon name="warning" size={12} /> Chain</Badge>
             </OverlayTrigger>
           )}
+        </td>
+
+        {/* Film */}
+        <td>
           {filmName && (
             <div className="cs-mr__film-badge" title={filmName}>
               <Icon name="movie" size={11} />
@@ -420,7 +425,7 @@ function MatchRow({ detail, baseVenues, filmName, showReassign, showAccept, clou
       {/* Reassignment dropdown row */}
       {showDropdown && (
         <tr>
-          <td colSpan={showReassign ? 7 : 6} style={{ background: 'var(--cs-surface-alt)' }}>
+          <td colSpan={showReassign ? 8 : 7} style={{ background: 'var(--cs-surface-alt)' }}>
             <div className="p-2">
               <div className="d-flex gap-2 align-items-center mb-2">
                 <Form.Control
