@@ -21,8 +21,6 @@ import VenueForm from './VenueForm'
 import VenueImport from './VenueImport'
 import * as venueApi from '../utils/venueApi'
 
-const PAGE_SIZE = 25
-
 const CATEGORY_LABELS = {
   'Large Chain': 'Large',
   'Small Chain': 'Small',
@@ -51,9 +49,6 @@ export default function VenueManager({ show, onHide, inline = false }) {
   // ── Sorting ──
   const [sortField, setSortField] = useState('name')
   const [sortDir, setSortDir] = useState('asc')
-
-  // ── Pagination ──
-  const [page, setPage] = useState(1)
 
   // ── Save feedback ──
   const [saveMessage, setSaveMessage] = useState(null)
@@ -84,7 +79,6 @@ export default function VenueManager({ show, onHide, inline = false }) {
       setView('list')
       setEditVenue(null)
       setSearch('')
-      setPage(1)
       setSaveMessage(null)
     }
   }, [show, inline, loadVenues])
@@ -129,12 +123,8 @@ export default function VenueManager({ show, onHide, inline = false }) {
     return result
   }, [venues, search, statusFilter, categoryFilter, sortField, sortDir])
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const safePage = Math.min(page, totalPages)
-  const pageVenues = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
-
-  // Reset page when filters change
-  useEffect(() => { setPage(1) }, [search, statusFilter, categoryFilter])
+  // Reset filters when search changes (no-op placeholder for future use)
+  // useEffect(() => {}, [search, statusFilter, categoryFilter])
 
   // Unique categories from loaded venues
   const categories = useMemo(() => {
@@ -241,15 +231,6 @@ export default function VenueManager({ show, onHide, inline = false }) {
     )
   }
 
-  // Page number buttons
-  const pageButtons = useMemo(() => {
-    const btns = []
-    let start = Math.max(1, safePage - 2)
-    let end = Math.min(totalPages, start + 4)
-    if (end - start < 4) start = Math.max(1, end - 4)
-    for (let i = start; i <= end; i++) btns.push(i)
-    return btns
-  }, [safePage, totalPages])
 
 
   // ═══════════════════════════════════════════════════════════════
@@ -405,7 +386,7 @@ export default function VenueManager({ show, onHide, inline = false }) {
                 </tr>
               </thead>
               <tbody>
-                {pageVenues.length === 0 && (
+                {filtered.length === 0 && (
                   <tr>
                     <td colSpan={columns.length} className="cs-vm__empty">
                       {search || statusFilter !== 'open' || categoryFilter
@@ -414,7 +395,7 @@ export default function VenueManager({ show, onHide, inline = false }) {
                     </td>
                   </tr>
                 )}
-                {pageVenues.map(venue => {
+                {filtered.map(venue => {
                   const status = venue.status || 'open'
                   const isChain = venue.chain && venue.chain !== 'Independent'
 
@@ -457,7 +438,16 @@ export default function VenueManager({ show, onHide, inline = false }) {
                       {/* Country */}
                       <td>
                         <span className="cs-vm__country">
-                          {venue.country === 'Ireland' ? '🇮🇪 IRE' : '🇬🇧 UK'}
+                          <img
+                            src={venue.country === 'Ireland'
+                              ? 'https://flagcdn.com/16x12/ie.png'
+                              : 'https://flagcdn.com/16x12/gb.png'}
+                            alt=""
+                            width="16"
+                            height="12"
+                            className="cs-vm__flag"
+                          />
+                          {venue.country === 'Ireland' ? ' IRE' : ' UK'}
                         </span>
                       </td>
 
@@ -478,59 +468,10 @@ export default function VenueManager({ show, onHide, inline = false }) {
             </table>
           </div>
 
-          {/* ── Pagination ── */}
-          {filtered.length > PAGE_SIZE && (
-            <div className="cs-vm__pagination">
-              <span className="cs-vm__page-info">
-                Showing {((safePage - 1) * PAGE_SIZE) + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length} venues
-              </span>
-              <div className="cs-vm__page-btns">
-                <button
-                  className="cs-vm__page-btn"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage(1)}
-                  title="First page"
-                >
-                  <Icon name="first_page" size={16} />
-                </button>
-                <button
-                  className="cs-vm__page-btn"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage(p => p - 1)}
-                  title="Previous page"
-                >
-                  <Icon name="chevron_left" size={16} />
-                </button>
-
-                {pageButtons.map(i => (
-                  <button
-                    key={i}
-                    className={`cs-vm__page-btn ${i === safePage ? 'cs-vm__page-btn--active' : ''}`}
-                    onClick={() => setPage(i)}
-                  >
-                    {i}
-                  </button>
-                ))}
-
-                <button
-                  className="cs-vm__page-btn"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage(p => p + 1)}
-                  title="Next page"
-                >
-                  <Icon name="chevron_right" size={16} />
-                </button>
-                <button
-                  className="cs-vm__page-btn"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage(totalPages)}
-                  title="Last page"
-                >
-                  <Icon name="last_page" size={16} />
-                </button>
-              </div>
-            </div>
-          )}
+          {/* ── Venue Count ── */}
+          <div className="cs-vm__list-footer">
+            Showing {filtered.length} of {venues.length} venues
+          </div>
         </div>
       )}
     </div>

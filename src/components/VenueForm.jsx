@@ -10,10 +10,8 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { Form, Button, Row, Col, Spinner, Alert, Badge } from 'react-bootstrap'
 import { MapContainer, TileLayer, CircleMarker, useMap } from 'react-leaflet'
 import { useAuth } from '@clerk/clerk-react'
-import { useTheme } from '../context/ThemeContext'
 import Icon from './Icon'
 import * as venueApi from '../utils/venueApi'
 
@@ -53,7 +51,6 @@ function MapUpdater({ lat, lng }) {
 
 export default function VenueForm({ venue, onSave, onCancel }) {
   const { getToken } = useAuth()
-  const { theme } = useTheme()
 
   const isEditing = !!venue?.id
   const mapRef = useRef(null)
@@ -241,238 +238,214 @@ export default function VenueForm({ venue, onSave, onCancel }) {
   // ═══════════════════════════════════════════════════════════════
 
   return (
-    <div className="p-3 p-md-4" style={{ maxWidth: 900, margin: '0 auto' }}>
+    <div className="cs-vf">
       {error && (
-        <Alert variant="danger" dismissible onClose={() => setError(null)}>
-          <Icon name="error" size={16} className="me-1" /> {error}
-        </Alert>
+        <div className="cs-vf__alert cs-vf__alert--error">
+          <Icon name="error" size={16} /> {error}
+          <button className="cs-vf__alert-close" onClick={() => setError(null)}>&times;</button>
+        </div>
       )}
 
-      <Row>
+      <div className="cs-vf__grid">
         {/* Left column: main fields */}
-        <Col md={7}>
+        <div className="cs-vf__col-left">
           {/* Venue Name */}
-          <Form.Group className="mb-3">
-            <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>
-              Venue Name <span className="text-danger">*</span>
-            </Form.Label>
-            <Form.Control
+          <div className="cs-vf__field">
+            <label className="cs-vf__label">
+              Venue Name <span className="cs-vf__required">*</span>
+            </label>
+            <input
               type="text"
+              className="cs-vf__input"
               value={form.name}
               onChange={e => updateField('name', e.target.value)}
               placeholder="e.g. Odeon Luxe Leicester Square"
             />
-            <Form.Text className="text-muted" style={{ fontSize: '0.75rem' }}>
-              Display name shown on the map and in reports
-            </Form.Text>
-          </Form.Group>
+            <span className="cs-vf__hint">Display name shown on the map and in reports</span>
+          </div>
 
           {/* Comscore Name */}
-          <Form.Group className="mb-3">
-            <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>
-              Comscore Name <span className="text-danger">*</span>
-            </Form.Label>
-            <Form.Control
+          <div className="cs-vf__field">
+            <label className="cs-vf__label">
+              Comscore Name <span className="cs-vf__required">*</span>
+            </label>
+            <input
               type="text"
+              className="cs-vf__input"
               value={form.comscore_name}
               onChange={e => updateField('comscore_name', e.target.value)}
               placeholder="e.g. ODEON LUXE LEICESTER SQUARE"
             />
-            <Form.Text className="text-muted" style={{ fontSize: '0.75rem' }}>
-              Name as it appears in Comscore reports (used for matching)
-            </Form.Text>
-          </Form.Group>
+            <span className="cs-vf__hint">Name as it appears in Comscore reports (used for matching)</span>
+          </div>
 
           {/* City + Country */}
-          <Row className="mb-3">
-            <Col>
-              <Form.Group>
-                <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>
-                  City <span className="text-danger">*</span>
-                </Form.Label>
-                <Form.Control
-                  type="text"
-                  value={form.city}
-                  onChange={e => updateField('city', e.target.value)}
-                  placeholder="e.g. London"
-                />
-              </Form.Group>
-            </Col>
-            <Col xs={5}>
-              <Form.Group>
-                <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>
-                  Country <span className="text-danger">*</span>
-                </Form.Label>
-                <Form.Select
-                  value={form.country}
-                  onChange={e => updateField('country', e.target.value)}
-                >
-                  <option>United Kingdom</option>
-                  <option>Ireland</option>
-                </Form.Select>
-              </Form.Group>
-            </Col>
-          </Row>
+          <div className="cs-vf__row">
+            <div className="cs-vf__field" style={{ flex: 1 }}>
+              <label className="cs-vf__label">
+                City <span className="cs-vf__required">*</span>
+              </label>
+              <input
+                type="text"
+                className="cs-vf__input"
+                value={form.city}
+                onChange={e => updateField('city', e.target.value)}
+                placeholder="e.g. London"
+              />
+            </div>
+            <div className="cs-vf__field" style={{ flex: '0 0 180px' }}>
+              <label className="cs-vf__label">
+                Country <span className="cs-vf__required">*</span>
+              </label>
+              <select
+                className="cs-vf__select"
+                value={form.country}
+                onChange={e => updateField('country', e.target.value)}
+              >
+                <option>United Kingdom</option>
+                <option>Ireland</option>
+              </select>
+            </div>
+          </div>
 
           {/* Chain + Category */}
-          <Row className="mb-3">
-            <Col>
-              <Form.Group>
-                <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Chain</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={form.chain}
-                  onChange={e => updateField('chain', e.target.value)}
-                  placeholder="e.g. Odeon (leave blank for independents)"
-                />
-              </Form.Group>
-            </Col>
-            <Col xs={5}>
-              <Form.Group>
-                <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>
-                  Category <span className="text-danger">*</span>
-                </Form.Label>
-                <Form.Select
-                  value={form.category}
-                  onChange={e => updateField('category', e.target.value)}
-                >
-                  <option>Large Chain</option>
-                  <option>Small Chain</option>
-                  <option>Independent</option>
-                </Form.Select>
-              </Form.Group>
-            </Col>
-          </Row>
+          <div className="cs-vf__row">
+            <div className="cs-vf__field" style={{ flex: 1 }}>
+              <label className="cs-vf__label">Chain</label>
+              <input
+                type="text"
+                className="cs-vf__input"
+                value={form.chain}
+                onChange={e => updateField('chain', e.target.value)}
+                placeholder="e.g. Odeon (leave blank for independents)"
+              />
+            </div>
+            <div className="cs-vf__field" style={{ flex: '0 0 180px' }}>
+              <label className="cs-vf__label">
+                Category <span className="cs-vf__required">*</span>
+              </label>
+              <select
+                className="cs-vf__select"
+                value={form.category}
+                onChange={e => updateField('category', e.target.value)}
+              >
+                <option>Large Chain</option>
+                <option>Small Chain</option>
+                <option>Independent</option>
+              </select>
+            </div>
+          </div>
 
-          {/* Address + Postcode + Geocode */}
-          <Form.Group className="mb-2">
-            <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Address</Form.Label>
-            <Form.Control
+          {/* Address */}
+          <div className="cs-vf__field">
+            <label className="cs-vf__label">Address</label>
+            <input
               type="text"
+              className="cs-vf__input"
               value={form.address}
               onChange={e => updateField('address', e.target.value)}
               placeholder="Full street address (for geocoding)"
             />
-          </Form.Group>
+          </div>
 
-          <Row className="mb-3 align-items-end">
-            <Col>
-              <Form.Group>
-                <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Postcode</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={form.postcode}
-                  onChange={e => updateField('postcode', e.target.value)}
-                  placeholder="e.g. WC2H 7NA"
-                />
-              </Form.Group>
-            </Col>
-            <Col xs="auto">
-              <Button
-                variant="outline-primary"
-                size="sm"
-                onClick={handleGeocode}
-                disabled={geocoding || (!form.address && !form.postcode)}
-                className="d-flex align-items-center gap-1"
-                style={{ height: 38 }}
-              >
-                {geocoding
-                  ? <><Spinner animation="border" size="sm" /> Looking up...</>
-                  : <><Icon name="my_location" size={16} /> Lookup Coordinates</>
-                }
-              </Button>
-            </Col>
-          </Row>
+          {/* Postcode + Geocode button */}
+          <div className="cs-vf__row cs-vf__row--align-end">
+            <div className="cs-vf__field" style={{ flex: 1 }}>
+              <label className="cs-vf__label">Postcode</label>
+              <input
+                type="text"
+                className="cs-vf__input"
+                value={form.postcode}
+                onChange={e => updateField('postcode', e.target.value)}
+                placeholder="e.g. WC2H 7NA"
+              />
+            </div>
+            <button
+              className="cs-vf__geocode-btn"
+              onClick={handleGeocode}
+              disabled={geocoding || (!form.address && !form.postcode)}
+            >
+              {geocoding
+                ? <><Icon name="progress_activity" size={15} /> Looking up...</>
+                : <><Icon name="my_location" size={15} /> Lookup Coordinates</>
+              }
+            </button>
+          </div>
 
           {geocodeMessage && (
-            <Alert
-              variant={geocodeMessage.type}
-              dismissible
-              onClose={() => setGeocodeMessage(null)}
-              style={{ fontSize: '0.82rem' }}
-            >
+            <div className={`cs-vf__alert cs-vf__alert--${geocodeMessage.type === 'success' ? 'success' : geocodeMessage.type === 'warning' ? 'warning' : 'error'}`}>
               {geocodeMessage.text}
-            </Alert>
+              <button className="cs-vf__alert-close" onClick={() => setGeocodeMessage(null)}>&times;</button>
+            </div>
           )}
 
           {/* Lat / Lng */}
-          <Row className="mb-3">
-            <Col>
-              <Form.Group>
-                <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Latitude</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={form.lat}
-                  onChange={e => updateField('lat', e.target.value)}
-                  placeholder="e.g. 51.5115"
-                />
-              </Form.Group>
-            </Col>
-            <Col>
-              <Form.Group>
-                <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Longitude</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={form.lng}
-                  onChange={e => updateField('lng', e.target.value)}
-                  placeholder="e.g. -0.1281"
-                />
-              </Form.Group>
-            </Col>
-          </Row>
+          <div className="cs-vf__row">
+            <div className="cs-vf__field" style={{ flex: 1 }}>
+              <label className="cs-vf__label">Latitude</label>
+              <input
+                type="text"
+                className="cs-vf__input"
+                value={form.lat}
+                onChange={e => updateField('lat', e.target.value)}
+                placeholder="e.g. 51.5115"
+              />
+            </div>
+            <div className="cs-vf__field" style={{ flex: 1 }}>
+              <label className="cs-vf__label">Longitude</label>
+              <input
+                type="text"
+                className="cs-vf__input"
+                value={form.lng}
+                onChange={e => updateField('lng', e.target.value)}
+                placeholder="e.g. -0.1281"
+              />
+            </div>
+          </div>
 
           {/* Status + Place ID */}
-          <Row className="mb-3">
-            <Col xs={4}>
-              <Form.Group>
-                <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Status</Form.Label>
-                <Form.Select
-                  value={form.status}
-                  onChange={e => updateField('status', e.target.value)}
-                >
-                  <option value="open">Open</option>
-                  <option value="closed">Closed</option>
-                </Form.Select>
-              </Form.Group>
-            </Col>
-            <Col>
-              <Form.Group>
-                <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Google Place ID</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={form.place_id}
-                  onChange={e => updateField('place_id', e.target.value)}
-                  placeholder="Optional"
-                />
-              </Form.Group>
-            </Col>
-          </Row>
+          <div className="cs-vf__row">
+            <div className="cs-vf__field" style={{ flex: '0 0 140px' }}>
+              <label className="cs-vf__label">Status</label>
+              <select
+                className="cs-vf__select"
+                value={form.status}
+                onChange={e => updateField('status', e.target.value)}
+              >
+                <option value="open">Open</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+            <div className="cs-vf__field" style={{ flex: 1 }}>
+              <label className="cs-vf__label">Google Place ID</label>
+              <input
+                type="text"
+                className="cs-vf__input"
+                value={form.place_id}
+                onChange={e => updateField('place_id', e.target.value)}
+                placeholder="Optional"
+              />
+            </div>
+          </div>
 
           {/* Notes */}
-          <Form.Group className="mb-3">
-            <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Notes</Form.Label>
-            <Form.Control
-              as="textarea"
+          <div className="cs-vf__field">
+            <label className="cs-vf__label">Notes</label>
+            <textarea
+              className="cs-vf__textarea"
               rows={3}
               value={form.notes}
               onChange={e => updateField('notes', e.target.value)}
               placeholder="Any additional notes about this venue..."
             />
-          </Form.Group>
-        </Col>
+          </div>
+        </div>
 
         {/* Right column: map preview + info */}
-        <Col md={5}>
-          <div className="mb-3">
-            <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Map Preview</Form.Label>
-            <div
-              style={{
-                height: 300,
-                borderRadius: 8,
-                overflow: 'hidden',
-                border: `1px solid ${theme.border}`,
-              }}
-            >
+        <div className="cs-vf__col-right">
+          <div className="cs-vf__field">
+            <label className="cs-vf__label">Map Preview</label>
+            <div className="cs-vf__map-container">
               <MapContainer
                 center={mapCenter}
                 zoom={hasCoords ? PREVIEW_ZOOM : 6}
@@ -501,14 +474,14 @@ export default function VenueForm({ venue, onSave, onCancel }) {
               </MapContainer>
             </div>
             {!hasCoords && (
-              <div className="text-muted text-center mt-2" style={{ fontSize: '0.78rem' }}>
-                <Icon name="info" size={14} className="me-1" />
+              <div className="cs-vf__map-hint">
+                <Icon name="info" size={14} />
                 Enter coordinates or use Lookup to place the pin
               </div>
             )}
             {hasCoords && (
-              <div className="text-success text-center mt-2" style={{ fontSize: '0.78rem' }}>
-                <Icon name="check_circle" size={14} className="me-1" />
+              <div className="cs-vf__map-hint cs-vf__map-hint--success">
+                <Icon name="check_circle" size={14} />
                 {parseFloat(form.lat).toFixed(5)}, {parseFloat(form.lng).toFixed(5)}
               </div>
             )}
@@ -516,61 +489,50 @@ export default function VenueForm({ venue, onSave, onCancel }) {
 
           {/* Venue info card (edit mode only) */}
           {isEditing && (
-            <div
-              className="p-3 rounded"
-              style={{
-                background: theme.surface,
-                border: `1px solid ${theme.border}`,
-                fontSize: '0.8rem',
-              }}
-            >
-              <div className="fw-semibold mb-2" style={{ color: theme.textMuted }}>Venue Info</div>
-              <div className="d-flex justify-content-between mb-1">
-                <span style={{ color: theme.textMuted }}>ID</span>
-                <span className="font-monospace">{venue.id}</span>
+            <div className="cs-vf__info-card">
+              <div className="cs-vf__info-title">Venue Info</div>
+              <div className="cs-vf__info-row">
+                <span>ID</span>
+                <span className="cs-vf__info-mono">{venue.id}</span>
               </div>
-              <div className="d-flex justify-content-between mb-1">
-                <span style={{ color: theme.textMuted }}>Source</span>
-                <Badge bg={venue.source === 'seed' ? 'secondary' : venue.source === 'manual' ? 'info' : 'primary'}>
+              <div className="cs-vf__info-row">
+                <span>Source</span>
+                <span className={`cs-vf__source-badge cs-vf__source-badge--${venue.source || 'seed'}`}>
                   {venue.source || 'seed'}
-                </Badge>
+                </span>
               </div>
               {venue.created_at && (
-                <div className="d-flex justify-content-between mb-1">
-                  <span style={{ color: theme.textMuted }}>Created</span>
+                <div className="cs-vf__info-row">
+                  <span>Created</span>
                   <span>{new Date(venue.created_at).toLocaleDateString()}</span>
                 </div>
               )}
               {venue.updated_at && (
-                <div className="d-flex justify-content-between">
-                  <span style={{ color: theme.textMuted }}>Updated</span>
+                <div className="cs-vf__info-row">
+                  <span>Updated</span>
                   <span>{new Date(venue.updated_at).toLocaleDateString()}</span>
                 </div>
               )}
             </div>
           )}
-        </Col>
-      </Row>
+        </div>
+      </div>
 
       {/* Action buttons */}
-      <div
-        className="d-flex justify-content-end gap-2 mt-3 pt-3"
-        style={{ borderTop: `1px solid ${theme.border}` }}
-      >
-        <Button variant="outline-secondary" onClick={onCancel} disabled={saving}>
+      <div className="cs-vf__actions">
+        <button className="cs-vm__btn" onClick={onCancel} disabled={saving}>
           Cancel
-        </Button>
-        <Button
-          variant="success"
+        </button>
+        <button
+          className="cs-vm__btn cs-vm__btn--primary"
           onClick={handleSave}
           disabled={saving || !dirty}
-          className="d-flex align-items-center gap-1"
         >
           {saving
-            ? <><Spinner animation="border" size="sm" /> Saving...</>
+            ? <><Icon name="progress_activity" size={16} /> Saving...</>
             : <><Icon name="save" size={16} /> {isEditing ? 'Update Venue' : 'Add Venue'}</>
           }
-        </Button>
+        </button>
       </div>
     </div>
   )
