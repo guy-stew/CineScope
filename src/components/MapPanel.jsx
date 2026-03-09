@@ -20,16 +20,14 @@ import { useTheme } from '../context/ThemeContext'
 import { GRADES, GRADE_ORDER } from '../utils/grades'
 import { formatRevenue } from '../utils/formatRevenue'
 import Icon from './Icon'
+import FilmSelectorDropdown from './FilmSelectorDropdown'
 
 export default function MapPanel({ visible, onToggle }) {
   const {
     filteredVenues,
     selectedVenue, setSelectedVenue,
-    selectedFilm, selectedFilmId, setSelectedFilmId, clearFilmSelection,
+    selectedFilm, selectedFilmId,
     filmDisplayStats, revenueFormat,
-    importedFilms,
-    catalogue,
-    analysisSet,
     gradeFilter, setGradeFilter,
     chainFilter, setChainFilter,
     categoryFilter, setCategoryFilter,
@@ -42,29 +40,6 @@ export default function MapPanel({ visible, onToggle }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortField, setSortField] = useState('revenue')
   const [sortDir, setSortDir] = useState('desc')
-
-  // ── Film selector helpers ──
-  const filmsWithData = useMemo(() =>
-    catalogue.filter(f => parseInt(f.import_count) > 0),
-    [catalogue]
-  )
-
-  const analysisCount = analysisSet.length
-
-  const handleFilmSelect = (e) => {
-    const val = e.target.value
-    if (val === '') {
-      clearFilmSelection()
-    } else {
-      setSelectedFilmId(val)
-    }
-  }
-
-  // Map catalogue IDs to importedFilm IDs for selection
-  const getImportedFilmId = (catEntry) => {
-    const imp = importedFilms.find(f => f.catalogueId === catEntry.id)
-    return imp ? imp.id : null
-  }
 
   // ── Grade toggle ──
   const toggleGrade = (grade) => {
@@ -135,28 +110,7 @@ export default function MapPanel({ visible, onToggle }) {
         className="cs-map-panel__film-selector"
         style={{ borderBottom: `1px solid ${theme.border}`, background: theme.surfaceAlt }}
       >
-        <select
-          className="cs-map-panel__select"
-          value={selectedFilmId || ''}
-          onChange={handleFilmSelect}
-          style={{
-            background: theme.inputBg,
-            borderColor: theme.inputBorder,
-            color: theme.inputText,
-          }}
-        >
-          <option value="">All Venues (no film)</option>
-          {analysisCount >= 2 && (
-            <option value="all-films">Selected Films ({analysisCount})</option>
-          )}
-          {filmsWithData.map(catFilm => {
-            const impId = getImportedFilmId(catFilm)
-            if (!impId) return null
-            return (
-              <option key={impId} value={impId}>{catFilm.title}</option>
-            )
-          })}
-        </select>
+        <FilmSelectorDropdown />
       </div>
 
       {/* ── Film info banner ── */}

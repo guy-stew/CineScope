@@ -18,6 +18,7 @@ import { generateAIReport, buildFilmProfileForAI } from '../utils/aiReport'
 import { formatRevenue } from '../utils/formatRevenue'
 import Icon from './Icon'
 import ExportMenu from './ExportMenu'
+import FilmSelectorDropdown from './FilmSelectorDropdown'
 
 
 // ─── Error Boundary ──────────────────────────────────────────
@@ -251,9 +252,9 @@ function TrendPanelInner({ show, onHide, inline = false }) {
       <div className="cs-tp__toolbar">
         <h1 className="cs-tp__title">
           Trend Analysis
-          <span className="cs-tp__count-badge">{summary.filmCount || 0} films</span>
         </h1>
         <div className="cs-tp__toolbar-right">
+          <FilmSelectorDropdown compact />
           <ExportMenu />
         </div>
       </div>

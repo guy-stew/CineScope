@@ -2042,6 +2042,217 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════ */
+/* ── Film Selector Dropdown (v3.4) ─────────────────────── */
+/* ═══════════════════════════════════════════════════════════ */
+
+.cs-film-dd {
+  position: relative;
+}
+
+.cs-film-dd__trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--cs-border);
+  background: var(--cs-surface);
+  color: var(--cs-text);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+  text-align: left;
+}
+
+.cs-film-dd__trigger:hover {
+  border-color: var(--cs-header-border);
+}
+
+.cs-film-dd__trigger-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Compact variant (for toolbar use) */
+.cs-film-dd--compact .cs-film-dd__trigger {
+  padding: 6px 10px;
+  font-size: 12px;
+  width: auto;
+  min-width: 180px;
+  max-width: 260px;
+}
+
+/* Dropdown menu */
+.cs-film-dd__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  min-width: 280px;
+  max-height: 380px;
+  overflow-y: auto;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  padding: 4px 0;
+}
+
+.cs-film-dd__menu::-webkit-scrollbar {
+  width: 5px;
+}
+
+.cs-film-dd__menu::-webkit-scrollbar-thumb {
+  background: var(--cs-scroll-thumb);
+  border-radius: 3px;
+}
+
+/* Standard item (All Venues, Selected Films) */
+.cs-film-dd__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--cs-text-muted);
+  transition: background 0.1s;
+}
+
+.cs-film-dd__item:hover {
+  background: var(--cs-surface-alt);
+  color: var(--cs-text);
+}
+
+.cs-film-dd__item--active {
+  color: var(--cs-header-border);
+  font-weight: 600;
+}
+
+.cs-film-dd__item-icon {
+  flex-shrink: 0;
+}
+
+.cs-film-dd__item-label {
+  flex: 1;
+}
+
+/* Divider */
+.cs-film-dd__divider {
+  height: 1px;
+  background: var(--cs-border);
+  margin: 4px 12px;
+}
+
+/* Select All / Deselect All controls */
+.cs-film-dd__controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 14px;
+}
+
+.cs-film-dd__ctrl-btn {
+  background: none;
+  border: none;
+  color: var(--cs-header-border);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.cs-film-dd__ctrl-btn:hover {
+  text-decoration: underline;
+}
+
+.cs-film-dd__ctrl-count {
+  font-size: 10.5px;
+  color: var(--cs-text-muted);
+}
+
+/* Films list */
+.cs-film-dd__films {
+  padding: 2px 0;
+}
+
+/* Individual film row */
+.cs-film-dd__film {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.cs-film-dd__film:hover {
+  background: var(--cs-surface-alt);
+}
+
+.cs-film-dd__film--active {
+  background: rgba(56, 178, 172, 0.08);
+}
+
+.cs-film-dd__film--active .cs-film-dd__film-title {
+  color: var(--cs-header-border);
+  font-weight: 600;
+}
+
+/* Checkbox */
+.cs-film-dd__check {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid var(--cs-border);
+  background: var(--cs-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.cs-film-dd__check:hover {
+  border-color: var(--cs-header-border);
+}
+
+.cs-film-dd__check--on {
+  background: var(--cs-header-border);
+  border-color: var(--cs-header-border);
+  color: #fff;
+}
+
+/* Film title */
+.cs-film-dd__film-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--cs-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* Empty state */
+.cs-film-dd__empty {
+  padding: 16px 14px;
+  font-size: 12px;
+  color: var(--cs-text-muted);
+  text-align: center;
+}
+
+/* ═══════════════════════════════════════════════════════════ */
 /* ── Film Catalogue Restyle (v3.3) ──────────────────────── */
 /* ═══════════════════════════════════════════════════════════ */
 
