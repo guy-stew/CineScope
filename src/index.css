@@ -2631,6 +2631,11 @@ body {
   overflow-y: auto;
 }
 
+/* When table should fill remaining space and scroll internally */
+.cs-tp--scroll-table {
+  overflow: hidden;
+}
+
 /* ── Toolbar ── */
 .cs-tp__toolbar {
   display: flex;
@@ -2913,6 +2918,19 @@ body {
   border: 1px solid var(--cs-border);
   border-radius: 12px;
   overflow: hidden;
+}
+
+.cs-tp__table-wrap--fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cs-tp__table-wrap--fill .cs-tp__table-scroll {
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
 }
 
 .cs-tp__table-scroll {

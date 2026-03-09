@@ -18,7 +18,7 @@ import Icon from './Icon'
 
 export default function MatchReviewPanel({ inline = false }) {
   const {
-    matchDetails, baseVenues, selectedFilm, rerunMatching,
+    matchDetails, baseVenues, rerunMatching,
     showMatchReview, setShowMatchReview,
     cloudSaveOverride, cloudDeleteOverride,
   } = useApp()
@@ -72,16 +72,11 @@ export default function MatchReviewPanel({ inline = false }) {
   // ═══════════════════════════════════════════════════════════════
 
   const mainContent = (
-    <div className="cs-tp">
+    <div className="cs-tp cs-tp--scroll-table">
       {/* ── Toolbar ── */}
       <div className="cs-tp__toolbar">
         <h1 className="cs-tp__title">
           Venue Matching
-          {selectedFilm && (
-            <span className="cs-tp__count-badge">
-              {selectedFilm.filmInfo.title || selectedFilm.filmInfo.fileName}
-            </span>
-          )}
         </h1>
       </div>
 
@@ -146,8 +141,8 @@ export default function MatchReviewPanel({ inline = false }) {
           {currentTabData.emptyMsg}
         </div>
       ) : (
-        <div className="cs-tp__table-wrap">
-          <div className="cs-tp__table-scroll" style={{ maxHeight: 'none' }}>
+        <div className="cs-tp__table-wrap cs-tp__table-wrap--fill">
+          <div className="cs-tp__table-scroll">
             <MatchTable
               details={currentTabData.details}
               baseVenues={baseVenues}
@@ -213,12 +208,11 @@ function MatchTable({ details, baseVenues, showReassign = false, showAccept = fa
           <tr>
             <th style={{ width: '25%' }}>Comscore Theater</th>
             <th style={{ width: '12%' }}>City</th>
-            <th style={{ width: '12%' }}>Circuit</th>
-            <th style={{ width: '10%' }}>Revenue</th>
+            <th style={{ width: '14%' }}>Circuit</th>
             <th style={{ width: '3%' }}></th>
-            <th style={{ width: '25%' }}>Matched Venue</th>
+            <th style={{ width: '28%' }}>Matched Venue</th>
             <th style={{ width: '8%' }}>Score</th>
-            {showReassign && <th style={{ width: '5%' }}>Action</th>}
+            {showReassign && <th style={{ width: '10%' }}>Action</th>}
           </tr>
         </thead>
         <tbody>
@@ -335,7 +329,6 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
         </td>
         <td>{comscore.city}</td>
         <td style={{ fontSize: '0.75rem' }}>{comscore.circuit}</td>
-        <td>£{(comscore.revenue || 0).toLocaleString()}</td>
 
         {/* Arrow */}
         <td style={{ textAlign: 'center' }}>
@@ -416,7 +409,7 @@ function MatchRow({ detail, baseVenues, showReassign, showAccept, cloudSaveOverr
       {/* Reassignment dropdown row */}
       {showDropdown && (
         <tr>
-          <td colSpan={showReassign ? 8 : 7} style={{ background: 'var(--cs-surface-alt)' }}>
+          <td colSpan={showReassign ? 7 : 6} style={{ background: 'var(--cs-surface-alt)' }}>
             <div className="p-2">
               <div className="d-flex gap-2 align-items-center mb-2">
                 <Form.Control
