@@ -16,11 +16,36 @@
 // 12-function limit.
 //
 // v2.1.0: Added venue contact methods
-// (getContact, saveContact, deleteContact,
-// listChainContacts) for Feature 1.
+//
+// v3.4.0: Added admin impersonation support.
+//   setImpersonateUserId(id) makes all subsequent
+//   API calls operate as the target user.
+//   clearImpersonation() reverts to own account.
 // ─────────────────────────────────────────────
 
 const API_BASE = '/api';
+
+// ─────────────────────────────────────────────
+// Impersonation state (module-level singleton)
+// ─────────────────────────────────────────────
+// When set, every API request includes the
+// X-Impersonate-User-Id header. Only works if
+// the caller is an admin (server enforces this).
+// ─────────────────────────────────────────────
+let _impersonateUserId = null;
+
+export function setImpersonateUserId(userId) {
+  _impersonateUserId = userId || null;
+}
+
+export function clearImpersonation() {
+  _impersonateUserId = null;
+}
+
+export function getImpersonateUserId() {
+  return _impersonateUserId;
+}
+
 
 // ─────────────────────────────────────────────
 // Internal: authenticated fetch wrapper
@@ -32,13 +57,20 @@ async function apiFetch(path, options = {}, getToken) {
     throw new Error('Not authenticated');
   }
 
+  // Build headers — include impersonation header if active
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+    ...(options.headers || {}),
+  };
+
+  if (_impersonateUserId) {
+    headers['X-Impersonate-User-Id'] = _impersonateUserId;
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(options.headers || {}),
-    },
+    headers,
   });
 
   // Handle non-JSON responses (e.g. SSE streams)
@@ -59,6 +91,51 @@ async function apiFetch(path, options = {}, getToken) {
   // Parse JSON, handling empty body gracefully
   if (!text || !text.trim()) {
     return null;
+  }
+  return JSON.parse(text);
+}
+
+
+// ═══════════════════════════════════════════════
+// ADMIN
+// ═══════════════════════════════════════════════
+
+/**
+ * Get current user info (id, email, displayName, isAdmin).
+ * Always returns the REAL caller's info, even during impersonation.
+ * @param {Function} getToken
+ */
+export async function getMe(getToken) {
+  // Don't send impersonation header for this call —
+  // we always want the real user's info
+  const token = await getToken();
+  const res = await fetch(`${API_BASE}/admin?action=me`, {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error('Failed to fetch user info');
+  return JSON.parse(text);
+}
+
+/**
+ * List all users (admin only).
+ * @param {Function} getToken
+ */
+export async function getUsers(getToken) {
+  const token = await getToken();
+  const res = await fetch(`${API_BASE}/admin?action=users`, {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    const err = JSON.parse(text);
+    throw new Error(err.error || 'Failed to fetch users');
   }
   return JSON.parse(text);
 }
@@ -287,11 +364,6 @@ export async function listChainContacts(chain, getToken) {
 // ═══════════════════════════════════════════════
 // VENUES
 // ═══════════════════════════════════════════════
-// Added in v2.2.0 for Venue Management feature.
-// Append this entire section to the bottom of
-// src/utils/apiClient.js (before the final line
-// if there is one, or just at the end).
-// ═══════════════════════════════════════════════
 
 /**
  * Get all venues for the current user.
@@ -390,6 +462,7 @@ export async function importVenues(venues, getToken) {
     body: JSON.stringify({ venues }),
   }, getToken);
 }
+
 // ═══════════════════════════════════════════════
 // FILM CATALOGUE
 // ═══════════════════════════════════════════════
@@ -424,12 +497,16 @@ export async function getCatalogueEntry(id, getToken) {
 export async function createCatalogueEntry(entry, getToken) {
   // Use raw fetch to handle 409 specially
   const token = await getToken();
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+  if (_impersonateUserId) {
+    headers['X-Impersonate-User-Id'] = _impersonateUserId;
+  }
   const res = await fetch(`${API_BASE}/catalogue`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers,
     body: JSON.stringify(entry),
   });
   if (res.status === 409) {

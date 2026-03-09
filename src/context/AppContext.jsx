@@ -1,9 +1,16 @@
 /**
- * CineScope — App Context (v2.1 cloud + venue management)
+ * CineScope — App Context (v3.4 — Admin Impersonation)
  *
  * Central state management for the entire application.
  * All persistent data now loads from / saves to the cloud backend
  * (Neon Postgres via Vercel serverless API), authenticated via Clerk.
+ *
+ * v3.4 changes:
+ *   - Added admin impersonation: admins can "view as" another user
+ *   - currentUserInfo, isAdmin, impersonating state
+ *   - startImpersonation / stopImpersonation actions
+ *   - loadCloudData extracted as reusable function (called on mount + impersonation switch)
+ *   - apiClient impersonation header auto-set/cleared
  *
  * v2.1 changes:
  *   - Venues now loaded from /api/venues instead of static JSON
@@ -26,7 +33,13 @@ import { calculateGrades, DEFAULT_GRADE_SETTINGS } from '../utils/grades'
 import { parseComscoreFile } from '../utils/comscoreParser'
 import { matchVenues } from '../utils/venueMatcher'
 import * as api from '../utils/apiClient'
-import * as venueApi from '../utils/venueApi'
+
+// NOTE: Venue loading now uses api.getVenues from apiClient (not separate venueApi)
+// so the impersonation header is included on venue API calls too.
+// If you have a separate venueApi.js that other components import directly,
+// keep that file — but ensure it also respects the impersonation header
+// (or better, import from apiClient.js).
+let venueApi = api // Alias for backwards compat with refresh calls
 
 const AppContext = createContext(null)
 
@@ -176,6 +189,12 @@ export function AppProvider({ children }) {
   // ── Loading state ──
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
+
+  // ── Admin / Impersonation state ──
+  const [currentUserInfo, setCurrentUserInfo] = useState(null)  // { id, email, displayName, isAdmin }
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [impersonating, setImpersonating] = useState(null)      // { userId, email, displayName } or null
+  const [allUsers, setAllUsers] = useState([])                  // Only populated for admins
 
   // ── Base venue data (now loaded from cloud, refreshable) ──
   const [baseVenues, setBaseVenues] = useState([])
@@ -390,96 +409,130 @@ export function AppProvider({ children }) {
 
 
   // ═══════════════════════════════════════════════════════════════
-  // CLOUD DATA LOADING (on mount)
+  // CLOUD DATA LOADING (reusable — called on mount + impersonation switch)
+  // ═══════════════════════════════════════════════════════════════
+
+  const loadCloudData = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      setLoadError(null)
+
+      // 1. Load settings
+      const rawSettings = await api.getSettings(getTokenRef.current)
+      const settings = parseCloudSettings(rawSettings)
+
+      setSelectedFilmIdLocal(settings.selectedFilmId)
+      setRevenueFormatLocal(settings.revenueFormat)
+      setHasApiKey(settings.hasApiKey)
+      setApiKeyDisplay(settings.apiKeyValue || '')
+      setGradeSettingsLocal(settings.gradeSettings)
+      setPopulationModeLocal(settings.populationMode)
+      setHeatmapIntensityLocal(settings.heatmapIntensity)
+
+      // 2. Load venues from cloud
+      const venueData = await venueApi.getVenues(getTokenRef.current)
+      const cloudVenues = (venueData.venues || venueData || []).map(normaliseCloudVenue)
+      setBaseVenues(cloudVenues)
+
+      // 3. Load film list (lightweight — no revenue data)
+      const filmList = await api.getFilms(getTokenRef.current)
+
+      // 4. Load full revenue data for each film (parallel)
+      const fullFilms = await Promise.all(
+        filmList.map(async (f) => {
+          const { film, revenues } = await api.getFilm(f.id, getTokenRef.current)
+          return cloudFilmToApp(film, revenues)
+        })
+      )
+
+      setImportedFilms(fullFilms)
+
+      // 4b. Load film catalogue (master list)
+      const catData = await api.getCatalogue(getTokenRef.current)
+      const catList = catData.catalogue || []
+      setCatalogue(catList)
+
+      // 4c. Initialise analysis set if empty (default: all films with Comscore data)
+      const storedSet = localStorage.getItem('cinescope_analysis_set')
+      if (!storedSet || JSON.parse(storedSet).length === 0) {
+        const defaultSet = catList.filter(f => parseInt(f.import_count) > 0).map(f => f.id)
+        setAnalysisSet(defaultSet)
+        localStorage.setItem('cinescope_analysis_set', JSON.stringify(defaultSet))
+      } else {
+        // Clean stale IDs from localStorage
+        const validIds = new Set(catList.map(f => f.id))
+        const cleaned = JSON.parse(storedSet).filter(id => validIds.has(id))
+        setAnalysisSet(cleaned)
+        localStorage.setItem('cinescope_analysis_set', JSON.stringify(cleaned))
+      }
+
+      // 5. Validate selected film still exists
+      if (settings.selectedFilmId && settings.selectedFilmId !== 'all-films') {
+        const exists = fullFilms.some(f => f.id === settings.selectedFilmId)
+        if (!exists) {
+          setSelectedFilmIdLocal(null)
+        }
+      }
+
+      // 6. Load match overrides
+      const { lookup } = await api.getOverrides(getTokenRef.current)
+      setOverrides(lookup)
+
+      // Reset filters on data load (especially important when switching users)
+      setGradeFilter([])
+      setChainFilter('')
+      setCategoryFilter('')
+      setSelectedVenue(null)
+
+      setIsLoading(false)
+    } catch (err) {
+      console.error('CineScope: Failed to load cloud data', err)
+      setLoadError(err.message || 'Failed to load data from server')
+      setIsLoading(false)
+    }
+  }, [])
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // INITIAL LOAD (on mount + when Clerk auth is ready)
   // ═══════════════════════════════════════════════════════════════
 
   useEffect(() => {
-    if (!authLoaded) return // Wait for Clerk to be ready
+    if (!authLoaded) return
 
     let cancelled = false
 
-    async function loadCloudData() {
+    async function initialLoad() {
+      // First, fetch the real user's info (admin status etc.)
       try {
-        // 1. Load settings
-        const rawSettings = await api.getSettings(getTokenRef.current)
+        const { user } = await api.getMe(getTokenRef.current)
         if (cancelled) return
-        const settings = parseCloudSettings(rawSettings)
+        setCurrentUserInfo(user)
+        setIsAdmin(user.isAdmin === true)
 
-        setSelectedFilmIdLocal(settings.selectedFilmId)
-        setRevenueFormatLocal(settings.revenueFormat)
-        setHasApiKey(settings.hasApiKey)
-        setApiKeyDisplay(settings.apiKeyValue || '')
-        setGradeSettingsLocal(settings.gradeSettings)
-        setPopulationModeLocal(settings.populationMode)
-        setHeatmapIntensityLocal(settings.heatmapIntensity)
-
-        // 2. Load venues from cloud (replaces static JSON)
-        const venueData = await venueApi.getVenues(getTokenRef.current)
-        if (cancelled) return
-        const cloudVenues = (venueData.venues || venueData || []).map(normaliseCloudVenue)
-        setBaseVenues(cloudVenues)
-
-        // 3. Load film list (lightweight — no revenue data)
-        const filmList = await api.getFilms(getTokenRef.current)
-        if (cancelled) return
-
-        // 4. Load full revenue data for each film (parallel)
-        const fullFilms = await Promise.all(
-          filmList.map(async (f) => {
-            const { film, revenues } = await api.getFilm(f.id, getTokenRef.current)
-            return cloudFilmToApp(film, revenues)
-          })
-        )
-        if (cancelled) return
-
-        setImportedFilms(fullFilms)
-
-        // 4b. Load film catalogue (master list)
-        const catData = await api.getCatalogue(getTokenRef.current)
-        if (cancelled) return
-        const catList = catData.catalogue || []
-        setCatalogue(catList)
-
-        // 4c. Initialise analysis set if empty (default: all films with Comscore data)
-        const storedSet = localStorage.getItem('cinescope_analysis_set')
-        if (!storedSet || JSON.parse(storedSet).length === 0) {
-          const defaultSet = catList.filter(f => parseInt(f.import_count) > 0).map(f => f.id)
-          setAnalysisSet(defaultSet)
-          localStorage.setItem('cinescope_analysis_set', JSON.stringify(defaultSet))
-        } else {
-          // Clean stale IDs from localStorage
-          const validIds = new Set(catList.map(f => f.id))
-          const cleaned = JSON.parse(storedSet).filter(id => validIds.has(id))
-          setAnalysisSet(cleaned)
-          localStorage.setItem('cinescope_analysis_set', JSON.stringify(cleaned))
-        }
-
-        // 5. Validate selected film still exists
-        if (settings.selectedFilmId && settings.selectedFilmId !== 'all-films') {
-          const exists = fullFilms.some(f => f.id === settings.selectedFilmId)
-          if (!exists) {
-            setSelectedFilmIdLocal(null)
+        // If admin, pre-fetch user list for the Switch User menu
+        if (user.isAdmin) {
+          try {
+            const { users } = await api.getUsers(getTokenRef.current)
+            if (!cancelled) setAllUsers(users)
+          } catch (err) {
+            console.warn('CineScope: Could not fetch user list', err)
           }
         }
-
-        // 6. Load match overrides
-        const { lookup } = await api.getOverrides(getTokenRef.current)
-        if (cancelled) return
-        setOverrides(lookup)
-
-        setIsLoading(false)
       } catch (err) {
-        console.error('CineScope: Failed to load cloud data', err)
-        if (!cancelled) {
-          setLoadError(err.message || 'Failed to load data from server')
-          setIsLoading(false)
-        }
+        console.warn('CineScope: Could not fetch user info', err)
+        // Not fatal — continue loading data
+      }
+
+      // Then load the actual app data
+      if (!cancelled) {
+        await loadCloudData()
       }
     }
 
-    loadCloudData()
+    initialLoad()
     return () => { cancelled = true }
-  }, [authLoaded])
+  }, [authLoaded, loadCloudData])
 
 
   // ── Refresh venues (called by VenueManager after add/edit/import) ──
@@ -492,6 +545,38 @@ export function AppProvider({ children }) {
       console.error('CineScope: Failed to refresh venues', err)
     }
   }, [])
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // ADMIN IMPERSONATION ACTIONS
+  // ═══════════════════════════════════════════════════════════════
+
+  const startImpersonation = useCallback(async (targetUser) => {
+    // targetUser: { id, email, displayName }
+    // Set the impersonation header on the API client module
+    api.setImpersonateUserId(targetUser.id)
+
+    // Update local impersonation state
+    setImpersonating({
+      userId: targetUser.id,
+      email: targetUser.email,
+      displayName: targetUser.displayName,
+    })
+
+    // Reload all data — now scoped to the target user
+    await loadCloudData()
+  }, [loadCloudData])
+
+  const stopImpersonation = useCallback(async () => {
+    // Clear the impersonation header
+    api.clearImpersonation()
+
+    // Clear impersonation state
+    setImpersonating(null)
+
+    // Reload own data
+    await loadCloudData()
+  }, [loadCloudData])
 
 
   // ═══════════════════════════════════════════════════════════════
@@ -627,8 +712,6 @@ export function AppProvider({ children }) {
   const matchDetails = matchResult.details
 
   // ── Corrected film stats from post-match data ──
-  // selectedFilm.stats uses raw Comscore name combos (inflated count).
-  // This computes the real numbers from deduplicated matched venues.
   const filmDisplayStats = useMemo(() => {
     if (!selectedFilm) return null
 
@@ -646,8 +729,6 @@ export function AppProvider({ children }) {
   }, [selectedFilm, venues])
 
   // Multi-film venue lookup (for enhanced popup: per-film grades + chronological order)
-  // Deferred: this is expensive (runs matchVenues for every film) but only needed
-  // when a venue popup opens, so we compute it after the main render completes.
   const [venueFilmData, setVenueFilmData] = useState(new Map())
 
   useEffect(() => {
@@ -786,7 +867,7 @@ export function AppProvider({ children }) {
     }
   }, [])
 
-  // Confirm film name and finalize import → save to cloud
+  // Confirm film name and finalize import -> save to cloud
   const confirmImport = useCallback(async (confirmedTitle, catalogueId) => {
     if (!pendingImport) return
 
@@ -884,9 +965,6 @@ export function AppProvider({ children }) {
   }, [])
 
   // ── Unified delete: removes catalogue entry + linked Comscore imports + local state ──
-  // Called from FilmDetailView Financials tab. The backend now handles deleting
-  // linked films rows (which cascade-deletes film_revenues) before removing the
-  // catalogue entry itself.
   const deleteFilmUnified = useCallback(async (catalogueId) => {
     try {
       // 1. Call API — deletes imports + catalogue entry server-side
@@ -907,8 +985,6 @@ export function AppProvider({ children }) {
 
       // 5. If the deleted film was selected, clear selection
       setSelectedFilmIdLocal(prev => {
-        // Check if any importedFilm with this catalogueId was the selected one
-        // (selectedFilmId is the Postgres integer film ID, not the catalogue UUID)
         return prev // Will be handled by the selectedFilm useMemo returning null
       })
     } catch (err) {
@@ -951,17 +1027,25 @@ export function AppProvider({ children }) {
     isLoading,
     loadError,
 
+    // Admin / Impersonation
+    currentUserInfo,
+    isAdmin,
+    impersonating,
+    allUsers,
+    startImpersonation,
+    stopImpersonation,
+
     // Venue data
     venues,
     baseVenues,
     filteredVenues,
-    refreshVenues,  // ← NEW: for VenueManager to trigger map updates
+    refreshVenues,  // for VenueManager to trigger map updates
 
     // Film management
     importedFilms,
     selectedFilm,
     selectedFilmId,
-    filmDisplayStats, // ← corrected venue/revenue counts from post-match data
+    filmDisplayStats, // corrected venue/revenue counts from post-match data
     setSelectedFilmId,
     importComscoreFile,
     clearFilmSelection,
@@ -1041,8 +1125,12 @@ export function AppProvider({ children }) {
           <div className="spinner-border text-light mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
             <span className="visually-hidden">Loading...</span>
           </div>
-          <div style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 500 }}>Loading CineScope...</div>
-          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginTop: 4 }}>Fetching your data from the cloud</div>
+          <div style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 500 }}>
+            {impersonating ? `Loading ${impersonating.displayName || impersonating.email}'s data...` : 'Loading CineScope...'}
+          </div>
+          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginTop: 4 }}>
+            {impersonating ? 'Switching user account' : 'Fetching your data from the cloud'}
+          </div>
         </div>
       </AppContext.Provider>
     )
@@ -1053,7 +1141,7 @@ export function AppProvider({ children }) {
     return (
       <AppContext.Provider value={value}>
         <div className="d-flex flex-column align-items-center justify-content-center vh-100" style={{ background: '#1a365d' }}>
-          <div style={{ color: '#e74c3c', fontSize: '2rem', marginBottom: 16 }}>⚠</div>
+          <div style={{ color: '#e74c3c', fontSize: '2rem', marginBottom: 16 }}>Warning</div>
           <div style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 500 }}>Failed to load CineScope</div>
           <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', marginTop: 8, maxWidth: 400, textAlign: 'center' }}>
             {loadError}
