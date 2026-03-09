@@ -246,7 +246,7 @@ function TrendPanelInner({ show, onHide, inline = false }) {
   }
 
   const mainContent = (
-    <div className="cs-tp">
+    <div className="cs-tp cs-tp--scroll-table">
       {/* ── Toolbar ── */}
       <div className="cs-tp__toolbar">
         <h1 className="cs-tp__title">
@@ -307,7 +307,7 @@ function TrendPanelInner({ show, onHide, inline = false }) {
 
       {/* ── TAB: Venues ── */}
       {activeTab === 'venues' && (
-        <>
+        <div className="cs-tp__tab-fill">
           <div className="cs-tp__filters">
             <div className="cs-tp__status-pills">
               {['all', 'improving', 'stable', 'declining'].map(f => (
@@ -340,7 +340,7 @@ function TrendPanelInner({ show, onHide, inline = false }) {
             <span className="cs-tp__venue-count">{filteredVenues.length} venues</span>
           </div>
 
-          <div className="cs-tp__table-wrap">
+          <div className="cs-tp__table-wrap cs-tp__table-wrap--fill">
             <div className="cs-tp__table-scroll">
               <table className="cs-tp__table">
                 <thead>
@@ -400,17 +400,16 @@ function TrendPanelInner({ show, onHide, inline = false }) {
               </table>
             </div>
           </div>
-        </>
+        </div>
       )}
-
       {/* ── TAB: Chains ── */}
       {activeTab === 'chains' && (
-        <>
+        <div className="cs-tp__tab-fill">
           {chainTrends.length === 0 ? (
             <div className="cs-tp__empty">Not enough chain data across films</div>
           ) : (
             <>
-              <div className="cs-tp__chart-wrap" style={{ height: 280 }}>
+              <div className="cs-tp__chart-wrap" style={{ height: 280, flexShrink: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chainTrends.slice(0, 15)} layout="vertical" margin={{ left: 120, right: 20, top: 5, bottom: 5 }}>
                     <XAxis type="number" tickFormatter={v => '\u00A3' + Number(v || 0).toLocaleString()} style={{ fontSize: '0.72rem' }} />
@@ -425,7 +424,7 @@ function TrendPanelInner({ show, onHide, inline = false }) {
                 </ResponsiveContainer>
               </div>
 
-              <div className="cs-tp__table-wrap">
+              <div className="cs-tp__table-wrap cs-tp__table-wrap--fill">
                 <div className="cs-tp__table-scroll">
                   <table className="cs-tp__table">
                     <thead>
@@ -475,17 +474,17 @@ function TrendPanelInner({ show, onHide, inline = false }) {
               </div>
             </>
           )}
-        </>
+        </div>
       )}
 
       {/* ── TAB: Regions ── */}
       {activeTab === 'regions' && (
-        <>
+        <div className="cs-tp__tab-fill">
           {regionalTrends.length === 0 ? (
             <div className="cs-tp__empty">Not enough regional data across films</div>
           ) : (
             <>
-              <div className="cs-tp__chart-wrap" style={{ height: 250 }}>
+              <div className="cs-tp__chart-wrap" style={{ height: 250, flexShrink: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={regionalTrends} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
                     <XAxis dataKey="region" style={{ fontSize: '0.68rem' }} angle={-20} textAnchor="end" height={60} />
@@ -500,7 +499,7 @@ function TrendPanelInner({ show, onHide, inline = false }) {
                 </ResponsiveContainer>
               </div>
 
-              <div className="cs-tp__table-wrap">
+              <div className="cs-tp__table-wrap cs-tp__table-wrap--fill">
                 <div className="cs-tp__table-scroll">
                   <table className="cs-tp__table">
                     <thead>
@@ -550,7 +549,7 @@ function TrendPanelInner({ show, onHide, inline = false }) {
               </div>
             </>
           )}
-        </>
+        </div>
       )}
 
       {/* ── TAB: AI Insights ── */}
@@ -627,7 +626,7 @@ function TrendPanelInner({ show, onHide, inline = false }) {
   if (inline) {
     return (
       <div className="d-flex flex-column h-100" style={{ background: 'var(--cs-body)', color: 'var(--cs-text)' }}>
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           {mainContent}
         </div>
         {footerContent}

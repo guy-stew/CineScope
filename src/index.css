@@ -2636,6 +2636,14 @@ body {
   overflow: hidden;
 }
 
+/* Flex container for tab content that fills remaining space */
+.cs-tp__tab-fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* ── Toolbar ── */
 .cs-tp__toolbar {
   display: flex;
@@ -2812,6 +2820,7 @@ body {
   gap: 8px;
   margin-bottom: 12px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .cs-tp__status-pills {
