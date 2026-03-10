@@ -1,23 +1,27 @@
 /**
- * CineScope — Reports View (v3.5 — Stage 2)
+ * CineScope — Reports View (v3.5 — Stage 3: Template Editor)
  *
  * Dedicated view for AI-powered report generation.
- * Card picker selects report type, controls configure the report,
+ * Card picker selects report type, template editor customises the prompt,
  * output panel streams AI text as it generates.
  *
- * Stage 2 wires up: AI Insights (multi-film) + Chain Performance.
- * Marketing Targets, Venue Recommendations, CSV Export come in later stages.
+ * Wired: AI Insights (multi-film) + Chain Performance.
+ * Template editor loads/saves via settings API with per-type keys.
  */
 
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '@clerk/clerk-react'
 import { computeTrends, buildTrendSummaryForAI } from '../utils/trendAnalysis'
-import { generateAIReport, generateChainAIReport, buildFilmProfileForAI } from '../utils/aiReport'
-import { REPORT_TYPES } from '../utils/reportTemplates'
+import { buildChainDataForAI, buildFilmProfileForAI, generateReportFromPrompt } from '../utils/aiReport'
+import {
+  REPORT_TYPES, PLACEHOLDER_DEFS, TEMPLATE_SETTINGS_KEYS,
+  DEFAULT_TEMPLATES, SYSTEM_PROMPTS, substituteTemplate,
+} from '../utils/reportTemplates'
 import Icon from './Icon'
 import FilmSelectorDropdown from './FilmSelectorDropdown'
+import ReportTemplateEditor from './ReportTemplateEditor'
 
 
 export default function ReportsView({ inline = false }) {
@@ -29,7 +33,7 @@ export default function ReportsView({ inline = false }) {
   const { theme } = useTheme()
   const { getToken } = useAuth()
 
-  // ── State ──
+  // ── Report state ──
   const [selectedType, setSelectedType] = useState('insights')
   const [reportText, setReportText] = useState('')
   const [loading, setLoading] = useState(false)
@@ -37,9 +41,57 @@ export default function ReportsView({ inline = false }) {
   const [selectedChain, setSelectedChain] = useState('')
   const [copied, setCopied] = useState(false)
 
+  // ── Template state ──
+  const [showEditor, setShowEditor] = useState(false)
+  const [templates, setTemplates] = useState({})       // { insights: '...', chain: '...' }
+  const [savedTemplates, setSavedTemplates] = useState({}) // cloud-saved versions
+  const [templateSaving, setTemplateSaving] = useState(false)
+  const [templateLoaded, setTemplateLoaded] = useState(false)
+
+  // Current template for selected type
+  const currentTemplate = templates[selectedType] || DEFAULT_TEMPLATES[selectedType] || ''
+  const savedTemplate = savedTemplates[selectedType] || ''
+  const isTemplateModified = currentTemplate !== (savedTemplate || DEFAULT_TEMPLATES[selectedType] || '')
+
+  // ── Load saved templates from settings API on mount ──
+  useEffect(() => {
+    if (templateLoaded) return
+    let cancelled = false
+
+    async function loadTemplates() {
+      try {
+        const token = await getToken()
+        const resp = await fetch('/api/settings', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!resp.ok) return
+        const settings = await resp.json()
+
+        if (cancelled) return
+
+        const loaded = {}
+        const saved = {}
+        for (const [type, key] of Object.entries(TEMPLATE_SETTINGS_KEYS)) {
+          if (settings[key]) {
+            loaded[type] = settings[key]
+            saved[type] = settings[key]
+          }
+        }
+        setTemplates(loaded)
+        setSavedTemplates(saved)
+      } catch (err) {
+        console.warn('CineScope: Could not load report templates', err)
+      } finally {
+        if (!cancelled) setTemplateLoaded(true)
+      }
+    }
+
+    loadTemplates()
+    return () => { cancelled = true }
+  }, [getToken, templateLoaded])
+
   // ── Derived data ──
 
-  // Chains with at least one screened venue for the current film
   const filmChains = useMemo(() => {
     if (!selectedFilm || !venues.length) return []
     const chainSet = new Set()
@@ -49,7 +101,6 @@ export default function ReportsView({ inline = false }) {
     return [...chainSet].sort()
   }, [selectedFilm, venues])
 
-  // Can generate for each type?
   const canGenerate = useMemo(() => ({
     insights: importedFilms.length >= 2 && hasApiKey,
     chain: !!selectedFilm && !!selectedChain && hasApiKey,
@@ -58,8 +109,8 @@ export default function ReportsView({ inline = false }) {
     csv: false,
   }), [importedFilms.length, selectedFilm, selectedChain, hasApiKey])
 
-  // Current type config
   const currentType = REPORT_TYPES.find(t => t.id === selectedType) || REPORT_TYPES[0]
+
 
   // ── Handlers ──
 
@@ -69,7 +120,42 @@ export default function ReportsView({ inline = false }) {
     setError(null)
     setSelectedChain('')
     setCopied(false)
+    // Don't reset showEditor — let it stay open if user was editing
   }, [])
+
+  const handleTemplateChange = useCallback((newText) => {
+    setTemplates(prev => ({ ...prev, [selectedType]: newText }))
+  }, [selectedType])
+
+  const handleTemplateSave = useCallback(async () => {
+    const key = TEMPLATE_SETTINGS_KEYS[selectedType]
+    if (!key) return
+
+    setTemplateSaving(true)
+    try {
+      const token = await getToken()
+      const resp = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: currentTemplate }),
+      })
+      if (resp.ok) {
+        setSavedTemplates(prev => ({ ...prev, [selectedType]: currentTemplate }))
+      }
+    } catch (err) {
+      console.error('CineScope: Failed to save template', err)
+    } finally {
+      setTemplateSaving(false)
+    }
+  }, [selectedType, currentTemplate, getToken])
+
+  const handleTemplateReset = useCallback(() => {
+    const defaultTpl = DEFAULT_TEMPLATES[selectedType] || ''
+    setTemplates(prev => ({ ...prev, [selectedType]: defaultTpl }))
+  }, [selectedType])
+
+
+  // ── Generate Report ──
 
   const handleGenerate = useCallback(async () => {
     if (loading) return
@@ -79,14 +165,18 @@ export default function ReportsView({ inline = false }) {
     setCopied(false)
 
     try {
+      // Get the active template (user-customised or default)
+      const tpl = currentTemplate || DEFAULT_TEMPLATES[selectedType] || ''
+
       if (selectedType === 'insights') {
         // ── Multi-film trend analysis ──
         const trendData = computeTrends(importedFilms, baseVenues, gradeSettings)
         if (trendData?.error) throw new Error(trendData.error)
 
-        const summary = buildTrendSummaryForAI(trendData)
+        const trendSummary = buildTrendSummaryForAI(trendData)
+        const summary = trendData.summary || {}
 
-        // Enrich with film profiles from catalogue
+        // Build film profiles
         let filmProfile = ''
         try {
           const catEntries = []
@@ -101,30 +191,51 @@ export default function ReportsView({ inline = false }) {
           console.warn('CineScope: Could not load film profiles for AI', profileErr)
         }
 
-        await generateAIReport(getToken, summary, (chunk) => {
-          setReportText(prev => prev + chunk)
-        }, filmProfile || undefined)
+        // Build placeholder values
+        const filmTitles = trendData.filmTitles || importedFilms.map(f => f.filmInfo?.title || 'Untitled')
+        const values = {
+          film_titles: filmTitles.join(', '),
+          film_count: String(filmTitles.length),
+          total_venues: String(summary.trackedVenues || 0),
+          improving_count: String(summary.improving || 0),
+          declining_count: String(summary.declining || 0),
+          trend_data: trendSummary,
+          film_profiles: filmProfile || '(No film profile data available)',
+        }
+
+        const userMessage = substituteTemplate(tpl, values)
+        await generateReportFromPrompt(
+          getToken, SYSTEM_PROMPTS.insights, userMessage,
+          (chunk) => { setReportText(prev => prev + chunk) }
+        )
 
       } else if (selectedType === 'chain') {
         // ── Chain performance report ──
         const chainVenues = venues.filter(v => v.chain === selectedChain)
+        const chainData = buildChainDataForAI(selectedChain, chainVenues, venues, selectedFilm)
 
-        let catalogueEntry = null
+        let filmProfile = ''
         try {
           const catId = selectedFilm?.catalogueId
-          if (catId) catalogueEntry = await apiClient.getCatalogueEntry(catId)
+          if (catId) {
+            const entry = await apiClient.getCatalogueEntry(catId)
+            if (entry) filmProfile = buildFilmProfileForAI([entry])
+          }
         } catch (profileErr) {
           console.warn('CineScope: Could not load film profile for chain report', profileErr)
         }
 
-        await generateChainAIReport(
-          getToken,
-          selectedChain,
-          chainVenues,
-          venues,
-          selectedFilm,
-          (chunk) => { setReportText(prev => prev + chunk) },
-          catalogueEntry
+        const values = {
+          chain_name: selectedChain,
+          film_title: selectedFilm?.filmInfo?.title || 'Unknown Film',
+          chain_data: chainData,
+          film_profile: filmProfile || '(No film profile data available)',
+        }
+
+        const userMessage = substituteTemplate(tpl, values)
+        await generateReportFromPrompt(
+          getToken, SYSTEM_PROMPTS.chain, userMessage,
+          (chunk) => { setReportText(prev => prev + chunk) }
         )
       }
     } catch (err) {
@@ -133,7 +244,7 @@ export default function ReportsView({ inline = false }) {
     } finally {
       setLoading(false)
     }
-  }, [selectedType, loading, importedFilms, baseVenues, gradeSettings,
+  }, [selectedType, loading, currentTemplate, importedFilms, baseVenues, gradeSettings,
       selectedFilm, selectedChain, venues, getToken, apiClient])
 
   const handleCopy = useCallback(() => {
@@ -142,7 +253,9 @@ export default function ReportsView({ inline = false }) {
     setTimeout(() => setCopied(false), 2000)
   }, [reportText])
 
-  // ── Requirement message for disabled states ──
+
+  // ── Status message for disabled states ──
+
   function getStatusMessage() {
     if (!hasApiKey && (selectedType === 'insights' || selectedType === 'chain')) {
       return { icon: 'key', text: 'Add your Anthropic API key in Settings to generate AI reports.' }
@@ -164,6 +277,8 @@ export default function ReportsView({ inline = false }) {
 
   const statusMsg = getStatusMessage()
   const isComingSoon = currentType.stage === 'coming'
+  const showTemplateEditor = showEditor && !isComingSoon &&
+    (selectedType === 'insights' || selectedType === 'chain')
 
 
   // ═══════════════════════════════════════════════════════════════
@@ -171,7 +286,10 @@ export default function ReportsView({ inline = false }) {
   // ═══════════════════════════════════════════════════════════════
 
   return (
-    <div className="cs-reports" style={{ background: theme.body, color: theme.text, height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="cs-reports" style={{
+      background: theme.body, color: theme.text,
+      height: '100%', display: 'flex', flexDirection: 'column',
+    }}>
 
       {/* ── Toolbar ── */}
       <div style={{
@@ -179,7 +297,10 @@ export default function ReportsView({ inline = false }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         flexShrink: 0,
       }}>
-        <h1 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <h1 style={{
+          fontSize: '1.15rem', fontWeight: 700, margin: 0,
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
           <Icon name="assessment" size={22} style={{ color: theme.headerBorder }} />
           Reports
         </h1>
@@ -201,16 +322,13 @@ export default function ReportsView({ inline = false }) {
               key={rt.id}
               onClick={() => !isLocked && handleTypeChange(rt.id)}
               style={{
-                flex: '0 0 auto',
-                minWidth: 160,
-                padding: '14px 16px',
-                borderRadius: 10,
+                flex: '0 0 auto', minWidth: 160,
+                padding: '14px 16px', borderRadius: 10,
                 border: `1.5px solid ${isActive ? theme.headerBorder : theme.border}`,
                 background: isActive ? `${theme.headerBorder}12` : theme.surface,
                 cursor: isLocked ? 'not-allowed' : 'pointer',
                 opacity: isLocked ? 0.5 : 1,
-                textAlign: 'left',
-                transition: 'all 0.15s ease',
+                textAlign: 'left', transition: 'all 0.15s ease',
                 position: 'relative',
               }}
             >
@@ -229,19 +347,17 @@ export default function ReportsView({ inline = false }) {
                   fontSize: '0.6rem', fontWeight: 700,
                   background: `${theme.headerBorder}22`, color: theme.headerBorder,
                   padding: '2px 6px', borderRadius: 4,
-                }}>
-                  SOON
-                </span>
+                }}>SOON</span>
               )}
             </button>
           )
         })}
       </div>
 
-      {/* ── Controls Section ── */}
+      {/* ── Controls Bar ── */}
       {!isComingSoon && (
         <div style={{
-          padding: '0 24px 16px',
+          padding: '0 24px 12px',
           display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flexShrink: 0,
         }}>
           {/* Chain selector (chain report only) */}
@@ -263,20 +379,14 @@ export default function ReportsView({ inline = false }) {
                   value={selectedChain}
                   onChange={e => { setSelectedChain(e.target.value); setReportText(''); setError(null) }}
                   style={{
-                    padding: '6px 10px',
-                    borderRadius: 6,
+                    padding: '6px 10px', borderRadius: 6,
                     border: `1px solid ${theme.border}`,
-                    background: theme.surface,
-                    color: theme.text,
-                    fontSize: '0.82rem',
-                    minWidth: 180,
-                    cursor: 'pointer',
+                    background: theme.surface, color: theme.text,
+                    fontSize: '0.82rem', minWidth: 180, cursor: 'pointer',
                   }}
                 >
                   <option value="">Select chain...</option>
-                  {filmChains.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
+                  {filmChains.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               )}
             </>
@@ -287,66 +397,70 @@ export default function ReportsView({ inline = false }) {
             onClick={handleGenerate}
             disabled={loading || !canGenerate[selectedType]}
             style={{
-              padding: '7px 18px',
-              borderRadius: 7,
-              border: 'none',
+              padding: '7px 18px', borderRadius: 7, border: 'none',
               background: (loading || !canGenerate[selectedType]) ? theme.border : theme.headerBorder,
-              color: '#fff',
-              fontSize: '0.82rem',
-              fontWeight: 600,
+              color: '#fff', fontSize: '0.82rem', fontWeight: 600,
               cursor: (loading || !canGenerate[selectedType]) ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', gap: 6,
               opacity: (loading || !canGenerate[selectedType]) ? 0.6 : 1,
               transition: 'all 0.15s ease',
             }}
           >
-            {loading ? (
-              <><Icon name="progress_activity" size={15} /> Generating...</>
-            ) : (
-              <><Icon name="auto_awesome" size={15} /> Generate Report</>
-            )}
+            {loading
+              ? <><Icon name="progress_activity" size={15} /> Generating...</>
+              : <><Icon name="auto_awesome" size={15} /> Generate Report</>
+            }
           </button>
 
-          {/* Copy button (when report is ready) */}
+          {/* Copy / Regenerate (when report ready) */}
           {reportText && !loading && (
-            <button
-              onClick={handleCopy}
-              style={{
-                padding: '7px 14px',
-                borderRadius: 7,
-                border: `1px solid ${theme.border}`,
-                background: theme.surface,
-                color: theme.textMuted,
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 5,
-              }}
-            >
-              <Icon name={copied ? 'check' : 'content_copy'} size={14} />
-              {copied ? 'Copied!' : 'Copy'}
-            </button>
+            <>
+              <button onClick={handleCopy} style={secondaryBtnStyle(theme)}>
+                <Icon name={copied ? 'check' : 'content_copy'} size={14} />
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+              <button onClick={handleGenerate} style={secondaryBtnStyle(theme)}>
+                <Icon name="refresh" size={14} /> Regenerate
+              </button>
+            </>
           )}
 
-          {/* Regenerate button */}
-          {reportText && !loading && (
+          {/* Spacer */}
+          <div style={{ flex: 1 }} />
+
+          {/* Template editor toggle */}
+          {(selectedType === 'insights' || selectedType === 'chain') && (
             <button
-              onClick={handleGenerate}
+              onClick={() => setShowEditor(prev => !prev)}
               style={{
-                padding: '7px 14px',
-                borderRadius: 7,
-                border: `1px solid ${theme.border}`,
-                background: theme.surface,
-                color: theme.textMuted,
-                fontSize: '0.8rem',
-                cursor: 'pointer',
+                padding: '6px 12px', borderRadius: 6,
+                border: `1px solid ${showEditor ? theme.headerBorder : theme.border}`,
+                background: showEditor ? `${theme.headerBorder}14` : 'transparent',
+                color: showEditor ? theme.headerBorder : theme.textMuted,
+                fontSize: '0.78rem', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: 5,
               }}
             >
-              <Icon name="refresh" size={14} />
-              Regenerate
+              <Icon name="edit_note" size={15} />
+              {showEditor ? 'Hide Template' : 'Edit Template'}
             </button>
           )}
         </div>
+      )}
+
+      {/* ── Template Editor (collapsible) ── */}
+      {showTemplateEditor && (
+        <ReportTemplateEditor
+          reportType={selectedType}
+          template={currentTemplate}
+          onChange={handleTemplateChange}
+          onSave={handleTemplateSave}
+          onReset={handleTemplateReset}
+          saving={templateSaving}
+          isModified={isTemplateModified}
+          placeholders={PLACEHOLDER_DEFS[selectedType] || []}
+          theme={theme}
+        />
       )}
 
       {/* ── Output Panel ── */}
@@ -447,15 +561,11 @@ export default function ReportsView({ inline = false }) {
         {/* Streaming / completed report */}
         {!isComingSoon && (reportText || loading) && (
           <div style={{
-            padding: 20,
-            borderRadius: 10,
+            padding: 20, borderRadius: 10,
             background: theme.surface,
             border: `1px solid ${theme.border}`,
-            fontSize: '0.86rem',
-            lineHeight: 1.7,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            position: 'relative',
+            fontSize: '0.86rem', lineHeight: 1.7,
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
           }}>
             {/* Report header badge */}
             <div style={{
@@ -467,22 +577,13 @@ export default function ReportsView({ inline = false }) {
               <Icon name={currentType.icon} size={16} style={{ color: theme.headerBorder }} />
               <span style={{ fontWeight: 600 }}>{currentType.label}</span>
               {selectedType === 'chain' && selectedChain && (
-                <>
-                  <span style={{ opacity: 0.4 }}>|</span>
-                  <span>{selectedChain}</span>
-                </>
+                <><span style={{ opacity: 0.4 }}>|</span><span>{selectedChain}</span></>
               )}
               {selectedType === 'chain' && selectedFilm && (
-                <>
-                  <span style={{ opacity: 0.4 }}>|</span>
-                  <span>{selectedFilm?.filmInfo?.title}</span>
-                </>
+                <><span style={{ opacity: 0.4 }}>|</span><span>{selectedFilm?.filmInfo?.title}</span></>
               )}
               {selectedType === 'insights' && (
-                <>
-                  <span style={{ opacity: 0.4 }}>|</span>
-                  <span>{importedFilms.length} films</span>
-                </>
+                <><span style={{ opacity: 0.4 }}>|</span><span>{importedFilms.length} films</span></>
               )}
               {loading && (
                 <span style={{ marginLeft: 'auto', color: theme.headerBorder, fontSize: '0.72rem' }}>
@@ -528,4 +629,18 @@ export default function ReportsView({ inline = false }) {
       </div>
     </div>
   )
+}
+
+
+// ── Shared style helper ──
+
+function secondaryBtnStyle(theme) {
+  return {
+    padding: '7px 14px', borderRadius: 7,
+    border: `1px solid ${theme.border}`,
+    background: theme.surface,
+    color: theme.textMuted,
+    fontSize: '0.8rem', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: 5,
+  }
 }

@@ -12,6 +12,9 @@
  *   - Calls go through /api/ai/report server proxy
  *   - SSE stream parsing logic unchanged
  *
+ * v2.1 additions:
+ *   - generateReportFromPrompt() — generic entry point for custom templates
+ *
  * v1.11 features preserved:
  *   - generateChainAIReport() — chain-tailored analysis for PDF pitch packs
  *   - buildChainDataForAI() — builds chain-specific data summary
@@ -274,6 +277,23 @@ export function buildChainDataForAI(chainName, chainVenues, allVenues, selectedF
   lines.push(`  Population density data is available in CineScope. When venues in densely populated areas underperform, this may indicate untapped audience potential worth investigating with targeted local marketing.`)
 
   return lines.join('\n')
+}
+
+
+// ─── Generic Custom Prompt Report ───────────────────────────────
+
+/**
+ * Generate a report using a custom system prompt and user message.
+ * Used by the Reports view when Austin has customised the prompt template.
+ *
+ * @param {Function} getToken — Clerk getToken() function for auth
+ * @param {string} systemPrompt — System-level instructions for Claude
+ * @param {string} userMessage — User message with data + instructions
+ * @param {Function} onChunk — Called with each text chunk as it streams in
+ * @returns {Promise<string>} — Complete report text
+ */
+export async function generateReportFromPrompt(getToken, systemPrompt, userMessage, onChunk) {
+  return _callProxy(getToken, systemPrompt, userMessage, onChunk)
 }
 
 
