@@ -1,5 +1,5 @@
 /**
- * CineScope — Report Templates (v3.5 — Stage 5: Venue Recommender)
+ * CineScope — Report Templates (v3.5 — Stage 6: All report types active)
  */
 
 
@@ -44,7 +44,7 @@ export const REPORT_TYPES = [
     label: 'CSV Data Export',
     description: 'Raw venue/revenue/grade data as a downloadable spreadsheet',
     requires: '1 film with Comscore data',
-    stage: 'coming',
+    stage: 'ready',
   },
 ]
 

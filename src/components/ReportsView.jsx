@@ -1,12 +1,12 @@
 /**
- * CineScope — Reports View (v3.5 — Stage 5: Venue Recommender)
+ * CineScope — Reports View (v3.5 — Stage 6: All report types complete)
  *
- * Dedicated view for AI-powered report generation.
- * Card picker selects report type, template editor customises the prompt,
+ * Dedicated view for AI-powered report generation and data export.
+ * Card picker selects report type, template editor customises prompts,
  * output panel streams AI text or structured tables.
  *
- * Wired: AI Insights, Chain Performance, Marketing Targets, Venue Recommendations.
- * Venue Recommender has two modes: Missed Opportunity + Pre-release Prediction.
+ * All 5 report types wired: AI Insights, Chain Performance,
+ * Marketing Targets, Venue Recommendations, CSV Data Export.
  */
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
@@ -43,6 +43,7 @@ export default function ReportsView({ inline = false }) {
   const [marketingData, setMarketingData] = useState(null) // Parsed JSON for marketing table
   const [recsData, setRecsData] = useState(null)           // Parsed JSON for venue recommendations
   const [recsMode, setRecsMode] = useState('missed_opportunity') // 'missed_opportunity' | 'pre_release'
+  const [csvData, setCsvData] = useState(null)               // Computed CSV preview rows
 
   // ── Template state ──
   const [showEditor, setShowEditor] = useState(false)
@@ -118,7 +119,7 @@ export default function ReportsView({ inline = false }) {
       (effectiveRecsMode === 'missed_opportunity' && filmHasComscore) ||
       (effectiveRecsMode === 'pre_release' && (!!selectedFilm || catalogue.length > 0))
     ),
-    csv: false,
+    csv: !!selectedFilm && venues.some(v => v.grade && v.grade !== 'E'),
   }), [importedFilms.length, selectedFilm, selectedChain, hasApiKey, venues, effectiveRecsMode, filmHasComscore, catalogue.length])
 
   const currentType = REPORT_TYPES.find(t => t.id === selectedType) || REPORT_TYPES[0]
@@ -134,6 +135,7 @@ export default function ReportsView({ inline = false }) {
     setCopied(false)
     setMarketingData(null)
     setRecsData(null)
+    setCsvData(null)
     // Don't reset showEditor — let it stay open if user was editing
   }, [])
 
@@ -179,8 +181,33 @@ export default function ReportsView({ inline = false }) {
     setCopied(false)
     setMarketingData(null)
     setRecsData(null)
+    setCsvData(null)
 
     try {
+      // ── CSV Export (no AI, pure data) ──
+      if (selectedType === 'csv') {
+        const screenedVenues = venues
+          .filter(v => v.grade && v.grade !== 'E')
+          .sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
+
+        // Compute national and chain ranks
+        const chainGroups = {}
+        screenedVenues.forEach((v, i) => {
+          v._nationalRank = i + 1
+          const chain = v.chain || 'Independent'
+          if (!chainGroups[chain]) chainGroups[chain] = []
+          chainGroups[chain].push(v)
+        })
+        Object.values(chainGroups).forEach(group => {
+          group.sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
+          group.forEach((v, i) => { v._chainRank = i + 1; v._chainTotal = group.length })
+        })
+
+        setCsvData(screenedVenues)
+        setLoading(false)
+        return
+      }
+
       // Get the active template (user-customised or default)
       const tpl = currentTemplate || DEFAULT_TEMPLATES[selectedType] || ''
 
@@ -475,6 +502,31 @@ export default function ReportsView({ inline = false }) {
     setTimeout(() => setCopied(false), 2000)
   }, [reportText, marketingData, recsData])
 
+  const handleDownloadCSV = useCallback(() => {
+    if (!csvData || csvData.length === 0) return
+    const filmTitle = selectedFilm?.filmInfo?.title || 'CineScope Export'
+    const headers = ['Venue', 'City', 'Chain', 'Category', 'Screens', 'Revenue', 'Grade', 'National Rank', 'Chain Rank']
+    const rows = csvData.map(v => [
+      `"${(v.name || '').replace(/"/g, '""')}"`,
+      `"${(v.city || '').replace(/"/g, '""')}"`,
+      `"${(v.chain || 'Independent').replace(/"/g, '""')}"`,
+      `"${(v.category || '').replace(/"/g, '""')}"`,
+      v.screens || '',
+      v.revenue || 0,
+      v.grade || '',
+      `${v._nationalRank} of ${csvData.length}`,
+      `${v._chainRank} of ${v._chainTotal}`,
+    ])
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${filmTitle.replace(/[^a-zA-Z0-9 ]/g, '').trim()}_venues.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }, [csvData, selectedFilm])
+
 
   // ── Status message for disabled states ──
 
@@ -504,6 +556,12 @@ export default function ReportsView({ inline = false }) {
       if (!selectedFilm && catalogue.length === 0) return { icon: 'movie', text: 'Add a film to the catalogue to generate venue recommendations.' }
       if (effectiveRecsMode === 'missed_opportunity' && !filmHasComscore) {
         return { icon: 'storefront', text: 'No Comscore data for this film. Switch to Pre-release mode, or import data for Missed Opportunity analysis.' }
+      }
+    }
+    if (selectedType === 'csv') {
+      if (!selectedFilm) return { icon: 'movie', text: 'Select a film from the header dropdown to export data.' }
+      if (!venues.some(v => v.grade && v.grade !== 'E')) {
+        return { icon: 'table_chart', text: 'No screening data for this film. Import Comscore data first.' }
       }
     }
     return null
@@ -684,6 +742,25 @@ export default function ReportsView({ inline = false }) {
             </>
           )}
 
+          {/* CSV film label */}
+          {selectedType === 'csv' && selectedFilm && (
+            <div style={{
+              fontSize: '0.8rem', color: theme.textMuted,
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <Icon name="movie" size={14} />
+              <span style={{ color: theme.text, fontWeight: 500 }}>
+                {selectedFilm?.filmInfo?.title || 'Unknown Film'}
+              </span>
+              <span style={{
+                fontSize: '0.72rem', color: theme.headerBorder,
+                background: `${theme.headerBorder}15`, padding: '2px 8px', borderRadius: 4,
+              }}>
+                {venues.filter(v => v.grade && v.grade !== 'E').length} venues
+              </span>
+            </div>
+          )}
+
           {/* Generate button */}
           <button
             onClick={handleGenerate}
@@ -700,12 +777,26 @@ export default function ReportsView({ inline = false }) {
           >
             {loading
               ? <><Icon name="progress_activity" size={15} /> Generating...</>
+              : selectedType === 'csv'
+              ? <><Icon name="table_chart" size={15} /> Build Preview</>
               : <><Icon name="auto_awesome" size={15} /> Generate Report</>
             }
           </button>
 
-          {/* Copy / Regenerate (when report ready) */}
-          {(reportText || marketingData || recsData) && !loading && (
+          {/* CSV Download button */}
+          {selectedType === 'csv' && csvData && !loading && (
+            <button onClick={handleDownloadCSV} style={{
+              padding: '7px 16px', borderRadius: 7, border: 'none',
+              background: '#27ae60', color: '#fff',
+              fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <Icon name="download" size={15} /> Download CSV
+            </button>
+          )}
+
+          {/* Copy / Regenerate (when report ready, not CSV) */}
+          {selectedType !== 'csv' && (reportText || marketingData || recsData) && !loading && (
             <>
               <button onClick={handleCopy} style={secondaryBtnStyle(theme)}>
                 <Icon name={copied ? 'check' : 'content_copy'} size={14} />
@@ -789,7 +880,7 @@ export default function ReportsView({ inline = false }) {
         )}
 
         {/* Status / requirement message */}
-        {!isComingSoon && !reportText && !loading && !error && statusMsg && (
+        {!isComingSoon && !reportText && !loading && !error && !csvData && !marketingData && !recsData && statusMsg && (
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             height: '100%', textAlign: 'center',
@@ -809,7 +900,7 @@ export default function ReportsView({ inline = false }) {
         )}
 
         {/* Ready to generate prompt */}
-        {!isComingSoon && !reportText && !loading && !error && !statusMsg && (
+        {!isComingSoon && !reportText && !loading && !error && !statusMsg && !csvData && !marketingData && !recsData && (
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             height: '100%', textAlign: 'center',
@@ -831,6 +922,8 @@ export default function ReportsView({ inline = false }) {
                 ? effectiveRecsMode === 'missed_opportunity'
                   ? `Ready to find missed screening opportunities from ${baseVenues.filter(v => v.status !== 'closed').length - venues.filter(v => v.grade && v.grade !== 'E').length} unscreened venues.`
                   : `Ready to predict best venues for this film based on profile and history.`
+                : selectedType === 'csv'
+                ? `Ready to export ${venues.filter(v => v.grade && v.grade !== 'E').length} venues with revenue and grade data. Click "Build Preview" to see the data.`
                 : `Ready to generate ${selectedChain} performance report. Click "Generate Report" to start.`
               }
             </p>
@@ -852,6 +945,112 @@ export default function ReportsView({ inline = false }) {
               <div style={{ fontSize: '0.82rem', color: theme.textMuted, lineHeight: 1.5 }}>
                 {error}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* CSV Data Preview Table */}
+        {!isComingSoon && csvData && csvData.length > 0 && (
+          <div style={{
+            borderRadius: 10, overflow: 'hidden',
+            border: `1px solid ${theme.border}`,
+            background: theme.surface,
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '14px 20px',
+              borderBottom: `1px solid ${theme.border}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.84rem' }}>
+                <Icon name="table_chart" size={18} style={{ color: theme.headerBorder }} />
+                <span style={{ fontWeight: 600, color: theme.text }}>
+                  {selectedFilm?.filmInfo?.title || 'Export'}
+                </span>
+                <span style={{ color: theme.textMuted }}>
+                  — {csvData.length} venues
+                </span>
+              </div>
+              <button onClick={handleDownloadCSV} style={{
+                padding: '6px 14px', borderRadius: 6, border: 'none',
+                background: '#27ae60', color: '#fff',
+                fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <Icon name="download" size={14} /> Download CSV
+              </button>
+            </div>
+
+            {/* Table */}
+            <div style={{ overflowX: 'auto', maxHeight: 520, overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                <thead>
+                  <tr style={{
+                    borderBottom: `1px solid ${theme.border}`,
+                    background: `${theme.headerBorder}08`,
+                    position: 'sticky', top: 0, zIndex: 1,
+                  }}>
+                    {['Venue', 'City', 'Chain', 'Category', 'Screens', 'Revenue', 'Grade', 'National Rank', 'Chain Rank'].map(h => (
+                      <th key={h} style={{
+                        padding: '9px 10px', textAlign: 'left',
+                        fontWeight: 600, fontSize: '0.7rem',
+                        color: theme.textMuted, whiteSpace: 'nowrap',
+                        textTransform: 'uppercase', letterSpacing: '0.03em',
+                        background: theme.surface,
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvData.map((v, i) => {
+                    const gradeColors = { A: '#27ae60', B: '#f5c542', C: '#e67e22', D: '#e74c3c' }
+                    return (
+                      <tr key={i} style={{
+                        borderBottom: `1px solid ${theme.border}`,
+                        transition: 'background 0.1s',
+                      }}
+                        onMouseEnter={e => e.currentTarget.style.background = `${theme.headerBorder}06`}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <td style={{ ...cellStyle, fontWeight: 500, color: theme.text, whiteSpace: 'nowrap' }}>{v.name}</td>
+                        <td style={cellStyle}>{v.city || ''}</td>
+                        <td style={cellStyle}>{v.chain || 'Independent'}</td>
+                        <td style={{ ...cellStyle, fontSize: '0.72rem' }}>{v.category || ''}</td>
+                        <td style={{ ...cellStyle, textAlign: 'center' }}>{v.screens || '—'}</td>
+                        <td style={{ ...cellStyle, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                          £{(v.revenue || 0).toLocaleString()}
+                        </td>
+                        <td style={cellStyle}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{
+                              width: 8, height: 8, borderRadius: '50%',
+                              background: gradeColors[v.grade] || '#95a5a6',
+                            }} />
+                            {v.grade}
+                          </span>
+                        </td>
+                        <td style={{ ...cellStyle, fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                          #{v._nationalRank} of {csvData.length}
+                        </td>
+                        <td style={{ ...cellStyle, fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                          #{v._chainRank} of {v._chainTotal}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '10px 20px',
+              borderTop: `1px solid ${theme.border}`,
+              fontSize: '0.72rem', color: theme.textMuted,
+              display: 'flex', justifyContent: 'space-between',
+            }}>
+              <span>{csvData.length} venues · sorted by revenue (highest first)</span>
+              <span>Click "Download CSV" to save as spreadsheet</span>
             </div>
           </div>
         )}
@@ -1068,7 +1267,7 @@ export default function ReportsView({ inline = false }) {
         )}
 
         {/* Streaming / completed report (text output) */}
-        {!isComingSoon && !marketingData && !recsData && (reportText || loading) && (
+        {!isComingSoon && !marketingData && !recsData && !csvData && (reportText || loading) && (
           <div style={{
             padding: 20, borderRadius: 10,
             background: theme.surface,
@@ -1144,12 +1343,19 @@ export default function ReportsView({ inline = false }) {
           {selectedType === 'marketing' && !selectedFilm && 'No film selected'}
           {selectedType === 'venue_recs' && selectedFilm && `${effectiveRecsMode === 'missed_opportunity' ? 'Missed opportunity' : 'Pre-release'} mode`}
           {selectedType === 'venue_recs' && !selectedFilm && 'No film selected'}
+          {selectedType === 'csv' && selectedFilm && `${venues.filter(v => v.grade && v.grade !== 'E').length} venues with screening data`}
+          {selectedType === 'csv' && !selectedFilm && 'No film selected'}
           {isComingSoon && currentType.requires}
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Icon name="auto_awesome" size={12} />
-          Powered by Claude
-        </span>
+        {selectedType !== 'csv' && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="auto_awesome" size={12} />
+            Powered by Claude
+          </span>
+        )}
+        {selectedType === 'csv' && (
+          <span>Data export — no AI</span>
+        )}
       </div>
     </div>
   )
