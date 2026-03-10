@@ -253,21 +253,28 @@ export default function ReportsView({ inline = false }) {
           ? Math.round(gradeAVenues.reduce((s, v) => s + (v.revenue || 0), 0) / gradeAVenues.length)
           : 0
 
+        // Cap venues sent to Claude — top 50 by revenue (highest potential)
+        const MAX_MARKETING_VENUES = 50
+        const sortedBC = [...bcVenues].sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
+        const venuesToSend = sortedBC.slice(0, MAX_MARKETING_VENUES)
+        const wasCapped = bcVenues.length > MAX_MARKETING_VENUES
+
         // Build venue data text
-        const venueLines = bcVenues
-          .sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
-          .map(v => {
-            const parts = [
-              `${v.name} (${v.city || 'Unknown'})`,
-              `Chain: ${v.chain || 'Independent'}`,
-              `Grade: ${v.grade}`,
-              `Revenue: £${(v.revenue || 0).toLocaleString()}`,
-              `Screens: ${v.screens || '?'}`,
-            ]
-            if (v.category) parts.push(`Category: ${v.category}`)
-            return parts.join(' | ')
-          })
-        const venueDataText = venueLines.join('\n')
+        const venueLines = venuesToSend.map(v => {
+          const parts = [
+            `${v.name} (${v.city || 'Unknown'})`,
+            `Chain: ${v.chain || 'Independent'}`,
+            `Grade: ${v.grade}`,
+            `Revenue: £${(v.revenue || 0).toLocaleString()}`,
+            `Screens: ${v.screens || '?'}`,
+          ]
+          if (v.category) parts.push(`Category: ${v.category}`)
+          return parts.join(' | ')
+        })
+        let venueDataText = venueLines.join('\n')
+        if (wasCapped) {
+          venueDataText += `\n\n(Showing top ${MAX_MARKETING_VENUES} of ${bcVenues.length} B+C venues, sorted by revenue — highest potential first)`
+        }
 
         // Film profile
         let filmProfile = ''
@@ -283,9 +290,9 @@ export default function ReportsView({ inline = false }) {
 
         const values = {
           film_title: selectedFilm?.filmInfo?.title || 'Unknown Film',
-          bc_count: String(bcVenues.length),
-          grade_b_count: String(bcVenues.filter(v => v.grade === 'B').length),
-          grade_c_count: String(bcVenues.filter(v => v.grade === 'C').length),
+          bc_count: String(venuesToSend.length),
+          grade_b_count: String(venuesToSend.filter(v => v.grade === 'B').length),
+          grade_c_count: String(venuesToSend.filter(v => v.grade === 'C').length),
           network_avg: `£${networkAvg.toLocaleString()}`,
           grade_a_avg: `£${gradeAAvg.toLocaleString()}`,
           venue_data: venueDataText,
@@ -299,7 +306,8 @@ export default function ReportsView({ inline = false }) {
           (chunk) => {
             fullText += chunk
             setReportText(prev => prev + chunk)
-          }
+          },
+          8192 // Higher token limit for structured JSON output
         )
 
         // Try to parse as JSON for structured table display
@@ -307,6 +315,10 @@ export default function ReportsView({ inline = false }) {
           const cleaned = fullText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
           const parsed = JSON.parse(cleaned)
           if (parsed && Array.isArray(parsed.venues)) {
+            // Add cap note to summary if we truncated
+            if (wasCapped && parsed.summary) {
+              parsed.summary += ` (Showing top ${MAX_MARKETING_VENUES} of ${bcVenues.length} total B+C venues, ranked by highest revenue.)`
+            }
             setMarketingData(parsed)
           }
         } catch (parseErr) {

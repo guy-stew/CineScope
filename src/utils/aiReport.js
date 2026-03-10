@@ -290,10 +290,11 @@ export function buildChainDataForAI(chainName, chainVenues, allVenues, selectedF
  * @param {string} systemPrompt — System-level instructions for Claude
  * @param {string} userMessage — User message with data + instructions
  * @param {Function} onChunk — Called with each text chunk as it streams in
+ * @param {number} [maxTokens=1500] — Max tokens for the response
  * @returns {Promise<string>} — Complete report text
  */
-export async function generateReportFromPrompt(getToken, systemPrompt, userMessage, onChunk) {
-  return _callProxy(getToken, systemPrompt, userMessage, onChunk)
+export async function generateReportFromPrompt(getToken, systemPrompt, userMessage, onChunk, maxTokens) {
+  return _callProxy(getToken, systemPrompt, userMessage, onChunk, maxTokens)
 }
 
 
@@ -303,13 +304,13 @@ export async function generateReportFromPrompt(getToken, systemPrompt, userMessa
  * Call the server-side AI proxy and parse the SSE stream.
  * Replaces the old _callClaude() that hit Anthropic directly.
  */
-async function _callProxy(getToken, systemPrompt, userMessage, onChunk) {
+async function _callProxy(getToken, systemPrompt, userMessage, onChunk, maxTokens = 1500) {
   // Call the server proxy via apiClient
   const response = await apiGenerateAIReport({
     model: MODEL,
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }],
-    max_tokens: 1500,
+    max_tokens: maxTokens,
   }, getToken)
 
   // The proxy returns the raw SSE stream from Anthropic,
