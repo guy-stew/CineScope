@@ -81,6 +81,15 @@ export async function toggleVenueStatus(id, newStatus, getToken) {
 }
 
 /**
+ * Delete a venue permanently. Only works for manual/import venues.
+ */
+export async function deleteVenue(id, getToken) {
+  return authFetch(`${API_BASE}/venues?id=${id}`, getToken, {
+    method: 'DELETE',
+  })
+}
+
+/**
  * Bulk import venues from spreadsheet data.
  * Accepts an array of venue objects.
  * Returns { imported: N, skipped: N, errors: [...] }
