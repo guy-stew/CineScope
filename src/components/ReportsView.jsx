@@ -1,0 +1,531 @@
+/**
+ * CineScope — Reports View (v3.5 — Stage 2)
+ *
+ * Dedicated view for AI-powered report generation.
+ * Card picker selects report type, controls configure the report,
+ * output panel streams AI text as it generates.
+ *
+ * Stage 2 wires up: AI Insights (multi-film) + Chain Performance.
+ * Marketing Targets, Venue Recommendations, CSV Export come in later stages.
+ */
+
+import React, { useState, useMemo, useCallback } from 'react'
+import { useApp } from '../context/AppContext'
+import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '@clerk/clerk-react'
+import { computeTrends, buildTrendSummaryForAI } from '../utils/trendAnalysis'
+import { generateAIReport, generateChainAIReport, buildFilmProfileForAI } from '../utils/aiReport'
+import { REPORT_TYPES } from '../utils/reportTemplates'
+import Icon from './Icon'
+import FilmSelectorDropdown from './FilmSelectorDropdown'
+
+
+export default function ReportsView({ inline = false }) {
+  const {
+    importedFilms, baseVenues, venues, gradeSettings,
+    selectedFilm, selectedFilmId, hasApiKey,
+    catalogue, apiClient,
+  } = useApp()
+  const { theme } = useTheme()
+  const { getToken } = useAuth()
+
+  // ── State ──
+  const [selectedType, setSelectedType] = useState('insights')
+  const [reportText, setReportText] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [selectedChain, setSelectedChain] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  // ── Derived data ──
+
+  // Chains with at least one screened venue for the current film
+  const filmChains = useMemo(() => {
+    if (!selectedFilm || !venues.length) return []
+    const chainSet = new Set()
+    venues.forEach(v => {
+      if (v.chain && v.grade && v.grade !== 'E') chainSet.add(v.chain)
+    })
+    return [...chainSet].sort()
+  }, [selectedFilm, venues])
+
+  // Can generate for each type?
+  const canGenerate = useMemo(() => ({
+    insights: importedFilms.length >= 2 && hasApiKey,
+    chain: !!selectedFilm && !!selectedChain && hasApiKey,
+    marketing: false,
+    venue_recs: false,
+    csv: false,
+  }), [importedFilms.length, selectedFilm, selectedChain, hasApiKey])
+
+  // Current type config
+  const currentType = REPORT_TYPES.find(t => t.id === selectedType) || REPORT_TYPES[0]
+
+  // ── Handlers ──
+
+  const handleTypeChange = useCallback((typeId) => {
+    setSelectedType(typeId)
+    setReportText('')
+    setError(null)
+    setSelectedChain('')
+    setCopied(false)
+  }, [])
+
+  const handleGenerate = useCallback(async () => {
+    if (loading) return
+    setLoading(true)
+    setError(null)
+    setReportText('')
+    setCopied(false)
+
+    try {
+      if (selectedType === 'insights') {
+        // ── Multi-film trend analysis ──
+        const trendData = computeTrends(importedFilms, baseVenues, gradeSettings)
+        if (trendData?.error) throw new Error(trendData.error)
+
+        const summary = buildTrendSummaryForAI(trendData)
+
+        // Enrich with film profiles from catalogue
+        let filmProfile = ''
+        try {
+          const catEntries = []
+          for (const film of importedFilms) {
+            if (film.catalogueId) {
+              const fullEntry = await apiClient.getCatalogueEntry(film.catalogueId)
+              if (fullEntry) catEntries.push(fullEntry)
+            }
+          }
+          if (catEntries.length > 0) filmProfile = buildFilmProfileForAI(catEntries)
+        } catch (profileErr) {
+          console.warn('CineScope: Could not load film profiles for AI', profileErr)
+        }
+
+        await generateAIReport(getToken, summary, (chunk) => {
+          setReportText(prev => prev + chunk)
+        }, filmProfile || undefined)
+
+      } else if (selectedType === 'chain') {
+        // ── Chain performance report ──
+        const chainVenues = venues.filter(v => v.chain === selectedChain)
+
+        let catalogueEntry = null
+        try {
+          const catId = selectedFilm?.catalogueId
+          if (catId) catalogueEntry = await apiClient.getCatalogueEntry(catId)
+        } catch (profileErr) {
+          console.warn('CineScope: Could not load film profile for chain report', profileErr)
+        }
+
+        await generateChainAIReport(
+          getToken,
+          selectedChain,
+          chainVenues,
+          venues,
+          selectedFilm,
+          (chunk) => { setReportText(prev => prev + chunk) },
+          catalogueEntry
+        )
+      }
+    } catch (err) {
+      console.error('CineScope: Report generation failed', err)
+      setError(err.message || 'Report generation failed')
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedType, loading, importedFilms, baseVenues, gradeSettings,
+      selectedFilm, selectedChain, venues, getToken, apiClient])
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(reportText)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [reportText])
+
+  // ── Requirement message for disabled states ──
+  function getStatusMessage() {
+    if (!hasApiKey && (selectedType === 'insights' || selectedType === 'chain')) {
+      return { icon: 'key', text: 'Add your Anthropic API key in Settings to generate AI reports.' }
+    }
+    if (selectedType === 'insights' && importedFilms.length < 2) {
+      const n = importedFilms.length
+      return {
+        icon: 'movie',
+        text: `Import Comscore data for at least 2 films to generate trend insights. Currently ${n} film${n === 1 ? '' : 's'} imported.`,
+      }
+    }
+    if (selectedType === 'chain') {
+      if (!selectedFilm) return { icon: 'movie', text: 'Select a film from the header dropdown to generate a chain report.' }
+      if (filmChains.length === 0) return { icon: 'storefront', text: 'No chains with screening data for the current film.' }
+      if (!selectedChain) return { icon: 'business', text: 'Select a chain below to analyse.' }
+    }
+    return null
+  }
+
+  const statusMsg = getStatusMessage()
+  const isComingSoon = currentType.stage === 'coming'
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════════
+
+  return (
+    <div className="cs-reports" style={{ background: theme.body, color: theme.text, height: '100%', display: 'flex', flexDirection: 'column' }}>
+
+      {/* ── Toolbar ── */}
+      <div style={{
+        padding: '16px 24px 0',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexShrink: 0,
+      }}>
+        <h1 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="assessment" size={22} style={{ color: theme.headerBorder }} />
+          Reports
+        </h1>
+        {selectedType === 'insights' && (
+          <FilmSelectorDropdown compact />
+        )}
+      </div>
+
+      {/* ── Report Type Cards ── */}
+      <div style={{
+        padding: '16px 24px',
+        display: 'flex', gap: 10, overflowX: 'auto', flexShrink: 0,
+      }}>
+        {REPORT_TYPES.map(rt => {
+          const isActive = selectedType === rt.id
+          const isLocked = rt.stage === 'coming'
+          return (
+            <button
+              key={rt.id}
+              onClick={() => !isLocked && handleTypeChange(rt.id)}
+              style={{
+                flex: '0 0 auto',
+                minWidth: 160,
+                padding: '14px 16px',
+                borderRadius: 10,
+                border: `1.5px solid ${isActive ? theme.headerBorder : theme.border}`,
+                background: isActive ? `${theme.headerBorder}12` : theme.surface,
+                cursor: isLocked ? 'not-allowed' : 'pointer',
+                opacity: isLocked ? 0.5 : 1,
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+                position: 'relative',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <Icon name={rt.icon} size={18} style={{ color: isActive ? theme.headerBorder : theme.textMuted }} />
+                <span style={{ fontWeight: 600, fontSize: '0.82rem', color: isActive ? theme.text : theme.textMuted }}>
+                  {rt.label}
+                </span>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: theme.textMuted, lineHeight: 1.4 }}>
+                {rt.description}
+              </div>
+              {isLocked && (
+                <span style={{
+                  position: 'absolute', top: 8, right: 8,
+                  fontSize: '0.6rem', fontWeight: 700,
+                  background: `${theme.headerBorder}22`, color: theme.headerBorder,
+                  padding: '2px 6px', borderRadius: 4,
+                }}>
+                  SOON
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ── Controls Section ── */}
+      {!isComingSoon && (
+        <div style={{
+          padding: '0 24px 16px',
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flexShrink: 0,
+        }}>
+          {/* Chain selector (chain report only) */}
+          {selectedType === 'chain' && (
+            <>
+              {selectedFilm && (
+                <div style={{
+                  fontSize: '0.8rem', color: theme.textMuted,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <Icon name="movie" size={14} />
+                  <span style={{ color: theme.text, fontWeight: 500 }}>
+                    {selectedFilm?.filmInfo?.title || 'Unknown Film'}
+                  </span>
+                </div>
+              )}
+              {filmChains.length > 0 && (
+                <select
+                  value={selectedChain}
+                  onChange={e => { setSelectedChain(e.target.value); setReportText(''); setError(null) }}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    border: `1px solid ${theme.border}`,
+                    background: theme.surface,
+                    color: theme.text,
+                    fontSize: '0.82rem',
+                    minWidth: 180,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="">Select chain...</option>
+                  {filmChains.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              )}
+            </>
+          )}
+
+          {/* Generate button */}
+          <button
+            onClick={handleGenerate}
+            disabled={loading || !canGenerate[selectedType]}
+            style={{
+              padding: '7px 18px',
+              borderRadius: 7,
+              border: 'none',
+              background: (loading || !canGenerate[selectedType]) ? theme.border : theme.headerBorder,
+              color: '#fff',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              cursor: (loading || !canGenerate[selectedType]) ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+              opacity: (loading || !canGenerate[selectedType]) ? 0.6 : 1,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {loading ? (
+              <><Icon name="progress_activity" size={15} /> Generating...</>
+            ) : (
+              <><Icon name="auto_awesome" size={15} /> Generate Report</>
+            )}
+          </button>
+
+          {/* Copy button (when report is ready) */}
+          {reportText && !loading && (
+            <button
+              onClick={handleCopy}
+              style={{
+                padding: '7px 14px',
+                borderRadius: 7,
+                border: `1px solid ${theme.border}`,
+                background: theme.surface,
+                color: theme.textMuted,
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              <Icon name={copied ? 'check' : 'content_copy'} size={14} />
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          )}
+
+          {/* Regenerate button */}
+          {reportText && !loading && (
+            <button
+              onClick={handleGenerate}
+              style={{
+                padding: '7px 14px',
+                borderRadius: 7,
+                border: `1px solid ${theme.border}`,
+                background: theme.surface,
+                color: theme.textMuted,
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              <Icon name="refresh" size={14} />
+              Regenerate
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Output Panel ── */}
+      <div style={{
+        flex: 1, minHeight: 0, overflowY: 'auto',
+        padding: '0 24px 24px',
+      }}>
+        {/* Coming soon placeholder for locked types */}
+        {isComingSoon && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            height: '100%', textAlign: 'center',
+          }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: 12,
+              background: `${theme.headerBorder}18`, color: theme.headerBorder,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              marginBottom: 12,
+            }}>
+              <Icon name={currentType.icon} size={28} />
+            </div>
+            <h4 style={{ fontWeight: 700, marginBottom: 6 }}>{currentType.label}</h4>
+            <p style={{ color: theme.textMuted, fontSize: '0.88rem', maxWidth: 400, lineHeight: 1.5 }}>
+              {currentType.description}
+            </p>
+            <span style={{
+              background: `${theme.headerBorder}18`, color: theme.headerBorder,
+              fontSize: '0.75rem', padding: '6px 14px', borderRadius: 20,
+              fontWeight: 500, marginTop: 4,
+            }}>
+              Coming Soon
+            </span>
+          </div>
+        )}
+
+        {/* Status / requirement message */}
+        {!isComingSoon && !reportText && !loading && !error && statusMsg && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            height: '100%', textAlign: 'center',
+          }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 10,
+              background: `${theme.headerBorder}14`, color: theme.headerBorder,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              marginBottom: 12,
+            }}>
+              <Icon name={statusMsg.icon} size={24} />
+            </div>
+            <p style={{ color: theme.textMuted, fontSize: '0.88rem', maxWidth: 420, lineHeight: 1.5 }}>
+              {statusMsg.text}
+            </p>
+          </div>
+        )}
+
+        {/* Ready to generate prompt */}
+        {!isComingSoon && !reportText && !loading && !error && !statusMsg && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            height: '100%', textAlign: 'center',
+          }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 10,
+              background: `${theme.headerBorder}14`, color: theme.headerBorder,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              marginBottom: 12,
+            }}>
+              <Icon name="auto_awesome" size={24} />
+            </div>
+            <p style={{ color: theme.textMuted, fontSize: '0.88rem', maxWidth: 420, lineHeight: 1.5 }}>
+              {selectedType === 'insights'
+                ? `Ready to analyse ${importedFilms.length} films. Click "Generate Report" to get AI-powered trend insights.`
+                : `Ready to generate ${selectedChain} performance report. Click "Generate Report" to start.`
+              }
+            </p>
+          </div>
+        )}
+
+        {/* Error */}
+        {!isComingSoon && error && (
+          <div style={{
+            padding: 16, borderRadius: 8,
+            background: '#ef444415', border: '1px solid #ef444440',
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+          }}>
+            <Icon name="error" size={18} style={{ color: '#ef4444', flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#ef4444', marginBottom: 4 }}>
+                Report generation failed
+              </div>
+              <div style={{ fontSize: '0.82rem', color: theme.textMuted, lineHeight: 1.5 }}>
+                {error}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Streaming / completed report */}
+        {!isComingSoon && (reportText || loading) && (
+          <div style={{
+            padding: 20,
+            borderRadius: 10,
+            background: theme.surface,
+            border: `1px solid ${theme.border}`,
+            fontSize: '0.86rem',
+            lineHeight: 1.7,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            position: 'relative',
+          }}>
+            {/* Report header badge */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              marginBottom: 14, paddingBottom: 12,
+              borderBottom: `1px solid ${theme.border}`,
+              fontSize: '0.78rem', color: theme.textMuted,
+            }}>
+              <Icon name={currentType.icon} size={16} style={{ color: theme.headerBorder }} />
+              <span style={{ fontWeight: 600 }}>{currentType.label}</span>
+              {selectedType === 'chain' && selectedChain && (
+                <>
+                  <span style={{ opacity: 0.4 }}>|</span>
+                  <span>{selectedChain}</span>
+                </>
+              )}
+              {selectedType === 'chain' && selectedFilm && (
+                <>
+                  <span style={{ opacity: 0.4 }}>|</span>
+                  <span>{selectedFilm?.filmInfo?.title}</span>
+                </>
+              )}
+              {selectedType === 'insights' && (
+                <>
+                  <span style={{ opacity: 0.4 }}>|</span>
+                  <span>{importedFilms.length} films</span>
+                </>
+              )}
+              {loading && (
+                <span style={{ marginLeft: 'auto', color: theme.headerBorder, fontSize: '0.72rem' }}>
+                  <Icon name="progress_activity" size={12} /> Streaming...
+                </span>
+              )}
+            </div>
+
+            {/* Report text */}
+            {reportText}
+
+            {/* Loading cursor */}
+            {loading && !reportText && (
+              <div style={{ color: theme.textMuted, textAlign: 'center', padding: 20 }}>
+                <Icon name="progress_activity" size={20} />
+                <div style={{ marginTop: 8, fontSize: '0.82rem' }}>
+                  Generating {currentType.label.toLowerCase()}...
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Footer ── */}
+      <div style={{
+        padding: '10px 24px',
+        borderTop: `1px solid ${theme.border}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexShrink: 0,
+        fontSize: '0.75rem', color: theme.textMuted,
+      }}>
+        <span>
+          {selectedType === 'insights' && `${importedFilms.length} films in analysis set`}
+          {selectedType === 'chain' && selectedFilm && `${filmChains.length} chains available`}
+          {selectedType === 'chain' && !selectedFilm && 'No film selected'}
+          {isComingSoon && currentType.requires}
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Icon name="auto_awesome" size={12} />
+          Powered by Claude
+        </span>
+      </div>
+    </div>
+  )
+}

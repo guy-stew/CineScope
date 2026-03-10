@@ -1,5 +1,5 @@
 /**
- * CineScope — App Shell (v3.5 — Reports view shell)
+ * CineScope — App Shell (v3.5 — Reports view Stage 2)
  *
  * All views render inline with persistent header + sidebar.
  * Header is slim (logo + view name + icon buttons).
@@ -16,6 +16,7 @@ import MapPanel from './components/MapPanel'
 import SettingsPanel from './components/SettingsPanel'
 import MatchReviewPanel from './components/MatchReviewPanel'
 import TrendPanel from './components/TrendPanel'
+import ReportsView from './components/ReportsView'
 import FilmNameDialog from './components/FilmNameDialog'
 import FilmCatalogue from './components/FilmCatalogue'
 import VenueManager from './components/VenueManager'
@@ -188,14 +189,9 @@ function AppContent() {
             />
           )}
 
-          {/* ══════ REPORTS VIEW (placeholder — Stage 1 shell) ══════ */}
+          {/* ══════ REPORTS VIEW — AI reports + exports ══════ */}
           {currentView === 'reports' && (
-            <PlaceholderView
-              title="Reports & AI Analysis"
-              icon="assessment"
-              description="Generate AI-powered insights reports, chain performance analysis, marketing target lists, and venue recommendations. Customise prompt templates and export as PDF or spreadsheet."
-              stage="Coming Soon — Stage 2"
-            />
+            <ReportsView inline />
           )}
         </main>
       </div>
