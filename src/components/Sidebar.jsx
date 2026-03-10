@@ -1,11 +1,11 @@
 /**
- * CineScope — Sidebar Navigation (v3.3)
+ * CineScope — Sidebar Navigation (v3.5 — Reports view)
  *
  * Collapsible left sidebar with icon + label navigation.
  * Neon-style: expanded shows icons + labels, collapsed shows icons only with tooltips.
  *
  * Props:
- *   currentView  - string: 'map' | 'films' | 'venues' | 'matching' | 'trends' | 'promote'
+ *   currentView  - string: 'map' | 'films' | 'venues' | 'matching' | 'trends' | 'reports' | 'promote'
  *   onViewChange - function(viewId): called when a nav item is clicked
  *   collapsed    - boolean: whether sidebar is in collapsed (icons-only) mode
  *   onToggle     - function(): toggle collapsed state
@@ -30,6 +30,7 @@ const NAV_SECTIONS = [
     items: [
       { id: 'map', icon: 'map', label: 'Map' },
       { id: 'trends', icon: 'insights', label: 'Trends' },
+      { id: 'reports', icon: 'assessment', label: 'Reports' },
     ],
   },
   {

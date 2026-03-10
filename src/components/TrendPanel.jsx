@@ -1,23 +1,20 @@
 /**
- * CineScope — Trend Panel (Restyled v3.3)
+ * CineScope — Trend Panel (v3.5 — AI & Export moved to Reports)
  *
  * Performance & Trends view — tracks venue grade changes across films.
- * Tabs: Venues, Chains, Regions, AI Insights.
- * Matches cinescope_redesign_v2 mockup design language.
+ * Tabs: Venues, Chains, Regions.
+ * AI Insights and Export functionality now live in the Reports view.
  */
 
-import React, { useState, useMemo, useCallback, Component } from 'react'
+import React, { useState, useMemo, Component } from 'react'
 import { Modal } from 'react-bootstrap'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as RTooltip, Cell } from 'recharts'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
-import { useAuth } from '@clerk/clerk-react'
 import { GRADES } from '../utils/grades'
-import { computeTrends, buildTrendSummaryForAI } from '../utils/trendAnalysis'
-import { generateAIReport, buildFilmProfileForAI } from '../utils/aiReport'
+import { computeTrends } from '../utils/trendAnalysis'
 import { formatRevenue } from '../utils/formatRevenue'
 import Icon from './Icon'
-import ExportMenu from './ExportMenu'
 import FilmSelectorDropdown from './FilmSelectorDropdown'
 
 
@@ -70,19 +67,11 @@ export default function TrendPanel({ show, onHide, inline = false }) {
 function TrendPanelInner({ show, onHide, inline = false }) {
   const {
     importedFilms, baseVenues, gradeSettings, revenueFormat,
-    hasApiKey, selectedFilmId, setAiReportText, setAiReportFilmId,
-    catalogue, apiClient
   } = useApp()
   const { theme } = useTheme()
-  const { getToken } = useAuth()
 
   // Tab state
   const [activeTab, setActiveTab] = useState('venues')
-
-  // AI report state
-  const [aiReport, setAiReport] = useState('')
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiError, setAiError] = useState(null)
 
   // Venue filter
   const [venueFilter, setVenueFilter] = useState('all')
@@ -98,45 +87,6 @@ function TrendPanelInner({ show, onHide, inline = false }) {
       return { error: String(err.message || 'Unknown error') }
     }
   }, [show, inline, importedFilms, baseVenues, gradeSettings])
-
-  // Generate AI report
-  const handleGenerateReport = useCallback(async () => {
-    if (!trendData || trendData.error) return
-    setAiLoading(true)
-    setAiError(null)
-    setAiReport('')
-
-    try {
-      const summary = buildTrendSummaryForAI(trendData)
-
-      let filmProfile = ''
-      try {
-        const catEntries = []
-        for (const film of importedFilms) {
-          if (film.catalogueId) {
-            const catMatch = catalogue.find(c => c.id === film.catalogueId)
-            if (catMatch) {
-              const fullEntry = await apiClient.getCatalogueEntry(film.catalogueId)
-              if (fullEntry) catEntries.push(fullEntry)
-            }
-          }
-        }
-        if (catEntries.length > 0) filmProfile = buildFilmProfileForAI(catEntries)
-      } catch (profileErr) {
-        console.warn('CineScope: Could not load film profiles for AI', profileErr)
-      }
-
-      const fullReport = await generateAIReport(getToken, summary, (chunk) => {
-        setAiReport(prev => prev + chunk)
-      }, filmProfile || undefined)
-      setAiReportText(fullReport)
-      setAiReportFilmId(selectedFilmId)
-    } catch (err) {
-      setAiError(err.message)
-    } finally {
-      setAiLoading(false)
-    }
-  }, [trendData, getToken, selectedFilmId, setAiReportText, setAiReportFilmId, importedFilms, catalogue, apiClient])
 
   // ── Not enough films ──
   if (!show && !inline) return null
@@ -255,7 +205,6 @@ function TrendPanelInner({ show, onHide, inline = false }) {
         </h1>
         <div className="cs-tp__toolbar-right">
           <FilmSelectorDropdown compact />
-          <ExportMenu />
         </div>
       </div>
 
@@ -294,7 +243,6 @@ function TrendPanelInner({ show, onHide, inline = false }) {
           { key: 'venues',  icon: 'location_on',   label: 'Venues' },
           { key: 'chains',  icon: 'business',      label: 'Chains' },
           { key: 'regions', icon: 'map',            label: 'Regions' },
-          { key: 'ai',      icon: 'auto_awesome',   label: 'AI Insights' },
         ].map(tab => (
           <button
             key={tab.key}
@@ -553,63 +501,6 @@ function TrendPanelInner({ show, onHide, inline = false }) {
         </div>
       )}
 
-      {/* ── TAB: AI Insights ── */}
-      {activeTab === 'ai' && (
-        <div className="cs-tp__ai-section">
-          {!hasApiKey ? (
-            <div className="cs-tp__ai-prompt">
-              <span className="cs-tp__ai-prompt-icon material-symbols-rounded">key</span>
-              <p>Add your Anthropic API key in <strong>Settings</strong> to enable AI-powered insights.</p>
-              <p style={{ fontSize: '0.85rem' }}>
-                Claude will analyse your trend data and write a concise report highlighting
-                marketing opportunities, improving venues, and actionable recommendations.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="cs-tp__ai-actions">
-                <button
-                  className="cs-tp__btn cs-tp__btn--primary"
-                  onClick={handleGenerateReport}
-                  disabled={aiLoading}
-                >
-                  {aiLoading ? (
-                    <><Icon name="progress_activity" size={16} /> Analysing...</>
-                  ) : (
-                    <><Icon name="auto_awesome" size={16} /> Generate Report</>
-                  )}
-                </button>
-                {aiReport && !aiLoading && (
-                  <button
-                    className="cs-tp__btn"
-                    onClick={() => navigator.clipboard.writeText(aiReport)}
-                  >
-                    <Icon name="content_copy" size={14} /> Copy
-                  </button>
-                )}
-                <span className="cs-tp__ai-powered">Powered by Claude</span>
-              </div>
-
-              {aiError && (
-                <div className="cs-tp__ai-error">
-                  <Icon name="error" size={16} /> {String(aiError)}
-                </div>
-              )}
-
-              {aiReport && (
-                <div className="cs-tp__ai-report">{aiReport}</div>
-              )}
-
-              {!aiReport && !aiLoading && !aiError && (
-                <div className="cs-tp__ai-prompt">
-                  Click "Generate Report" to get AI-powered insights on your {summary.filmCount || 0} films
-                  and {summary.trackedVenues || 0} tracked venues.
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
     </div>
   )
 

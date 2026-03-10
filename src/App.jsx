@@ -1,5 +1,5 @@
 /**
- * CineScope — App Shell (v3.3 — Match Review inline)
+ * CineScope — App Shell (v3.5 — Reports view shell)
  *
  * All views render inline with persistent header + sidebar.
  * Header is slim (logo + view name + icon buttons).
@@ -185,6 +185,16 @@ function AppContent() {
               icon="campaign"
               description="Create and manage targeted Facebook & Instagram ad campaigns powered by CineScope's venue demographics and box office data. AI-assisted targeting and A/B testing."
               stage="Coming Soon"
+            />
+          )}
+
+          {/* ══════ REPORTS VIEW (placeholder — Stage 1 shell) ══════ */}
+          {currentView === 'reports' && (
+            <PlaceholderView
+              title="Reports & AI Analysis"
+              icon="assessment"
+              description="Generate AI-powered insights reports, chain performance analysis, marketing target lists, and venue recommendations. Customise prompt templates and export as PDF or spreadsheet."
+              stage="Coming Soon — Stage 2"
             />
           )}
         </main>
