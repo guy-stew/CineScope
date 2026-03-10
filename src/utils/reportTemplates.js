@@ -1,5 +1,5 @@
 /**
- * CineScope — Report Templates (v3.5 — Stage 3)
+ * CineScope — Report Templates (v3.5 — Stage 4: Marketing Targets)
  *
  * Report type metadata (card picker), default AI prompt templates,
  * placeholder definitions for the template editor, and substitution helper.
@@ -31,7 +31,7 @@ export const REPORT_TYPES = [
     label: 'Marketing Targets',
     description: 'Grade B+C venues with AI-generated growth notes',
     requires: '1 film with Comscore data',
-    stage: 'coming',
+    stage: 'ready',
   },
   {
     id: 'venue_recs',
@@ -53,8 +53,6 @@ export const REPORT_TYPES = [
 
 
 // ─── Placeholder Definitions ─────────────────────────────────────
-// Each report type has its own set of available placeholders.
-// Shown in the template editor's reference panel.
 
 export const PLACEHOLDER_DEFS = {
   insights: [
@@ -72,6 +70,16 @@ export const PLACEHOLDER_DEFS = {
     { token: '{{chain_data}}',         description: 'Full chain data summary (auto-generated, includes venue-level detail)' },
     { token: '{{film_profile}}',       description: 'Film metadata: genres, cast, director, keywords, financials' },
   ],
+  marketing: [
+    { token: '{{film_title}}',         description: 'Title of the selected film' },
+    { token: '{{bc_count}}',           description: 'Number of Grade B+C venues' },
+    { token: '{{grade_b_count}}',      description: 'Number of Grade B venues' },
+    { token: '{{grade_c_count}}',      description: 'Number of Grade C venues' },
+    { token: '{{network_avg}}',        description: 'Network average revenue per venue' },
+    { token: '{{grade_a_avg}}',        description: 'Grade A average revenue (the target benchmark)' },
+    { token: '{{venue_data}}',         description: 'Full B+C venue list with revenue, chain, grade, screens' },
+    { token: '{{film_profile}}',       description: 'Film metadata: genres, cast, director, keywords, financials' },
+  ],
 }
 
 
@@ -86,10 +94,6 @@ export const TEMPLATE_SETTINGS_KEYS = {
 
 
 // ─── Default Templates ───────────────────────────────────────────
-// Used when Austin hasn't customised a template.
-// The template is sent as the user message to Claude.
-// Data placeholders ({{trend_data}}, {{chain_data}}) are auto-filled
-// with the full dataset. Text placeholders are filled with labels.
 
 export const DEFAULT_TEMPLATES = {
 
@@ -141,20 +145,59 @@ Use GBP for currency. Be specific with venue names and numbers. Keep under 500 w
 
 {{film_profile}}`,
 
-  marketing: `Placeholder -- Marketing Targets template (Stage 4)`,
+  marketing: `You are analysing Grade B and C cinema venues for the film "{{film_title}}".
+
+These {{bc_count}} venues ({{grade_b_count}} Grade B, {{grade_c_count}} Grade C) screened the film but underperformed relative to Grade A venues. They represent growth opportunities where targeted marketing could lift performance.
+
+Context:
+- Network average revenue per venue: {{network_avg}}
+- Grade A average revenue (the benchmark): {{grade_a_avg}}
+
+For each venue, write a short (1-2 sentence) marketing note explaining:
+- Why this venue is a target (what's the gap vs Grade A performance?)
+- What specific marketing action might help (social media, local press, chain negotiation, screening times)
+- Reference the chain type or location if relevant
+
+Rate each venue's potential as "High", "Medium", or "Low" based on how likely marketing could close the gap.
+
+Sort from highest potential to lowest.
+
+IMPORTANT: Respond with ONLY a JSON object in this exact format, no other text:
+{
+  "summary": "2-3 sentence overview of the B+C opportunity for this film",
+  "venues": [
+    {
+      "rank": 1,
+      "name": "Venue Name",
+      "city": "City",
+      "chain": "Chain or Independent",
+      "grade": "B",
+      "revenue": 1234,
+      "screens": 5,
+      "potential": "High",
+      "note": "Marketing note for this venue"
+    }
+  ]
+}
+
+--- VENUE DATA ---
+
+{{venue_data}}
+
+{{film_profile}}`,
 
   venue_recs: `Placeholder -- Venue Recommendations template (Stage 5)`,
 }
 
 
 // ─── System Prompts ──────────────────────────────────────────────
-// These stay fixed (not user-editable). The template above is the
-// user message; this system prompt sets Claude's role/behaviour.
 
 export const SYSTEM_PROMPTS = {
   insights: `You are CineScope's AI analyst -- a sharp, commercially-minded cinema distribution analyst helping Austin Shaw at Liberator Film Services make smarter marketing decisions. You receive trend data showing how cinema venues across the UK and Ireland perform across multiple film releases, including grades (A=top quartile, B=above average, C=below average, D=poor, E=not screened). Write concise, actionable analysis. Use GBP for currency.`,
 
   chain: `You are CineScope's AI analyst writing a chain-specific performance report. This report will be sent to a cinema chain's manager, so it must be professional, constructive, and externally appropriate. Reference specific venue names and data. Use GBP for currency.`,
+
+  marketing: `You are CineScope's AI analyst generating structured marketing target data for Grade B and C cinema venues. You MUST respond with valid JSON only -- no markdown, no explanation, no backticks. The JSON must match the schema specified in the user message exactly. Every venue in the input data must appear in your output. Use GBP for currency values (numbers only, no symbols in the JSON).`,
 }
 
 
@@ -162,14 +205,10 @@ export const SYSTEM_PROMPTS = {
 
 /**
  * Substitute {{placeholders}} in a template string with real values.
- *
- * @param {string} template — Template text with {{placeholders}}
- * @param {Object} values — Map of placeholder name to value
- * @returns {string} — Substituted text
  */
 export function substituteTemplate(template, values) {
   return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     if (key in values) return values[key]
-    return match // Leave unrecognised placeholders as-is
+    return match
   })
 }

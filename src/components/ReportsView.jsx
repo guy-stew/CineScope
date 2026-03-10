@@ -1,12 +1,12 @@
 /**
- * CineScope — Reports View (v3.5 — Stage 3: Template Editor)
+ * CineScope — Reports View (v3.5 — Stage 4: Marketing Targets)
  *
  * Dedicated view for AI-powered report generation.
  * Card picker selects report type, template editor customises the prompt,
  * output panel streams AI text as it generates.
  *
- * Wired: AI Insights (multi-film) + Chain Performance.
- * Template editor loads/saves via settings API with per-type keys.
+ * Wired: AI Insights (multi-film), Chain Performance, Marketing Targets.
+ * Marketing Targets returns structured JSON rendered as a sortable table.
  */
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
@@ -40,6 +40,7 @@ export default function ReportsView({ inline = false }) {
   const [error, setError] = useState(null)
   const [selectedChain, setSelectedChain] = useState('')
   const [copied, setCopied] = useState(false)
+  const [marketingData, setMarketingData] = useState(null) // Parsed JSON for marketing table
 
   // ── Template state ──
   const [showEditor, setShowEditor] = useState(false)
@@ -104,10 +105,10 @@ export default function ReportsView({ inline = false }) {
   const canGenerate = useMemo(() => ({
     insights: importedFilms.length >= 2 && hasApiKey,
     chain: !!selectedFilm && !!selectedChain && hasApiKey,
-    marketing: false,
+    marketing: !!selectedFilm && hasApiKey && venues.some(v => v.grade === 'B' || v.grade === 'C'),
     venue_recs: false,
     csv: false,
-  }), [importedFilms.length, selectedFilm, selectedChain, hasApiKey])
+  }), [importedFilms.length, selectedFilm, selectedChain, hasApiKey, venues])
 
   const currentType = REPORT_TYPES.find(t => t.id === selectedType) || REPORT_TYPES[0]
 
@@ -120,6 +121,7 @@ export default function ReportsView({ inline = false }) {
     setError(null)
     setSelectedChain('')
     setCopied(false)
+    setMarketingData(null)
     // Don't reset showEditor — let it stay open if user was editing
   }, [])
 
@@ -163,6 +165,7 @@ export default function ReportsView({ inline = false }) {
     setError(null)
     setReportText('')
     setCopied(false)
+    setMarketingData(null)
 
     try {
       // Get the active template (user-customised or default)
@@ -237,6 +240,79 @@ export default function ReportsView({ inline = false }) {
           getToken, SYSTEM_PROMPTS.chain, userMessage,
           (chunk) => { setReportText(prev => prev + chunk) }
         )
+
+      } else if (selectedType === 'marketing') {
+        // ── Marketing Targets (structured JSON) ──
+        const bcVenues = venues.filter(v => v.grade === 'B' || v.grade === 'C')
+        const gradeAVenues = venues.filter(v => v.grade === 'A')
+        const allScreened = venues.filter(v => v.grade && v.grade !== 'E')
+        const networkAvg = allScreened.length > 0
+          ? Math.round(allScreened.reduce((s, v) => s + (v.revenue || 0), 0) / allScreened.length)
+          : 0
+        const gradeAAvg = gradeAVenues.length > 0
+          ? Math.round(gradeAVenues.reduce((s, v) => s + (v.revenue || 0), 0) / gradeAVenues.length)
+          : 0
+
+        // Build venue data text
+        const venueLines = bcVenues
+          .sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
+          .map(v => {
+            const parts = [
+              `${v.name} (${v.city || 'Unknown'})`,
+              `Chain: ${v.chain || 'Independent'}`,
+              `Grade: ${v.grade}`,
+              `Revenue: £${(v.revenue || 0).toLocaleString()}`,
+              `Screens: ${v.screens || '?'}`,
+            ]
+            if (v.category) parts.push(`Category: ${v.category}`)
+            return parts.join(' | ')
+          })
+        const venueDataText = venueLines.join('\n')
+
+        // Film profile
+        let filmProfile = ''
+        try {
+          const catId = selectedFilm?.catalogueId
+          if (catId) {
+            const entry = await apiClient.getCatalogueEntry(catId)
+            if (entry) filmProfile = buildFilmProfileForAI([entry])
+          }
+        } catch (profileErr) {
+          console.warn('CineScope: Could not load film profile for marketing report', profileErr)
+        }
+
+        const values = {
+          film_title: selectedFilm?.filmInfo?.title || 'Unknown Film',
+          bc_count: String(bcVenues.length),
+          grade_b_count: String(bcVenues.filter(v => v.grade === 'B').length),
+          grade_c_count: String(bcVenues.filter(v => v.grade === 'C').length),
+          network_avg: `£${networkAvg.toLocaleString()}`,
+          grade_a_avg: `£${gradeAAvg.toLocaleString()}`,
+          venue_data: venueDataText,
+          film_profile: filmProfile || '(No film profile data available)',
+        }
+
+        const userMessage = substituteTemplate(tpl, values)
+        let fullText = ''
+        await generateReportFromPrompt(
+          getToken, SYSTEM_PROMPTS.marketing, userMessage,
+          (chunk) => {
+            fullText += chunk
+            setReportText(prev => prev + chunk)
+          }
+        )
+
+        // Try to parse as JSON for structured table display
+        try {
+          const cleaned = fullText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+          const parsed = JSON.parse(cleaned)
+          if (parsed && Array.isArray(parsed.venues)) {
+            setMarketingData(parsed)
+          }
+        } catch (parseErr) {
+          console.warn('CineScope: Marketing response was not valid JSON, showing as text', parseErr)
+          // Leave reportText visible as fallback
+        }
       }
     } catch (err) {
       console.error('CineScope: Report generation failed', err)
@@ -248,10 +324,19 @@ export default function ReportsView({ inline = false }) {
       selectedFilm, selectedChain, venues, getToken, apiClient])
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(reportText)
+    if (marketingData) {
+      // Copy marketing data as tab-separated table
+      const header = 'Rank\tVenue\tCity\tChain\tGrade\tRevenue\tScreens\tPotential\tNote'
+      const rows = (marketingData.venues || []).map(v =>
+        `${v.rank}\t${v.name}\t${v.city}\t${v.chain}\t${v.grade}\t£${(v.revenue || 0).toLocaleString()}\t${v.screens || ''}\t${v.potential}\t${v.note}`
+      )
+      navigator.clipboard.writeText([header, ...rows].join('\n'))
+    } else {
+      navigator.clipboard.writeText(reportText)
+    }
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }, [reportText])
+  }, [reportText, marketingData])
 
 
   // ── Status message for disabled states ──
@@ -272,13 +357,19 @@ export default function ReportsView({ inline = false }) {
       if (filmChains.length === 0) return { icon: 'storefront', text: 'No chains with screening data for the current film.' }
       if (!selectedChain) return { icon: 'business', text: 'Select a chain below to analyse.' }
     }
+    if (selectedType === 'marketing') {
+      if (!selectedFilm) return { icon: 'movie', text: 'Select a film from the header dropdown to generate marketing targets.' }
+      if (!venues.some(v => v.grade === 'B' || v.grade === 'C')) {
+        return { icon: 'campaign', text: 'No Grade B or C venues for the current film. Marketing targets require B+C venues.' }
+      }
+    }
     return null
   }
 
   const statusMsg = getStatusMessage()
   const isComingSoon = currentType.stage === 'coming'
-  const showTemplateEditor = showEditor && !isComingSoon &&
-    (selectedType === 'insights' || selectedType === 'chain')
+  const hasTemplateEditor = selectedType === 'insights' || selectedType === 'chain' || selectedType === 'marketing'
+  const showTemplateEditor = showEditor && !isComingSoon && hasTemplateEditor
 
 
   // ═══════════════════════════════════════════════════════════════
@@ -392,6 +483,25 @@ export default function ReportsView({ inline = false }) {
             </>
           )}
 
+          {/* Marketing film label */}
+          {selectedType === 'marketing' && selectedFilm && (
+            <div style={{
+              fontSize: '0.8rem', color: theme.textMuted,
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <Icon name="movie" size={14} />
+              <span style={{ color: theme.text, fontWeight: 500 }}>
+                {selectedFilm?.filmInfo?.title || 'Unknown Film'}
+              </span>
+              <span style={{
+                fontSize: '0.72rem', color: theme.headerBorder,
+                background: `${theme.headerBorder}15`, padding: '2px 8px', borderRadius: 4,
+              }}>
+                {venues.filter(v => v.grade === 'B' || v.grade === 'C').length} B+C venues
+              </span>
+            </div>
+          )}
+
           {/* Generate button */}
           <button
             onClick={handleGenerate}
@@ -413,7 +523,7 @@ export default function ReportsView({ inline = false }) {
           </button>
 
           {/* Copy / Regenerate (when report ready) */}
-          {reportText && !loading && (
+          {(reportText || marketingData) && !loading && (
             <>
               <button onClick={handleCopy} style={secondaryBtnStyle(theme)}>
                 <Icon name={copied ? 'check' : 'content_copy'} size={14} />
@@ -429,7 +539,7 @@ export default function ReportsView({ inline = false }) {
           <div style={{ flex: 1 }} />
 
           {/* Template editor toggle */}
-          {(selectedType === 'insights' || selectedType === 'chain') && (
+          {hasTemplateEditor && (
             <button
               onClick={() => setShowEditor(prev => !prev)}
               style={{
@@ -533,6 +643,8 @@ export default function ReportsView({ inline = false }) {
             <p style={{ color: theme.textMuted, fontSize: '0.88rem', maxWidth: 420, lineHeight: 1.5 }}>
               {selectedType === 'insights'
                 ? `Ready to analyse ${importedFilms.length} films. Click "Generate Report" to get AI-powered trend insights.`
+                : selectedType === 'marketing'
+                ? `Ready to analyse ${venues.filter(v => v.grade === 'B' || v.grade === 'C').length} Grade B+C venues for marketing opportunities.`
                 : `Ready to generate ${selectedChain} performance report. Click "Generate Report" to start.`
               }
             </p>
@@ -558,8 +670,110 @@ export default function ReportsView({ inline = false }) {
           </div>
         )}
 
-        {/* Streaming / completed report */}
-        {!isComingSoon && (reportText || loading) && (
+        {/* Marketing Targets Table (structured output) */}
+        {!isComingSoon && marketingData && !loading && (
+          <div style={{
+            borderRadius: 10, overflow: 'hidden',
+            border: `1px solid ${theme.border}`,
+            background: theme.surface,
+          }}>
+            {/* Summary */}
+            {marketingData.summary && (
+              <div style={{
+                padding: '14px 20px',
+                borderBottom: `1px solid ${theme.border}`,
+                fontSize: '0.84rem', lineHeight: 1.6,
+                color: theme.text,
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+              }}>
+                <Icon name="campaign" size={18} style={{ color: theme.headerBorder, flexShrink: 0, marginTop: 2 }} />
+                <div>{marketingData.summary}</div>
+              </div>
+            )}
+
+            {/* Table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{
+                width: '100%', borderCollapse: 'collapse',
+                fontSize: '0.8rem',
+              }}>
+                <thead>
+                  <tr style={{
+                    borderBottom: `1px solid ${theme.border}`,
+                    background: `${theme.headerBorder}08`,
+                  }}>
+                    {['#', 'Venue', 'City', 'Chain', 'Grade', 'Revenue', 'Screens', 'Potential', 'Marketing Note'].map(h => (
+                      <th key={h} style={{
+                        padding: '10px 12px', textAlign: 'left',
+                        fontWeight: 600, fontSize: '0.72rem',
+                        color: theme.textMuted, whiteSpace: 'nowrap',
+                        textTransform: 'uppercase', letterSpacing: '0.03em',
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(marketingData.venues || []).map((v, i) => (
+                    <tr key={i} style={{
+                      borderBottom: `1px solid ${theme.border}`,
+                      transition: 'background 0.1s',
+                    }}
+                      onMouseEnter={e => e.currentTarget.style.background = `${theme.headerBorder}08`}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <td style={cellStyle}>{v.rank || i + 1}</td>
+                      <td style={{ ...cellStyle, fontWeight: 600, color: theme.text }}>{v.name}</td>
+                      <td style={cellStyle}>{v.city}</td>
+                      <td style={cellStyle}>{v.chain}</td>
+                      <td style={cellStyle}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                        }}>
+                          <span style={{
+                            width: 8, height: 8, borderRadius: '50%',
+                            background: v.grade === 'B' ? '#f5c542' : '#e67e22',
+                          }} />
+                          {v.grade}
+                        </span>
+                      </td>
+                      <td style={{ ...cellStyle, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                        £{(v.revenue || 0).toLocaleString()}
+                      </td>
+                      <td style={{ ...cellStyle, textAlign: 'center' }}>{v.screens || '—'}</td>
+                      <td style={cellStyle}>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 4,
+                          fontSize: '0.7rem', fontWeight: 600,
+                          background: v.potential === 'High' ? '#27ae6020' : v.potential === 'Medium' ? '#f5c54220' : '#95a5a620',
+                          color: v.potential === 'High' ? '#27ae60' : v.potential === 'Medium' ? '#f5c542' : '#95a5a6',
+                        }}>
+                          {v.potential}
+                        </span>
+                      </td>
+                      <td style={{ ...cellStyle, fontSize: '0.76rem', lineHeight: 1.45, maxWidth: 320 }}>
+                        {v.note}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Table footer */}
+            <div style={{
+              padding: '10px 20px',
+              borderTop: `1px solid ${theme.border}`,
+              fontSize: '0.72rem', color: theme.textMuted,
+              display: 'flex', justifyContent: 'space-between',
+            }}>
+              <span>{marketingData.venues?.length || 0} marketing target venues</span>
+              <span>{selectedFilm?.filmInfo?.title}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Streaming / completed report (text output) */}
+        {!isComingSoon && !marketingData && (reportText || loading) && (
           <div style={{
             padding: 20, borderRadius: 10,
             background: theme.surface,
@@ -584,6 +798,9 @@ export default function ReportsView({ inline = false }) {
               )}
               {selectedType === 'insights' && (
                 <><span style={{ opacity: 0.4 }}>|</span><span>{importedFilms.length} films</span></>
+              )}
+              {selectedType === 'marketing' && selectedFilm && (
+                <><span style={{ opacity: 0.4 }}>|</span><span>{selectedFilm?.filmInfo?.title}</span></>
               )}
               {loading && (
                 <span style={{ marginLeft: 'auto', color: theme.headerBorder, fontSize: '0.72rem' }}>
@@ -620,6 +837,8 @@ export default function ReportsView({ inline = false }) {
           {selectedType === 'insights' && `${importedFilms.length} films in analysis set`}
           {selectedType === 'chain' && selectedFilm && `${filmChains.length} chains available`}
           {selectedType === 'chain' && !selectedFilm && 'No film selected'}
+          {selectedType === 'marketing' && selectedFilm && `${venues.filter(v => v.grade === 'B' || v.grade === 'C').length} Grade B+C target venues`}
+          {selectedType === 'marketing' && !selectedFilm && 'No film selected'}
           {isComingSoon && currentType.requires}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -632,7 +851,12 @@ export default function ReportsView({ inline = false }) {
 }
 
 
-// ── Shared style helper ──
+// ── Shared style helpers ──
+
+const cellStyle = {
+  padding: '10px 12px',
+  verticalAlign: 'top',
+}
 
 function secondaryBtnStyle(theme) {
   return {
