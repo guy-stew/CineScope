@@ -49,15 +49,18 @@ function MapUpdater({ lat, lng }) {
 }
 
 
-export default function VenueForm({ venue, onSave, onCancel }) {
+export default function VenueForm({ venue, onSave, onCancel, onDelete }) {
   const { getToken } = useAuth()
 
   const isEditing = !!venue?.id
+  const canDelete = isEditing && venue?.source !== 'seed'
   const mapRef = useRef(null)
 
   // ── Form state ──
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [geocoding, setGeocoding] = useState(false)
   const [error, setError] = useState(null)
   const [geocodeMessage, setGeocodeMessage] = useState(null)
@@ -229,6 +232,27 @@ export default function VenueForm({ venue, onSave, onCancel }) {
       setError(`Failed to save: ${err.message}`)
     } finally {
       setSaving(false)
+    }
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // DELETE
+  // ═══════════════════════════════════════════════════════════════
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    setError(null)
+
+    try {
+      await venueApi.deleteVenue(venue.id, getToken)
+      setShowDeleteConfirm(false)
+      if (onDelete) onDelete(venue)
+    } catch (err) {
+      setError(`Failed to delete: ${err.message}`)
+      setShowDeleteConfirm(false)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -520,13 +544,23 @@ export default function VenueForm({ venue, onSave, onCancel }) {
 
       {/* Action buttons */}
       <div className="cs-vf__actions">
-        <button className="cs-vm__btn" onClick={onCancel} disabled={saving}>
+        {canDelete && (
+          <button
+            className="cs-vm__btn cs-vm__btn--danger"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={saving || deleting}
+          >
+            <Icon name="delete" size={16} /> Delete Venue
+          </button>
+        )}
+        <div style={{ flex: 1 }} />
+        <button className="cs-vm__btn" onClick={onCancel} disabled={saving || deleting}>
           Cancel
         </button>
         <button
           className="cs-vm__btn cs-vm__btn--primary"
           onClick={handleSave}
-          disabled={saving || !dirty}
+          disabled={saving || deleting || !dirty}
         >
           {saving
             ? <><Icon name="progress_activity" size={16} /> Saving...</>
@@ -534,6 +568,43 @@ export default function VenueForm({ venue, onSave, onCancel }) {
           }
         </button>
       </div>
+
+      {/* Delete confirmation overlay */}
+      {showDeleteConfirm && (
+        <div className="cs-vf__delete-overlay">
+          <div className="cs-vf__delete-dialog">
+            <div className="cs-vf__delete-icon">
+              <Icon name="warning" size={32} />
+            </div>
+            <h3 className="cs-vf__delete-title">Delete Venue?</h3>
+            <p className="cs-vf__delete-text">
+              This will permanently remove <strong>{venue.name}</strong> ({venue.city}) from
+              your venue list. Any Comscore matching data associated with this venue will
+              no longer resolve to it.
+            </p>
+            <p className="cs-vf__delete-warning">This action cannot be undone.</p>
+            <div className="cs-vf__delete-actions">
+              <button
+                className="cs-vm__btn"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="cs-vm__btn cs-vm__btn--danger"
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting
+                  ? <><Icon name="progress_activity" size={16} /> Deleting...</>
+                  : <><Icon name="delete" size={16} /> Yes, delete permanently</>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

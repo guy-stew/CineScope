@@ -157,6 +157,13 @@ function parseCloudSettings(raw) {
  * App expects:     { name, city, country, chain, category, lat, lng, address, placeId, comscore_name, status, ... }
  */
 function normaliseCloudVenue(v) {
+  // Guard against NaN/invalid coordinates — parseFloat('') or parseFloat(undefined)
+  // returns NaN which silently breaks Leaflet marker rendering.
+  const rawLat = v.lat != null && v.lat !== '' ? parseFloat(v.lat) : null
+  const rawLng = v.lng != null && v.lng !== '' ? parseFloat(v.lng) : null
+  const lat = rawLat != null && !isNaN(rawLat) && isFinite(rawLat) ? rawLat : null
+  const lng = rawLng != null && !isNaN(rawLng) && isFinite(rawLng) ? rawLng : null
+
   return {
     id: v.id,
     name: v.name,
@@ -165,8 +172,8 @@ function normaliseCloudVenue(v) {
     country: v.country || 'United Kingdom',
     chain: v.chain || '',
     category: v.category || 'Independent',
-    lat: v.lat != null ? parseFloat(v.lat) : null,
-    lng: v.lng != null ? parseFloat(v.lng) : null,
+    lat,
+    lng,
     address: v.address || '',
     postcode: v.postcode || '',
     placeId: v.place_id || '',
@@ -651,8 +658,11 @@ export function AppProvider({ children }) {
   const matchResult = useMemo(() => {
     if (!selectedFilm) {
       // No film: show all venues (including closed, marked as such)
+      // Skip venues without valid coordinates — they can't be plotted on the map
       return {
-        venues: baseVenues.map(v => ({ ...v, grade: null, revenue: null })),
+        venues: baseVenues
+          .filter(v => v.lat != null && v.lng != null)
+          .map(v => ({ ...v, grade: null, revenue: null })),
         details: [],
       }
     }
@@ -691,15 +701,17 @@ export function AppProvider({ children }) {
 
     const graded = calculateGrades(deduped, gradeSettings)
 
-    // Unmatched open venues get grade E
+    // Unmatched open venues get grade E (skip those without coordinates)
     const matchedKeys = new Set(graded.map(v => `${v.name}|${v.city}`.toLowerCase()))
     const eGradeVenues = activeVenues
       .filter(v => !matchedKeys.has(`${v.name}|${v.city}`.toLowerCase()))
+      .filter(v => v.lat != null && v.lng != null)
       .map(v => ({ ...v, grade: 'E', revenue: null }))
 
     // Closed venues: include with null grade + closed status (visible as grey markers)
     const closedVenues = baseVenues
       .filter(v => (v.status || 'open') === 'closed')
+      .filter(v => v.lat != null && v.lng != null)
       .map(v => ({ ...v, grade: null, revenue: null }))
 
     return {

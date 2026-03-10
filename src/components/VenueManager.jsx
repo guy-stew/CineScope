@@ -209,6 +209,15 @@ export default function VenueManager({ show, onHide, inline = false }) {
     setEditVenue(null)
   }
 
+  const handleFormDelete = async (deletedVenue) => {
+    await loadVenues()
+    await refreshVenues()
+    setView('list')
+    setEditVenue(null)
+    setSaveMessage(`${deletedVenue.name} deleted successfully`)
+    setTimeout(() => setSaveMessage(null), 4000)
+  }
+
   const handleImportComplete = async (result) => {
     await loadVenues()
     await refreshVenues()
@@ -503,6 +512,7 @@ export default function VenueManager({ show, onHide, inline = false }) {
             venue={editVenue}
             onSave={handleFormSave}
             onCancel={handleFormCancel}
+            onDelete={handleFormDelete}
           />
         </div>
       )}

@@ -1766,6 +1766,7 @@ body {
 /* ═══════════════════════════════════════════════════════════ */
 
 .cs-vf {
+  position: relative;
   padding: 20px 28px 28px;
   max-width: 960px;
   margin: 0 auto;
@@ -2039,6 +2040,99 @@ body {
   .cs-vf__row > .cs-vf__field {
     flex: 1 1 auto !important;
   }
+}
+
+/* ── VenueForm Delete Button & Confirmation ── */
+
+.cs-vm__btn--danger {
+  background: transparent;
+  color: #e74c3c;
+  border: 1px solid rgba(231, 76, 60, 0.4);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cs-vm__btn--danger:hover:not(:disabled) {
+  background: rgba(231, 76, 60, 0.1);
+  border-color: #e74c3c;
+  color: #c0392b;
+}
+
+.cs-vm__btn--danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cs-vf__delete-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  border-radius: inherit;
+  backdrop-filter: blur(2px);
+}
+
+.cs-vf__delete-dialog {
+  background: var(--cs-surface, #1e293b);
+  border: 1px solid var(--cs-border, rgba(255, 255, 255, 0.1));
+  border-radius: 12px;
+  padding: 28px 32px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.cs-vf__delete-icon {
+  color: #e74c3c;
+  margin-bottom: 12px;
+}
+
+.cs-vf__delete-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--cs-text, #f1f5f9);
+  margin: 0 0 12px;
+}
+
+.cs-vf__delete-text {
+  font-size: 0.85rem;
+  color: var(--cs-text-muted, rgba(255, 255, 255, 0.6));
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+
+.cs-vf__delete-text strong {
+  color: var(--cs-text, #f1f5f9);
+}
+
+.cs-vf__delete-warning {
+  font-size: 0.8rem;
+  color: #e74c3c;
+  font-weight: 500;
+  margin: 0 0 20px;
+}
+
+.cs-vf__delete-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.cs-vf__delete-actions .cs-vm__btn--danger {
+  background: #e74c3c;
+  color: #fff;
+  border-color: #e74c3c;
+}
+
+.cs-vf__delete-actions .cs-vm__btn--danger:hover:not(:disabled) {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
 }
 
 /* ═══════════════════════════════════════════════════════════ */
