@@ -22,7 +22,7 @@ import { formatRevenue } from '../utils/formatRevenue'
 import Icon from './Icon'
 import FilmSelectorDropdown from './FilmSelectorDropdown'
 
-export default function MapPanel({ visible, onToggle }) {
+export default function MapPanel({ visible, onToggle, onVenueFly }) {
   const {
     filteredVenues,
     selectedVenue, setSelectedVenue,
@@ -278,7 +278,10 @@ export default function MapPanel({ visible, onToggle }) {
             <div
               key={`${venue.name}-${venue.city}-${idx}`}
               className="cs-map-panel__venue-row"
-              onClick={() => setSelectedVenue(venue)}
+              onClick={() => {
+                setSelectedVenue(venue)
+                if (onVenueFly) onVenueFly(venue)
+              }}
               style={{
                 background: isSelected ? `${theme.headerBorder}12` : 'transparent',
                 borderBottom: `1px solid ${theme.border}`,

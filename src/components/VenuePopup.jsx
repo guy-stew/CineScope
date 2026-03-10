@@ -1,16 +1,22 @@
 /**
- * VenuePopup.jsx — Enhanced venue popup for CineScope v2.1
+ * VenuePopup.jsx — CineScope v3.6
  *
- * Renders inside a react-leaflet <Popup> when a map marker is clicked.
- * Shows: grade badge, national + chain rankings, per-film breakdown
- * with individual grade badges, Recharts mini trend chart, and
- * contact management with chain-default / venue-override model.
+ * Redesigned venue popup for map markers.
+ * Changes from v2.1:
+ *   - Landscape 2-column layout (left: revenue/films, right: contact/chart)
+ *   - Theme-aware (dark/light mode via ThemeContext)
+ *   - "Average Revenue" label (was "Revenue")
+ *   - Grade tooltip on hover (explains quartile system + venue position)
+ *   - No "#" prefix on rankings
+ *   - Styled close button handled via CSS (circle with offset)
+ *   - More padding, spacing, CineScope design language
  */
 
-import React, { useMemo, useState, useEffect, useCallback } from 'react'
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '@clerk/clerk-react'
 import { useApp } from '../context/AppContext'
-import { getGradeColor } from '../utils/grades'
+import { useTheme } from '../context/ThemeContext'
+import { getGradeColor, GRADES } from '../utils/grades'
 import { formatRevenue } from '../utils/formatRevenue'
 import * as api from '../utils/apiClient'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
@@ -25,19 +31,21 @@ export default function VenuePopup({ venue }) {
     importedFilms,
     revenueFormat,
   } = useApp()
+  const { theme } = useTheme()
   const { getToken } = useAuth()
 
   const venueKey = `${venue.name}|${venue.city}`.toLowerCase()
   const filmEntries = venueFilmData.get(venueKey) || []
 
   const grade = venue.grade || null
-  const color = grade ? getGradeColor(grade) : '#2E75B6'
+  const gradeColor = grade ? getGradeColor(grade) : '#2E75B6'
 
-  // Is this an independent / single-location venue?
   const isIndependent = !venue.chain || venue.chain === 'Independent'
 
+  // ── Grade tooltip ──
+  const [showGradeTooltip, setShowGradeTooltip] = useState(false)
 
-  // ── Contact state ─────────────────────────────────────────────
+  // ── Contact state ──
   const [contact, setContact] = useState(null)
   const [resolvedScope, setResolvedScope] = useState(null)
   const [contactLoading, setContactLoading] = useState(true)
@@ -45,18 +53,16 @@ export default function VenuePopup({ venue }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Edit form fields
   const [editFields, setEditFields] = useState({
     manager_name: '',
     booking_contact_name: '',
     booking_contact_email: '',
     notes: '',
   })
-  // Chain-broadcast checkbox (only relevant for chain venues)
   const [applyToChain, setApplyToChain] = useState(false)
 
 
-  // ── Fetch contact on mount ────────────────────────────────────
+  // ── Fetch contact on mount ──
   useEffect(() => {
     let cancelled = false
     async function loadContact() {
@@ -80,7 +86,6 @@ export default function VenuePopup({ venue }) {
   }, [venue.name, venue.city, venue.chain, getToken])
 
 
-  // ── Start editing ─────────────────────────────────────────────
   const startEdit = useCallback(() => {
     setEditFields({
       manager_name: contact?.manager_name || '',
@@ -93,25 +98,16 @@ export default function VenuePopup({ venue }) {
   }, [contact])
 
 
-  // ── Save contact ──────────────────────────────────────────────
   const saveContactHandler = useCallback(async () => {
     setSaving(true)
     try {
       const chainName = venue.chain || 'Independent'
       const scope = (!isIndependent && applyToChain) ? 'chain' : 'venue'
-
-      const payload = {
-        scope,
-        chain_name: chainName,
-        ...editFields,
-      }
-
-      // For venue-level saves, include venue identifiers
+      const payload = { scope, chain_name: chainName, ...editFields }
       if (scope === 'venue') {
         payload.venue_name = venue.name
         payload.venue_city = venue.city
       }
-
       const result = await api.saveContact(payload, getToken)
       setContact(result.contact)
       setResolvedScope(result.contact.scope)
@@ -125,13 +121,11 @@ export default function VenuePopup({ venue }) {
   }, [editFields, applyToChain, venue, isIndependent, getToken])
 
 
-  // ── Reset to chain default ────────────────────────────────────
   const resetToChainDefault = useCallback(async () => {
     if (!contact?.id) return
     setSaving(true)
     try {
       await api.deleteContact(contact.id, getToken)
-      // Re-fetch to get the chain default
       const chainName = venue.chain || 'Independent'
       const result = await api.getContact(venue.name, venue.city, chainName, getToken)
       setContact(result.contact)
@@ -146,7 +140,7 @@ export default function VenuePopup({ venue }) {
   }, [contact, venue, getToken])
 
 
-  // ── National Ranking ──────────────────────────────────────────
+  // ── National Ranking ──
   const nationalRanking = useMemo(() => {
     if (!selectedFilm) return null
     const withRevenue = venues.filter(v => v.revenue != null && v.grade && v.grade !== 'E')
@@ -159,7 +153,7 @@ export default function VenuePopup({ venue }) {
   }, [venues, venue, selectedFilm])
 
 
-  // ── Chain Ranking (hidden for independents / single-venue chains) ──
+  // ── Chain Ranking ──
   const chainRanking = useMemo(() => {
     if (!selectedFilm || !venue.chain) return null
     const chainVenues = venues.filter(v =>
@@ -175,7 +169,7 @@ export default function VenuePopup({ venue }) {
   }, [venues, venue, selectedFilm])
 
 
-  // ── Unscreened films ──────────────────────────────────────────
+  // ── Unscreened films ──
   const unscreenedFilms = useMemo(() => {
     if (importedFilms.length === 0) return []
     const screenedIds = new Set(filmEntries.map(f => f.filmId))
@@ -195,15 +189,15 @@ export default function VenuePopup({ venue }) {
   }, [importedFilms, filmEntries])
 
 
-  // ── Chart data ────────────────────────────────────────────────
+  // ── Chart data ──
   const showChart = filmEntries.length >= 2 &&
     (!selectedFilmId || selectedFilmId === 'all-films')
 
   const chartData = useMemo(() => {
     if (!showChart) return []
     return filmEntries.map(f => ({
-      name: f.filmTitle.length > 15
-        ? f.filmTitle.substring(0, 13) + '…'
+      name: f.filmTitle.length > 12
+        ? f.filmTitle.substring(0, 10) + '..'
         : f.filmTitle,
       fullName: f.filmTitle,
       revenue: f.revenue,
@@ -211,235 +205,7 @@ export default function VenuePopup({ venue }) {
   }, [filmEntries, showChart])
 
 
-  // ── Styles ────────────────────────────────────────────────────
-  const s = {
-    container: {
-      minWidth: 280,
-      maxWidth: 320,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      lineHeight: 1.4,
-    },
-    header: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      marginBottom: 8,
-    },
-    title: {
-      fontWeight: 700,
-      fontSize: '1rem',
-      lineHeight: 1.2,
-      color: '#1a1a1a',
-    },
-    subtitle: {
-      fontSize: '0.78rem',
-      color: '#777',
-      marginTop: 2,
-    },
-    closedBadge: {
-      display: 'inline-block',
-      marginTop: 4,
-      padding: '1px 8px',
-      borderRadius: 3,
-      fontSize: '0.65rem',
-      fontWeight: 700,
-      letterSpacing: '0.05em',
-      background: '#e74c3c',
-      color: '#fff',
-    },
-    gradeBadge: {
-      width: 36,
-      height: 36,
-      borderRadius: '50%',
-      backgroundColor: color,
-      color: '#fff',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontWeight: 700,
-      fontSize: '1rem',
-      flexShrink: 0,
-      marginLeft: 10,
-    },
-    statsBox: {
-      background: '#f5f6f8',
-      borderRadius: 6,
-      padding: '7px 10px',
-      marginBottom: 8,
-      fontSize: '0.83rem',
-    },
-    revenue: {
-      fontWeight: 700,
-      fontSize: '1rem',
-      color: '#1a1a1a',
-    },
-    rankRow: {
-      color: '#555',
-      marginTop: 2,
-    },
-    sectionLabel: {
-      fontWeight: 600,
-      fontSize: '0.73rem',
-      color: '#888',
-      marginBottom: 4,
-      textTransform: 'uppercase',
-      letterSpacing: '0.04em',
-    },
-    filmRow: {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '3px 0',
-    },
-    filmTitle: {
-      color: '#333',
-      flex: 1,
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap',
-      marginRight: 8,
-      fontSize: '0.8rem',
-    },
-    filmRevenue: {
-      fontWeight: 600,
-      marginRight: 6,
-      whiteSpace: 'nowrap',
-      fontSize: '0.8rem',
-    },
-    miniGradeBadge: (gradeColor) => ({
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: 20,
-      height: 20,
-      borderRadius: '50%',
-      fontSize: '0.65rem',
-      fontWeight: 700,
-      color: '#fff',
-      flexShrink: 0,
-      backgroundColor: gradeColor,
-    }),
-    address: {
-      fontSize: '0.73rem',
-      color: '#999',
-      borderTop: '1px solid #eee',
-      paddingTop: 5,
-      marginTop: 4,
-    },
-    // Contact styles
-    contactSection: {
-      borderTop: '1px solid #e5e5e5',
-      paddingTop: 8,
-      marginTop: 8,
-    },
-    contactRow: {
-      fontSize: '0.8rem',
-      color: '#444',
-      marginBottom: 2,
-    },
-    contactLabel: {
-      color: '#888',
-      fontWeight: 500,
-      marginRight: 4,
-      fontSize: '0.75rem',
-    },
-    contactNotes: {
-      fontSize: '0.78rem',
-      color: '#666',
-      fontStyle: 'italic',
-      marginTop: 3,
-    },
-    badge: {
-      display: 'inline-block',
-      fontSize: '0.65rem',
-      fontWeight: 600,
-      padding: '1px 6px',
-      borderRadius: 3,
-      marginLeft: 6,
-    },
-    customBadge: {
-      background: '#e8f4fd',
-      color: '#1a7bc0',
-    },
-    chainBadge: {
-      background: '#f0f0f0',
-      color: '#888',
-    },
-    input: {
-      width: '100%',
-      padding: '4px 7px',
-      fontSize: '0.8rem',
-      border: '1px solid #ddd',
-      borderRadius: 4,
-      marginTop: 2,
-      marginBottom: 5,
-      boxSizing: 'border-box',
-      outline: 'none',
-      fontFamily: 'inherit',
-    },
-    textarea: {
-      width: '100%',
-      padding: '4px 7px',
-      fontSize: '0.8rem',
-      border: '1px solid #ddd',
-      borderRadius: 4,
-      marginTop: 2,
-      marginBottom: 5,
-      resize: 'vertical',
-      minHeight: 40,
-      boxSizing: 'border-box',
-      outline: 'none',
-      fontFamily: 'inherit',
-    },
-    btnRow: {
-      display: 'flex',
-      gap: 6,
-      marginTop: 4,
-      flexWrap: 'wrap',
-      alignItems: 'center',
-    },
-    btn: {
-      fontSize: '0.75rem',
-      padding: '3px 10px',
-      borderRadius: 4,
-      border: '1px solid #ccc',
-      background: '#fff',
-      cursor: 'pointer',
-      fontWeight: 500,
-    },
-    btnPrimary: {
-      fontSize: '0.75rem',
-      padding: '3px 10px',
-      borderRadius: 4,
-      border: 'none',
-      background: '#2E75B6',
-      color: '#fff',
-      cursor: 'pointer',
-      fontWeight: 500,
-    },
-    btnDanger: {
-      fontSize: '0.7rem',
-      padding: '2px 8px',
-      borderRadius: 4,
-      border: '1px solid #e74c3c',
-      background: '#fff',
-      color: '#e74c3c',
-      cursor: 'pointer',
-      fontWeight: 500,
-    },
-    checkboxRow: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      marginTop: 4,
-      marginBottom: 2,
-      fontSize: '0.78rem',
-      color: '#555',
-    },
-  }
-
-
-  // ── Helper: is there any contact info to display? ─────────────
+  // ── Helpers ──
   const hasContactInfo = contact && (
     contact.manager_name ||
     contact.booking_contact_name ||
@@ -447,319 +213,574 @@ export default function VenuePopup({ venue }) {
     contact.notes
   )
 
+  const hasFilmData = filmEntries.length > 0 || unscreenedFilms.length > 0
+  const useTwoColumns = hasFilmData
 
-  // ── Stop clicks inside popup from reaching Leaflet's map ───
   const stopPropagation = useCallback((e) => {
     e.stopPropagation()
     if (e.nativeEvent) e.nativeEvent.stopImmediatePropagation()
   }, [])
 
 
-  return (
-    <div style={s.container} onClick={stopPropagation} onMouseDown={stopPropagation}>
+  // ── Shared label style ──
+  const sectionLabel = {
+    fontWeight: 600,
+    fontSize: '0.68rem',
+    color: theme.textMuted,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  }
 
-      {/* ── Header + Grade Badge ── */}
-      <div style={s.header}>
-        <div style={{ flex: 1 }}>
-          <div style={s.title}>{venue.name}</div>
-          <div style={s.subtitle}>
+  // ── Input style ──
+  const inputStyle = {
+    width: '100%',
+    padding: '3px 7px',
+    fontSize: '0.78rem',
+    border: `1px solid ${theme.border}`,
+    borderRadius: 4,
+    marginBottom: 5,
+    boxSizing: 'border-box',
+    outline: 'none',
+    fontFamily: 'inherit',
+    background: theme.inputBg || theme.surface,
+    color: theme.text,
+  }
+
+  const btnStyle = {
+    fontSize: '0.72rem',
+    padding: '3px 10px',
+    borderRadius: 5,
+    border: `1px solid ${theme.border}`,
+    background: theme.surface,
+    color: theme.text,
+    cursor: 'pointer',
+    fontWeight: 500,
+    fontFamily: 'inherit',
+  }
+
+  const btnPrimaryStyle = {
+    ...btnStyle,
+    border: 'none',
+    background: theme.headerBorder || '#2E75B6',
+    color: '#fff',
+  }
+
+
+  return (
+    <div
+      className="cs-venue-popup"
+      onClick={stopPropagation}
+      onMouseDown={stopPropagation}
+      style={{
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        lineHeight: 1.4,
+        minWidth: useTwoColumns ? 440 : 280,
+        maxWidth: useTwoColumns ? 540 : 320,
+        padding: '16px 18px',
+      }}
+    >
+
+      {/* ══ HEADER — Venue name + Grade badge ══ */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 8,
+        gap: 12,
+      }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontWeight: 700,
+            fontSize: '0.95rem',
+            lineHeight: 1.25,
+            color: theme.text,
+          }}>
+            {venue.name}
+          </div>
+          <div style={{
+            fontSize: '0.74rem',
+            color: theme.textMuted,
+            marginTop: 3,
+          }}>
             {venue.city}
             {venue.country === 'Ireland' ? ', Ireland' : ''}
-            {' | '}{venue.chain} | {venue.category}
+            {' \u00b7 '}{venue.chain || 'Independent'} {' \u00b7 '} {venue.category}
           </div>
           {(venue.status || 'open') === 'closed' && (
-            <div style={s.closedBadge}>CLOSED</div>
+            <span style={{
+              display: 'inline-block',
+              marginTop: 4,
+              padding: '1px 8px',
+              borderRadius: 3,
+              fontSize: '0.62rem',
+              fontWeight: 700,
+              letterSpacing: '0.05em',
+              background: '#e74c3c',
+              color: '#fff',
+            }}>
+              CLOSED
+            </span>
           )}
         </div>
+
+        {/* Grade badge with hover tooltip */}
         {grade && grade !== 'E' && selectedFilm && (
-          <div style={s.gradeBadge}>{grade}</div>
+          <div
+            style={{ position: 'relative', flexShrink: 0 }}
+            onMouseEnter={() => setShowGradeTooltip(true)}
+            onMouseLeave={() => setShowGradeTooltip(false)}
+          >
+            <div style={{
+              width: 38,
+              height: 38,
+              borderRadius: '50%',
+              backgroundColor: gradeColor,
+              color: grade === 'B' ? '#1a1c25' : '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 700,
+              fontSize: '1rem',
+              cursor: 'help',
+              boxShadow: `0 2px 8px ${gradeColor}44`,
+            }}>
+              {grade}
+            </div>
+
+            {showGradeTooltip && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: 6,
+                width: 230,
+                padding: '10px 12px',
+                background: theme.surface,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 8,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+                zIndex: 10000,
+                fontSize: '0.7rem',
+                lineHeight: 1.5,
+                color: theme.text,
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 5, color: gradeColor, fontSize: '0.74rem' }}>
+                  Grade {grade} {GRADES[grade]?.name ? `\u2014 ${GRADES[grade].name}` : ''}
+                </div>
+                <div style={{ color: theme.textMuted, fontSize: '0.66rem', marginBottom: 4 }}>
+                  Venues graded A\u2013E by revenue quartiles:
+                </div>
+                {['A', 'B', 'C', 'D', 'E'].map(g => (
+                  <div key={g} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '1px 0',
+                    fontWeight: g === grade ? 700 : 400,
+                    color: g === grade ? theme.text : theme.textMuted,
+                    fontSize: '0.66rem',
+                  }}>
+                    <span style={{
+                      display: 'inline-block',
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      background: getGradeColor(g),
+                      flexShrink: 0,
+                    }} />
+                    <span>
+                      {g === 'A' && 'A \u2014 Top 25%'}
+                      {g === 'B' && 'B \u2014 25\u201350%'}
+                      {g === 'C' && 'C \u2014 50\u201375%'}
+                      {g === 'D' && 'D \u2014 Bottom 25%'}
+                      {g === 'E' && 'E \u2014 Not screened'}
+                    </span>
+                  </div>
+                ))}
+                {nationalRanking && (
+                  <div style={{
+                    borderTop: `1px solid ${theme.border}`,
+                    paddingTop: 5,
+                    marginTop: 5,
+                    fontWeight: 600,
+                    fontSize: '0.68rem',
+                    color: theme.text,
+                  }}>
+                    This venue: {nationalRanking.rank} of {nationalRanking.total} nationally
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
 
-      {/* ── Revenue + Rankings ── */}
+      {/* ══ REVENUE + RANKINGS ══ */}
       {venue.revenue != null && (
-        <div style={s.statsBox}>
-          <div style={s.revenue}>
-            Revenue: {formatRevenue(venue.revenue, revenueFormat)}
+        <div style={{
+          background: `${theme.headerBorder}10`,
+          borderRadius: 8,
+          padding: '8px 12px',
+          marginBottom: 10,
+          border: `1px solid ${theme.border}`,
+        }}>
+          <div style={{
+            fontWeight: 700,
+            fontSize: '0.92rem',
+            color: theme.text,
+          }}>
+            Average Revenue: {formatRevenue(venue.revenue, revenueFormat)}
             {venue.wasAggregated && (
               <span
-                style={{ fontSize: '0.75em', marginLeft: 4, cursor: 'help' }}
+                style={{ fontSize: '0.72em', marginLeft: 4, cursor: 'help' }}
                 title={`Combined from ${venue.screenEntries} screen entries`}
               >
-                🖥️×{venue.screenEntries}
+                {'\uD83D\uDDA5\uFE0F'}&times;{venue.screenEntries}
               </span>
             )}
           </div>
 
           {nationalRanking && (
-            <div style={s.rankRow}>
-              National: <strong>#{nationalRanking.rank}</strong> of {nationalRanking.total} venues
+            <div style={{ color: theme.textMuted, fontSize: '0.76rem', marginTop: 3 }}>
+              National: <strong style={{ color: theme.text }}>{nationalRanking.rank}</strong> of {nationalRanking.total} venues
             </div>
           )}
 
           {chainRanking && (
-            <div style={s.rankRow}>
-              Chain: <strong>#{chainRanking.rank}</strong> of {chainRanking.total} {chainRanking.chain} venues
+            <div style={{ color: theme.textMuted, fontSize: '0.76rem', marginTop: 1 }}>
+              Chain: <strong style={{ color: theme.text }}>{chainRanking.rank}</strong> of {chainRanking.total} {chainRanking.chain} venues
             </div>
           )}
         </div>
       )}
 
 
-      {/* ── Per-Film Breakdown ── */}
-      {(filmEntries.length > 0 || unscreenedFilms.length > 0) && (
-        <div style={{ marginBottom: 8 }}>
-          <div style={s.sectionLabel}>Per-Film Breakdown</div>
+      {/* ══ TWO-COLUMN BODY ══ */}
+      <div style={{
+        display: useTwoColumns ? 'flex' : 'block',
+        gap: 14,
+      }}>
 
-          {filmEntries.map((f, i) => (
-            <div
-              key={f.filmId}
-              style={{
-                ...s.filmRow,
-                borderBottom: (i < filmEntries.length - 1 || unscreenedFilms.length > 0)
-                  ? '1px solid #f0f0f0' : 'none',
-              }}
-            >
-              <span style={s.filmTitle}>{f.filmTitle}</span>
-              <span style={s.filmRevenue}>
-                {formatRevenue(f.revenue, revenueFormat)}
-              </span>
-              <span style={s.miniGradeBadge(getGradeColor(f.grade))}>
-                {f.grade}
-              </span>
+        {/* ── LEFT: Per-Film Breakdown + Chart ── */}
+        {hasFilmData && (
+          <div style={{ flex: useTwoColumns ? '1 1 55%' : 'none', minWidth: 0 }}>
+            <div style={sectionLabel}>Per-Film Breakdown</div>
+
+            <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 6 }}>
+              {filmEntries.map((f, i) => (
+                <div
+                  key={f.filmId}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '4px 0',
+                    borderBottom: (i < filmEntries.length - 1 || unscreenedFilms.length > 0)
+                      ? `1px solid ${theme.border}` : 'none',
+                  }}
+                >
+                  <span style={{
+                    color: theme.text,
+                    flex: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    marginRight: 8,
+                    fontSize: '0.78rem',
+                  }}>
+                    {f.filmTitle}
+                  </span>
+                  <span style={{
+                    fontWeight: 600,
+                    marginRight: 6,
+                    whiteSpace: 'nowrap',
+                    fontSize: '0.78rem',
+                    color: theme.text,
+                  }}>
+                    {formatRevenue(f.revenue, revenueFormat)}
+                  </span>
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    fontSize: '0.62rem',
+                    fontWeight: 700,
+                    color: '#fff',
+                    flexShrink: 0,
+                    backgroundColor: getGradeColor(f.grade),
+                  }}>
+                    {f.grade}
+                  </span>
+                </div>
+              ))}
+
+              {unscreenedFilms.map((f, i) => (
+                <div
+                  key={`un-${f.filmId}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '4px 0',
+                    opacity: 0.5,
+                    borderBottom: i < unscreenedFilms.length - 1
+                      ? `1px solid ${theme.border}` : 'none',
+                  }}
+                >
+                  <span style={{
+                    color: theme.textMuted,
+                    flex: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    marginRight: 8,
+                    fontSize: '0.78rem',
+                  }}>
+                    {f.filmTitle}
+                  </span>
+                  <span style={{
+                    color: theme.textMuted,
+                    fontStyle: 'italic',
+                    fontSize: '0.7rem',
+                    marginRight: 6,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    Not screened
+                  </span>
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    fontSize: '0.62rem',
+                    fontWeight: 700,
+                    color: '#fff',
+                    flexShrink: 0,
+                    backgroundColor: getGradeColor('E'),
+                  }}>
+                    E
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
 
-          {unscreenedFilms.map((f, i) => (
-            <div
-              key={`un-${f.filmId}`}
-              style={{
-                ...s.filmRow,
-                opacity: 0.55,
-                borderBottom: i < unscreenedFilms.length - 1
-                  ? '1px solid #f0f0f0' : 'none',
-              }}
-            >
-              <span style={{ ...s.filmTitle, color: '#999' }}>
-                {f.filmTitle}
-              </span>
-              <span style={{ ...s.filmRevenue, color: '#bbb', fontStyle: 'italic', fontSize: '0.73rem' }}>
-                Not screened
-              </span>
-              <span style={s.miniGradeBadge(getGradeColor('E'))}>E</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-
-      {/* ── Trend Chart ── */}
-      {showChart && (
-        <div style={{ marginBottom: 8 }}>
-          <div style={s.sectionLabel}>Revenue Trend</div>
-          <div style={{ width: 280, height: 120 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 5, right: 8, bottom: 5, left: 0 }}>
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 9, fill: '#888' }}
-                  interval={0}
-                  angle={-15}
-                  textAnchor="end"
-                  height={32}
-                />
-                <YAxis
-                  tick={{ fontSize: 9, fill: '#888' }}
-                  tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
-                  width={32}
-                />
-                <Tooltip
-                  formatter={(value) => [formatRevenue(value, revenueFormat), 'Revenue']}
-                  labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
-                  contentStyle={{ fontSize: '0.78rem', borderRadius: 4 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#2E75B6"
-                  strokeWidth={2}
-                  dot={{ r: 4, fill: '#2E75B6', stroke: '#fff', strokeWidth: 1 }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {filmEntries.length === 1 && importedFilms.length <= 1 && (
-        <div style={{ fontSize: '0.7rem', color: '#aaa', textAlign: 'center', marginBottom: 6 }}>
-          Import more films to see trends
-        </div>
-      )}
-
-
-      {/* ══════════════════════════════════════════════════════════
-          CONTACT INFORMATION
-         ══════════════════════════════════════════════════════════ */}
-      <div style={s.contactSection}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-          <div style={s.sectionLabel}>Contact Information</div>
-
-          {/* Scope badges */}
-          {resolvedScope === 'venue' && !editing && (
-            <span style={{ ...s.badge, ...s.customBadge }}>Custom contact</span>
-          )}
-          {resolvedScope === 'chain' && !editing && !isIndependent && (
-            <span style={{ ...s.badge, ...s.chainBadge }}>Chain default</span>
-          )}
-        </div>
-
-        {/* Loading state */}
-        {contactLoading && (
-          <div style={{ fontSize: '0.78rem', color: '#aaa' }}>Loading contact...</div>
-        )}
-
-        {/* Error */}
-        {contactError && !contactLoading && (
-          <div style={{ fontSize: '0.78rem', color: '#e74c3c' }}>{contactError}</div>
-        )}
-
-        {/* ── Display mode ── */}
-        {!contactLoading && !editing && (
-          <>
-            {hasContactInfo ? (
-              <div>
-                {contact.manager_name && (
-                  <div style={s.contactRow}>
-                    <span style={s.contactLabel}>Manager:</span>
-                    {contact.manager_name}
-                  </div>
-                )}
-                {contact.booking_contact_name && (
-                  <div style={s.contactRow}>
-                    <span style={s.contactLabel}>Booking:</span>
-                    {contact.booking_contact_name}
-                  </div>
-                )}
-                {contact.booking_contact_email && (
-                  <div style={s.contactRow}>
-                    <span style={s.contactLabel}>Email:</span>
-                    <a
-                      href={`mailto:${contact.booking_contact_email}`}
-                      style={{ color: '#2E75B6', textDecoration: 'none', fontSize: '0.8rem' }}
-                    >
-                      {contact.booking_contact_email}
-                    </a>
-                  </div>
-                )}
-                {contact.notes && (
-                  <div style={s.contactNotes}>{contact.notes}</div>
-                )}
-              </div>
-            ) : (
-              <div style={{ fontSize: '0.78rem', color: '#bbb' }}>
-                No contact information yet
+            {/* Trend Chart */}
+            {showChart && (
+              <div style={{ marginTop: 4 }}>
+                <div style={sectionLabel}>Revenue Trend</div>
+                <div style={{ width: '100%', height: 110 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData} margin={{ top: 5, right: 8, bottom: 5, left: 0 }}>
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: 8, fill: theme.textMuted }}
+                        interval={0}
+                        angle={-15}
+                        textAnchor="end"
+                        height={28}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 8, fill: theme.textMuted }}
+                        tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
+                        width={30}
+                      />
+                      <Tooltip
+                        formatter={(value) => [formatRevenue(value, revenueFormat), 'Revenue']}
+                        labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
+                        contentStyle={{
+                          fontSize: '0.74rem',
+                          borderRadius: 6,
+                          background: theme.surface,
+                          border: `1px solid ${theme.border}`,
+                          color: theme.text,
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke={theme.headerBorder || '#6c8aff'}
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: theme.headerBorder || '#6c8aff', stroke: '#fff', strokeWidth: 1 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
 
-            {/* Action buttons */}
-            <div style={s.btnRow}>
-              <button
-                style={s.btn}
-                onClick={startEdit}
-              >
-                {hasContactInfo ? 'Edit' : 'Add Contact'}
-              </button>
+            {filmEntries.length === 1 && importedFilms.length <= 1 && (
+              <div style={{ fontSize: '0.68rem', color: theme.textMuted, textAlign: 'center', marginTop: 4 }}>
+                Import more films to see trends
+              </div>
+            )}
+          </div>
+        )}
 
-              {/* Reset to chain default — only for venue-level overrides on chain venues */}
-              {resolvedScope === 'venue' && !isIndependent && (
-                <button
-                  style={s.btnDanger}
-                  onClick={resetToChainDefault}
-                  disabled={saving}
-                >
-                  {saving ? 'Resetting...' : 'Reset to Chain Default'}
-                </button>
+
+        {/* ── RIGHT: Contact + Address ── */}
+        <div style={{
+          flex: useTwoColumns ? '1 1 45%' : 'none',
+          minWidth: 0,
+          borderLeft: useTwoColumns ? `1px solid ${theme.border}` : 'none',
+          paddingLeft: useTwoColumns ? 14 : 0,
+          paddingTop: useTwoColumns ? 0 : (hasFilmData ? 0 : 0),
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 4 }}>
+              <div style={sectionLabel}>Contact</div>
+              {resolvedScope === 'venue' && !editing && (
+                <span style={{
+                  fontSize: '0.6rem', fontWeight: 600, padding: '1px 6px', borderRadius: 3,
+                  background: `${theme.headerBorder}18`, color: theme.headerBorder,
+                }}>Custom</span>
+              )}
+              {resolvedScope === 'chain' && !editing && !isIndependent && (
+                <span style={{
+                  fontSize: '0.6rem', fontWeight: 600, padding: '1px 6px', borderRadius: 3,
+                  background: `${theme.textMuted}18`, color: theme.textMuted,
+                }}>Chain default</span>
               )}
             </div>
-          </>
-        )}
 
-        {/* ── Edit mode ── */}
-        {editing && (
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 2 }}>Manager</div>
-            <input
-              style={s.input}
-              value={editFields.manager_name}
-              onChange={(e) => setEditFields(f => ({ ...f, manager_name: e.target.value }))}
-              placeholder="Manager name"
-            />
-
-            <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 2 }}>Booking Contact</div>
-            <input
-              style={s.input}
-              value={editFields.booking_contact_name}
-              onChange={(e) => setEditFields(f => ({ ...f, booking_contact_name: e.target.value }))}
-              placeholder="Booking contact name"
-            />
-
-            <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 2 }}>Email</div>
-            <input
-              style={s.input}
-              type="email"
-              value={editFields.booking_contact_email}
-              onChange={(e) => setEditFields(f => ({ ...f, booking_contact_email: e.target.value }))}
-              placeholder="booking@example.co.uk"
-            />
-
-            <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 2 }}>Notes</div>
-            <textarea
-              style={s.textarea}
-              value={editFields.notes}
-              onChange={(e) => setEditFields(f => ({ ...f, notes: e.target.value }))}
-              placeholder="Any additional notes..."
-            />
-
-            {/* Chain-broadcast checkbox (only for chain venues) */}
-            {!isIndependent && (
-              <label style={s.checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={applyToChain}
-                  onChange={(e) => setApplyToChain(e.target.checked)}
-                />
-                Apply to all {venue.chain} venues
-              </label>
+            {contactLoading && (
+              <div style={{ fontSize: '0.75rem', color: theme.textMuted }}>Loading contact..</div>
             )}
 
-            <div style={s.btnRow}>
-              <button
-                style={s.btnPrimary}
-                onClick={saveContactHandler}
-                disabled={saving}
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                style={s.btn}
-                onClick={() => setEditing(false)}
-                disabled={saving}
-              >
-                Cancel
-              </button>
-            </div>
+            {contactError && !contactLoading && (
+              <div style={{ fontSize: '0.75rem', color: '#e74c3c' }}>{contactError}</div>
+            )}
+
+            {!contactLoading && !editing && (
+              <>
+                {hasContactInfo ? (
+                  <div style={{ fontSize: '0.78rem' }}>
+                    {contact.manager_name && (
+                      <div style={{ color: theme.text, marginBottom: 2 }}>
+                        <span style={{ color: theme.textMuted, fontWeight: 500, fontSize: '0.72rem' }}>Manager: </span>
+                        {contact.manager_name}
+                      </div>
+                    )}
+                    {contact.booking_contact_name && (
+                      <div style={{ color: theme.text, marginBottom: 2 }}>
+                        <span style={{ color: theme.textMuted, fontWeight: 500, fontSize: '0.72rem' }}>Booking: </span>
+                        {contact.booking_contact_name}
+                      </div>
+                    )}
+                    {contact.booking_contact_email && (
+                      <div style={{ marginBottom: 2 }}>
+                        <span style={{ color: theme.textMuted, fontWeight: 500, fontSize: '0.72rem' }}>Email: </span>
+                        <a
+                          href={`mailto:${contact.booking_contact_email}`}
+                          style={{ color: theme.headerBorder, textDecoration: 'none', fontSize: '0.78rem' }}
+                        >
+                          {contact.booking_contact_email}
+                        </a>
+                      </div>
+                    )}
+                    {contact.notes && (
+                      <div style={{ fontSize: '0.74rem', color: theme.textMuted, fontStyle: 'italic', marginTop: 3 }}>
+                        {contact.notes}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '0.75rem', color: theme.textMuted }}>
+                    No contact information yet
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  <button style={btnStyle} onClick={startEdit}>
+                    {hasContactInfo ? 'Edit' : 'Add Contact'}
+                  </button>
+                  {resolvedScope === 'venue' && !isIndependent && (
+                    <button
+                      style={{ ...btnStyle, borderColor: '#e74c3c', color: '#e74c3c', fontSize: '0.68rem' }}
+                      onClick={resetToChainDefault}
+                      disabled={saving}
+                    >
+                      {saving ? 'Resetting..' : 'Reset to Chain Default'}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+
+            {editing && (
+              <div>
+                {[
+                  { key: 'manager_name', label: 'Manager', placeholder: 'Manager name' },
+                  { key: 'booking_contact_name', label: 'Booking Contact', placeholder: 'Booking contact name' },
+                  { key: 'booking_contact_email', label: 'Email', placeholder: 'booking@example.co.uk', type: 'email' },
+                ].map(({ key, label, placeholder, type }) => (
+                  <div key={key}>
+                    <div style={{ fontSize: '0.7rem', color: theme.textMuted, marginBottom: 1 }}>{label}</div>
+                    <input
+                      type={type || 'text'}
+                      style={inputStyle}
+                      value={editFields[key]}
+                      onChange={(e) => setEditFields(f => ({ ...f, [key]: e.target.value }))}
+                      placeholder={placeholder}
+                    />
+                  </div>
+                ))}
+
+                <div style={{ fontSize: '0.7rem', color: theme.textMuted, marginBottom: 1 }}>Notes</div>
+                <textarea
+                  style={{ ...inputStyle, resize: 'vertical', minHeight: 36 }}
+                  value={editFields.notes}
+                  onChange={(e) => setEditFields(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Any additional notes..."
+                />
+
+                {!isIndependent && (
+                  <label style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    marginTop: 2, marginBottom: 4, fontSize: '0.74rem',
+                    color: theme.textMuted, cursor: 'pointer',
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={applyToChain}
+                      onChange={(e) => setApplyToChain(e.target.checked)}
+                    />
+                    Apply to all {venue.chain} venues
+                  </label>
+                )}
+
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  <button style={btnPrimaryStyle} onClick={saveContactHandler} disabled={saving}>
+                    {saving ? 'Saving..' : 'Save'}
+                  </button>
+                  <button style={btnStyle} onClick={() => setEditing(false)} disabled={saving}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
+
+          {venue.address && (
+            <div style={{
+              fontSize: '0.7rem',
+              color: theme.textMuted,
+              borderTop: `1px solid ${theme.border}`,
+              paddingTop: 6,
+              marginTop: 10,
+            }}>
+              {venue.address}
+            </div>
+          )}
+        </div>
       </div>
-
-
-      {/* ── Address ── */}
-      {venue.address && (
-        <div style={s.address}>{venue.address}</div>
-      )}
     </div>
   )
 }

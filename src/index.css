@@ -1114,6 +1114,65 @@ body {
   margin-top: 4px;
 }
 
+/* ── Leaflet popup overrides for CineScope v3.6 ─────────── */
+
+/* Allow popup to be wider for landscape 2-column layout */
+.leaflet-popup-content {
+  margin: 0 !important;
+  width: auto !important;
+  max-width: 560px !important;
+}
+
+.leaflet-popup-content-wrapper {
+  padding: 0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+  overflow: hidden;
+}
+
+/* Close button: circle style, offset top-right */
+.leaflet-popup-close-button {
+  width: 26px !important;
+  height: 26px !important;
+  font-size: 16px !important;
+  line-height: 26px !important;
+  text-align: center !important;
+  top: -10px !important;
+  right: -10px !important;
+  background: #2a2d3a !important;
+  border: 2px solid #3a3d4a !important;
+  border-radius: 50% !important;
+  color: #aaa !important;
+  font-weight: 700 !important;
+  padding: 0 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  z-index: 1000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background 0.15s, color 0.15s, border-color 0.15s !important;
+}
+
+.leaflet-popup-close-button:hover {
+  background: #e74c3c !important;
+  color: #fff !important;
+  border-color: #e74c3c !important;
+}
+
+/* Light mode adjustments for close button */
+[data-theme="light"] .leaflet-popup-close-button {
+  background: #fff !important;
+  border-color: #ddd !important;
+  color: #666 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+[data-theme="light"] .leaflet-popup-close-button:hover {
+  background: #e74c3c !important;
+  color: #fff !important;
+  border-color: #e74c3c !important;
+}
+
 /* ── Analytics Panel ─────────────────────────────────────── */
 
 .analytics-panel {

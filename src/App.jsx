@@ -75,6 +75,7 @@ function AppContent() {
   const [currentView, setCurrentView] = useState('map')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mapPanelVisible, setMapPanelVisible] = useState(true)
+  const [mapFlyTarget, setMapFlyTarget] = useState(null)
 
   const handleViewChange = useCallback((viewId) => {
     setCurrentView(viewId)
@@ -86,6 +87,12 @@ function AppContent() {
 
   const handleMapPanelToggle = useCallback(() => {
     setMapPanelVisible(prev => !prev)
+  }, [])
+
+  // When a venue is clicked in the MapPanel list, fly to it on the map
+  const handleVenueFly = useCallback((venue) => {
+    // Set a new object each time to ensure useEffect triggers even for same venue
+    setMapFlyTarget({ ...venue, _ts: Date.now() })
   }, [])
 
   const hasTrendData = importedFilms.length >= 2
@@ -117,11 +124,13 @@ function AppContent() {
                 <MapView
                   panelVisible={mapPanelVisible}
                   onTogglePanel={handleMapPanelToggle}
+                  flyTarget={mapFlyTarget}
                 />
               </div>
               <MapPanel
                 visible={mapPanelVisible}
                 onToggle={handleMapPanelToggle}
+                onVenueFly={handleVenueFly}
               />
             </div>
           )}

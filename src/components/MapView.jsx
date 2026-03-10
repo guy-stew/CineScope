@@ -9,7 +9,7 @@
  *   - All existing map functionality preserved (markers, clusters, legends, popups)
  */
 
-import React, { useMemo, useEffect, useState } from 'react'
+import React, { useMemo, useEffect, useState, useRef, useCallback } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup, ZoomControl, useMap } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import { useApp } from '../context/AppContext'
@@ -27,17 +27,57 @@ const DEFAULT_ZOOM = 6
 const CLOSED_COLOR = '#999'
 const CLOSED_OPACITY = 0.45
 
-function FitBounds({ venues }) {
+/**
+ * Only re-fit map bounds when the selected film changes
+ * (not on grade/chain/category/search filter changes).
+ * This prevents the map from zooming out when Austin adjusts filters.
+ */
+function FitBounds({ venues, selectedFilmId }) {
   const map = useMap()
+  const lastFilmIdRef = useRef(null)
+
   useEffect(() => {
+    // Only fit bounds when the film selection actually changes
+    if (selectedFilmId === lastFilmIdRef.current) return
+    lastFilmIdRef.current = selectedFilmId
+
     if (venues.length === 0) return
     const bounds = venues.filter(v => v.lat && v.lng).map(v => [v.lat, v.lng])
     if (bounds.length > 0) {
       map.fitBounds(bounds, { padding: [30, 30], maxZoom: 10 })
     }
-  }, [venues, map])
+  }, [venues, selectedFilmId, map])
   return null
 }
+
+/**
+ * Fly to a specific venue and open its popup when triggered from MapPanel.
+ * Watches flyTarget prop — when it changes to a new venue, animate map to it.
+ */
+function FlyToVenue({ flyTarget, markerRefs }) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (!flyTarget || !flyTarget.lat || !flyTarget.lng) return
+
+    // Fly to venue location
+    map.flyTo([flyTarget.lat, flyTarget.lng], 14, { duration: 0.8 })
+
+    // Open the marker popup after fly animation completes
+    const timer = setTimeout(() => {
+      const key = `${flyTarget.name}|${flyTarget.city}`.toLowerCase()
+      const markerRef = markerRefs.current?.get(key)
+      if (markerRef) {
+        markerRef.openPopup()
+      }
+    }, 900)
+
+    return () => clearTimeout(timer)
+  }, [flyTarget, map, markerRefs])
+
+  return null
+}
+
 
 /**
  * Component to swap tile layers when theme changes
@@ -204,9 +244,12 @@ function MapResizer({ panelVisible }) {
 }
 
 
-export default function MapView({ panelVisible, onTogglePanel }) {
-  const { filteredVenues, selectedFilm, setSelectedVenue, populationMode } = useApp()
+export default function MapView({ panelVisible, onTogglePanel, flyTarget }) {
+  const { filteredVenues, selectedFilm, selectedFilmId, setSelectedVenue, populationMode } = useApp()
   const { theme } = useTheme()
+
+  // Ref map for CircleMarker instances (keyed by venue identity)
+  const markerRefs = useRef(new Map())
 
   const mappableVenues = useMemo(() => {
     return filteredVenues.filter(v => v.lat && v.lng && !isNaN(v.lat) && !isNaN(v.lng))
@@ -229,7 +272,8 @@ export default function MapView({ panelVisible, onTogglePanel }) {
         <ThemeTiles />
         <PopulationHeatLayer />
         <PopulationZonesLayer />
-        <FitBounds venues={mappableVenues} />
+        <FitBounds venues={mappableVenues} selectedFilmId={selectedFilmId} />
+        <FlyToVenue flyTarget={flyTarget} markerRefs={markerRefs} />
         <MapResizer panelVisible={panelVisible} />
         <ZoomControl position="bottomright" />
 
@@ -260,6 +304,12 @@ export default function MapView({ panelVisible, onTogglePanel }) {
                 key={`${venue.name}-${venue.city}-${idx}`}
                 center={[venue.lat, venue.lng]}
                 radius={isClosed ? 6 : 8}
+                ref={(ref) => {
+                  const key = `${venue.name}|${venue.city}`.toLowerCase()
+                  if (ref) {
+                    markerRefs.current.set(key, ref)
+                  }
+                }}
                 pathOptions={{
                   color: isClosed ? '#777' : '#fff',
                   weight: isClosed ? 1 : 2,
@@ -270,7 +320,7 @@ export default function MapView({ panelVisible, onTogglePanel }) {
                   click: () => setSelectedVenue(venue),
                 }}
               >
-                <Popup maxWidth={340} minWidth={300} closeOnClick={false} autoPan={false}>
+                <Popup maxWidth={560} minWidth={280} closeOnClick={false} autoPan={true}>
                   <VenuePopup venue={venue} />
                 </Popup>
               </CircleMarker>
