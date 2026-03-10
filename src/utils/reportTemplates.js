@@ -1,8 +1,5 @@
 /**
- * CineScope — Report Templates (v3.5 — Stage 4: Marketing Targets)
- *
- * Report type metadata (card picker), default AI prompt templates,
- * placeholder definitions for the template editor, and substitution helper.
+ * CineScope — Report Templates (v3.5 — Stage 5: Venue Recommender)
  */
 
 
@@ -39,7 +36,7 @@ export const REPORT_TYPES = [
     label: 'Venue Recommendations',
     description: 'AI-predicted venues for pre-release or missed opportunities',
     requires: '1 film in catalogue',
-    stage: 'coming',
+    stage: 'ready',
   },
   {
     id: 'csv',
@@ -61,14 +58,14 @@ export const PLACEHOLDER_DEFS = {
     { token: '{{total_venues}}',       description: 'Total unique venues tracked across all films' },
     { token: '{{improving_count}}',    description: 'Number of venues with improving grades' },
     { token: '{{declining_count}}',    description: 'Number of venues with declining grades' },
-    { token: '{{trend_data}}',         description: 'Full trend summary (auto-generated, includes venue-level detail)' },
+    { token: '{{trend_data}}',         description: 'Full trend summary (auto-generated)' },
     { token: '{{film_profiles}}',      description: 'Film metadata: genres, cast, director, keywords, financials' },
   ],
   chain: [
     { token: '{{chain_name}}',         description: 'Name of the selected cinema chain' },
     { token: '{{film_title}}',         description: 'Title of the selected film' },
-    { token: '{{chain_data}}',         description: 'Full chain data summary (auto-generated, includes venue-level detail)' },
-    { token: '{{film_profile}}',       description: 'Film metadata: genres, cast, director, keywords, financials' },
+    { token: '{{chain_data}}',         description: 'Full chain data summary (auto-generated)' },
+    { token: '{{film_profile}}',       description: 'Film metadata' },
   ],
   marketing: [
     { token: '{{film_title}}',         description: 'Title of the selected film' },
@@ -76,9 +73,17 @@ export const PLACEHOLDER_DEFS = {
     { token: '{{grade_b_count}}',      description: 'Number of Grade B venues' },
     { token: '{{grade_c_count}}',      description: 'Number of Grade C venues' },
     { token: '{{network_avg}}',        description: 'Network average revenue per venue' },
-    { token: '{{grade_a_avg}}',        description: 'Grade A average revenue (the target benchmark)' },
-    { token: '{{venue_data}}',         description: 'Full B+C venue list with revenue, chain, grade, screens' },
-    { token: '{{film_profile}}',       description: 'Film metadata: genres, cast, director, keywords, financials' },
+    { token: '{{grade_a_avg}}',        description: 'Grade A average revenue (the benchmark)' },
+    { token: '{{venue_data}}',         description: 'Full B+C venue list' },
+    { token: '{{film_profile}}',       description: 'Film metadata' },
+  ],
+  venue_recs: [
+    { token: '{{mode}}',               description: 'Analysis mode: "missed_opportunity" or "pre_release"' },
+    { token: '{{film_title}}',         description: 'Title of the target film' },
+    { token: '{{film_profile}}',       description: 'Film metadata: genres, cast, director, keywords' },
+    { token: '{{candidate_venues}}',   description: 'Unscreened venues to evaluate (auto-generated)' },
+    { token: '{{top_performers}}',     description: 'Grade A/B venues as context for what "good" looks like' },
+    { token: '{{historical_data}}',    description: 'Performance data from other imported films' },
   ],
 }
 
@@ -186,7 +191,52 @@ IMPORTANT: Respond with ONLY a JSON object in this exact format, no other text:
 
 {{film_profile}}`,
 
-  venue_recs: `Placeholder -- Venue Recommendations template (Stage 5)`,
+  venue_recs: `You are recommending cinema venues for the film "{{film_title}}".
+
+MODE: {{mode}}
+
+{{film_profile}}
+
+Your task: Analyse the candidate venues below and recommend the best ones for this film. For each venue, predict how it would perform and explain your reasoning.
+
+Consider:
+- Chain type (premium/arthouse chains like Picturehouse, Curzon, Everyman tend to suit certain genres)
+- Location and city (major cities vs regional towns)
+- Screen count (larger venues can dedicate more screens)
+- Historical performance at similar films (if available below)
+- Category (Independent vs Large Chain vs Small/Premium Chain)
+
+Rank venues from strongest recommendation to weakest. Only include venues you'd actually recommend (minimum confidence of Medium).
+
+IMPORTANT: Respond with ONLY a JSON object in this exact format, no other text:
+{
+  "summary": "2-3 sentence overview of the recommendation strategy",
+  "mode": "{{mode}}",
+  "venues": [
+    {
+      "rank": 1,
+      "name": "Venue Name",
+      "city": "City",
+      "chain": "Chain or Independent",
+      "predicted_grade": "A",
+      "confidence": "High",
+      "reasoning": "1-2 sentence explanation",
+      "screens": 5
+    }
+  ]
+}
+
+--- TOP PERFORMERS (what "good" looks like for this type of film) ---
+
+{{top_performers}}
+
+--- CANDIDATE VENUES TO EVALUATE ---
+
+{{candidate_venues}}
+
+--- HISTORICAL PERFORMANCE DATA ---
+
+{{historical_data}}`,
 }
 
 
@@ -198,14 +248,13 @@ export const SYSTEM_PROMPTS = {
   chain: `You are CineScope's AI analyst writing a chain-specific performance report. This report will be sent to a cinema chain's manager, so it must be professional, constructive, and externally appropriate. Reference specific venue names and data. Use GBP for currency.`,
 
   marketing: `You are CineScope's AI analyst generating structured marketing target data for Grade B and C cinema venues. You MUST respond with valid JSON only -- no markdown, no explanation, no backticks. The JSON must match the schema specified in the user message exactly. Every venue in the input data must appear in your output. Use GBP for currency values (numbers only, no symbols in the JSON).`,
+
+  venue_recs: `You are CineScope's AI venue recommender for UK/Ireland cinema distribution. You predict which cinema venues would perform well for a specific film based on venue characteristics, chain type, location, and historical patterns. You MUST respond with valid JSON only -- no markdown, no explanation, no backticks. The JSON must match the schema specified in the user message exactly. Recommend 20-40 venues maximum, ranked by predicted performance. Use GBP for currency values (numbers only, no symbols in the JSON).`,
 }
 
 
 // ─── Template Substitution ───────────────────────────────────────
 
-/**
- * Substitute {{placeholders}} in a template string with real values.
- */
 export function substituteTemplate(template, values) {
   return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     if (key in values) return values[key]

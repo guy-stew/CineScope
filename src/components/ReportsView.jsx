@@ -1,12 +1,12 @@
 /**
- * CineScope — Reports View (v3.5 — Stage 4: Marketing Targets)
+ * CineScope — Reports View (v3.5 — Stage 5: Venue Recommender)
  *
  * Dedicated view for AI-powered report generation.
  * Card picker selects report type, template editor customises the prompt,
- * output panel streams AI text as it generates.
+ * output panel streams AI text or structured tables.
  *
- * Wired: AI Insights (multi-film), Chain Performance, Marketing Targets.
- * Marketing Targets returns structured JSON rendered as a sortable table.
+ * Wired: AI Insights, Chain Performance, Marketing Targets, Venue Recommendations.
+ * Venue Recommender has two modes: Missed Opportunity + Pre-release Prediction.
  */
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
@@ -41,6 +41,8 @@ export default function ReportsView({ inline = false }) {
   const [selectedChain, setSelectedChain] = useState('')
   const [copied, setCopied] = useState(false)
   const [marketingData, setMarketingData] = useState(null) // Parsed JSON for marketing table
+  const [recsData, setRecsData] = useState(null)           // Parsed JSON for venue recommendations
+  const [recsMode, setRecsMode] = useState('missed_opportunity') // 'missed_opportunity' | 'pre_release'
 
   // ── Template state ──
   const [showEditor, setShowEditor] = useState(false)
@@ -102,13 +104,22 @@ export default function ReportsView({ inline = false }) {
     return [...chainSet].sort()
   }, [selectedFilm, venues])
 
+  // Does the current film have Comscore data?
+  const filmHasComscore = !!selectedFilm && venues.some(v => v.grade && v.grade !== 'E')
+
+  // Auto-detect recs mode when switching to venue_recs
+  const effectiveRecsMode = filmHasComscore ? recsMode : 'pre_release'
+
   const canGenerate = useMemo(() => ({
     insights: importedFilms.length >= 2 && hasApiKey,
     chain: !!selectedFilm && !!selectedChain && hasApiKey,
     marketing: !!selectedFilm && hasApiKey && venues.some(v => v.grade === 'B' || v.grade === 'C'),
-    venue_recs: false,
+    venue_recs: hasApiKey && (
+      (effectiveRecsMode === 'missed_opportunity' && filmHasComscore) ||
+      (effectiveRecsMode === 'pre_release' && (!!selectedFilm || catalogue.length > 0))
+    ),
     csv: false,
-  }), [importedFilms.length, selectedFilm, selectedChain, hasApiKey, venues])
+  }), [importedFilms.length, selectedFilm, selectedChain, hasApiKey, venues, effectiveRecsMode, filmHasComscore, catalogue.length])
 
   const currentType = REPORT_TYPES.find(t => t.id === selectedType) || REPORT_TYPES[0]
 
@@ -122,6 +133,7 @@ export default function ReportsView({ inline = false }) {
     setSelectedChain('')
     setCopied(false)
     setMarketingData(null)
+    setRecsData(null)
     // Don't reset showEditor — let it stay open if user was editing
   }, [])
 
@@ -166,6 +178,7 @@ export default function ReportsView({ inline = false }) {
     setReportText('')
     setCopied(false)
     setMarketingData(null)
+    setRecsData(null)
 
     try {
       // Get the active template (user-customised or default)
@@ -325,6 +338,113 @@ export default function ReportsView({ inline = false }) {
           console.warn('CineScope: Marketing response was not valid JSON, showing as text', parseErr)
           // Leave reportText visible as fallback
         }
+
+      } else if (selectedType === 'venue_recs') {
+        // ── Venue Recommendations (structured JSON) ──
+        const MAX_CANDIDATE_VENUES = 60
+        const MAX_PERFORMER_VENUES = 30
+
+        // Build film profile from catalogue
+        let filmProfile = ''
+        try {
+          const catId = selectedFilm?.catalogueId
+          if (catId) {
+            const entry = await apiClient.getCatalogueEntry(catId)
+            if (entry) filmProfile = buildFilmProfileForAI([entry])
+          }
+        } catch (profileErr) {
+          console.warn('CineScope: Could not load film profile for venue recs', profileErr)
+        }
+
+        let topPerformersText = '(No performance data available for this film)'
+        let candidateVenuesText = ''
+        let historicalText = '(No historical data from other films)'
+        let modeLabel = effectiveRecsMode === 'missed_opportunity'
+          ? 'MISSED OPPORTUNITY -- Identify unscreened venues that would likely perform well based on the Grade A/B performers.'
+          : 'PRE-RELEASE PREDICTION -- Predict which venues would suit this film based on similar historical films.'
+
+        if (effectiveRecsMode === 'missed_opportunity') {
+          // Top performers context (Grade A + B, capped)
+          const topVenues = venues
+            .filter(v => v.grade === 'A' || v.grade === 'B')
+            .sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
+            .slice(0, MAX_PERFORMER_VENUES)
+          if (topVenues.length > 0) {
+            topPerformersText = topVenues.map(v =>
+              `${v.name} (${v.city || '?'}) | ${v.chain || 'Independent'} | Grade ${v.grade} | £${(v.revenue || 0).toLocaleString()} | ${v.screens || '?'} screens | ${v.category || ''}`
+            ).join('\n')
+          }
+
+          // Candidate venues: Grade E (unscreened) from baseVenues not in current film's screened set
+          const screenedNames = new Set(venues.filter(v => v.grade && v.grade !== 'E').map(v => v.name))
+          const unscreened = baseVenues
+            .filter(v => !screenedNames.has(v.name) && v.status !== 'closed')
+            .slice(0, MAX_CANDIDATE_VENUES)
+          candidateVenuesText = unscreened.map(v =>
+            `${v.name} (${v.city || '?'}) | ${v.chain || 'Independent'} | ${v.screens || '?'} screens | ${v.category || ''}`
+          ).join('\n')
+          if (unscreened.length === 0) {
+            candidateVenuesText = '(All venues in the network screened this film)'
+          }
+
+        } else {
+          // Pre-release: use all baseVenues as candidates, historical data from other films
+          const candidates = baseVenues
+            .filter(v => v.status !== 'closed')
+            .slice(0, MAX_CANDIDATE_VENUES)
+          candidateVenuesText = candidates.map(v =>
+            `${v.name} (${v.city || '?'}) | ${v.chain || 'Independent'} | ${v.screens || '?'} screens | ${v.category || ''}`
+          ).join('\n')
+        }
+
+        // Historical data from other imported films
+        if (importedFilms.length > 0) {
+          const histLines = []
+          for (const film of importedFilms) {
+            const title = film.filmInfo?.title || 'Untitled'
+            const topFilmVenues = (film.revenues || [])
+              .sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
+              .slice(0, 15)
+            if (topFilmVenues.length > 0) {
+              histLines.push(`\n--- ${title} (top 15 venues) ---`)
+              for (const v of topFilmVenues) {
+                histLines.push(`${v.venue_name || v.name || '?'} (${v.venue_city || v.city || '?'}) | £${(v.revenue || 0).toLocaleString()}`)
+              }
+            }
+          }
+          if (histLines.length > 0) historicalText = histLines.join('\n')
+        }
+
+        const values = {
+          mode: modeLabel,
+          film_title: selectedFilm?.filmInfo?.title || 'Unknown Film',
+          film_profile: filmProfile || '(No film profile data available)',
+          candidate_venues: candidateVenuesText,
+          top_performers: topPerformersText,
+          historical_data: historicalText,
+        }
+
+        const userMessage = substituteTemplate(tpl, values)
+        let fullText = ''
+        await generateReportFromPrompt(
+          getToken, SYSTEM_PROMPTS.venue_recs, userMessage,
+          (chunk) => {
+            fullText += chunk
+            setReportText(prev => prev + chunk)
+          },
+          8192
+        )
+
+        // Parse JSON for structured table
+        try {
+          const cleaned = fullText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+          const parsed = JSON.parse(cleaned)
+          if (parsed && Array.isArray(parsed.venues)) {
+            setRecsData(parsed)
+          }
+        } catch (parseErr) {
+          console.warn('CineScope: Venue recs response was not valid JSON, showing as text', parseErr)
+        }
       }
     } catch (err) {
       console.error('CineScope: Report generation failed', err)
@@ -333,14 +453,19 @@ export default function ReportsView({ inline = false }) {
       setLoading(false)
     }
   }, [selectedType, loading, currentTemplate, importedFilms, baseVenues, gradeSettings,
-      selectedFilm, selectedChain, venues, getToken, apiClient])
+      selectedFilm, selectedChain, venues, getToken, apiClient, effectiveRecsMode])
 
   const handleCopy = useCallback(() => {
     if (marketingData) {
-      // Copy marketing data as tab-separated table
       const header = 'Rank\tVenue\tCity\tChain\tGrade\tRevenue\tScreens\tPotential\tNote'
       const rows = (marketingData.venues || []).map(v =>
         `${v.rank}\t${v.name}\t${v.city}\t${v.chain}\t${v.grade}\t£${(v.revenue || 0).toLocaleString()}\t${v.screens || ''}\t${v.potential}\t${v.note}`
+      )
+      navigator.clipboard.writeText([header, ...rows].join('\n'))
+    } else if (recsData) {
+      const header = 'Rank\tVenue\tCity\tChain\tPredicted Grade\tConfidence\tScreens\tReasoning'
+      const rows = (recsData.venues || []).map(v =>
+        `${v.rank}\t${v.name}\t${v.city}\t${v.chain}\t${v.predicted_grade}\t${v.confidence}\t${v.screens || ''}\t${v.reasoning}`
       )
       navigator.clipboard.writeText([header, ...rows].join('\n'))
     } else {
@@ -348,7 +473,7 @@ export default function ReportsView({ inline = false }) {
     }
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }, [reportText, marketingData])
+  }, [reportText, marketingData, recsData])
 
 
   // ── Status message for disabled states ──
@@ -375,12 +500,18 @@ export default function ReportsView({ inline = false }) {
         return { icon: 'campaign', text: 'No Grade B or C venues for the current film. Marketing targets require B+C venues.' }
       }
     }
+    if (selectedType === 'venue_recs') {
+      if (!selectedFilm && catalogue.length === 0) return { icon: 'movie', text: 'Add a film to the catalogue to generate venue recommendations.' }
+      if (effectiveRecsMode === 'missed_opportunity' && !filmHasComscore) {
+        return { icon: 'storefront', text: 'No Comscore data for this film. Switch to Pre-release mode, or import data for Missed Opportunity analysis.' }
+      }
+    }
     return null
   }
 
   const statusMsg = getStatusMessage()
   const isComingSoon = currentType.stage === 'coming'
-  const hasTemplateEditor = selectedType === 'insights' || selectedType === 'chain' || selectedType === 'marketing'
+  const hasTemplateEditor = selectedType === 'insights' || selectedType === 'chain' || selectedType === 'marketing' || selectedType === 'venue_recs'
   const showTemplateEditor = showEditor && !isComingSoon && hasTemplateEditor
 
 
@@ -514,6 +645,45 @@ export default function ReportsView({ inline = false }) {
             </div>
           )}
 
+          {/* Venue Recs controls */}
+          {selectedType === 'venue_recs' && (
+            <>
+              {selectedFilm && (
+                <div style={{
+                  fontSize: '0.8rem', color: theme.textMuted,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <Icon name="movie" size={14} />
+                  <span style={{ color: theme.text, fontWeight: 500 }}>
+                    {selectedFilm?.filmInfo?.title || 'Unknown Film'}
+                  </span>
+                </div>
+              )}
+              <select
+                value={effectiveRecsMode}
+                onChange={e => { setRecsMode(e.target.value); setReportText(''); setRecsData(null); setError(null) }}
+                disabled={!filmHasComscore && effectiveRecsMode === 'pre_release'}
+                style={{
+                  padding: '6px 10px', borderRadius: 6,
+                  border: `1px solid ${theme.border}`,
+                  background: theme.surface, color: theme.text,
+                  fontSize: '0.82rem', cursor: 'pointer',
+                }}
+              >
+                <option value="missed_opportunity">Missed Opportunities</option>
+                <option value="pre_release">Pre-release Prediction</option>
+              </select>
+              <span style={{
+                fontSize: '0.7rem', color: theme.textMuted, maxWidth: 260,
+              }}>
+                {effectiveRecsMode === 'missed_opportunity'
+                  ? 'Find unscreened venues that would likely perform well'
+                  : 'Predict best venues based on film profile + history'
+                }
+              </span>
+            </>
+          )}
+
           {/* Generate button */}
           <button
             onClick={handleGenerate}
@@ -535,7 +705,7 @@ export default function ReportsView({ inline = false }) {
           </button>
 
           {/* Copy / Regenerate (when report ready) */}
-          {(reportText || marketingData) && !loading && (
+          {(reportText || marketingData || recsData) && !loading && (
             <>
               <button onClick={handleCopy} style={secondaryBtnStyle(theme)}>
                 <Icon name={copied ? 'check' : 'content_copy'} size={14} />
@@ -657,6 +827,10 @@ export default function ReportsView({ inline = false }) {
                 ? `Ready to analyse ${importedFilms.length} films. Click "Generate Report" to get AI-powered trend insights.`
                 : selectedType === 'marketing'
                 ? `Ready to analyse ${venues.filter(v => v.grade === 'B' || v.grade === 'C').length} Grade B+C venues for marketing opportunities.`
+                : selectedType === 'venue_recs'
+                ? effectiveRecsMode === 'missed_opportunity'
+                  ? `Ready to find missed screening opportunities from ${baseVenues.filter(v => v.status !== 'closed').length - venues.filter(v => v.grade && v.grade !== 'E').length} unscreened venues.`
+                  : `Ready to predict best venues for this film based on profile and history.`
                 : `Ready to generate ${selectedChain} performance report. Click "Generate Report" to start.`
               }
             </p>
@@ -784,8 +958,117 @@ export default function ReportsView({ inline = false }) {
           </div>
         )}
 
+        {/* Venue Recommendations Table (structured output) */}
+        {!isComingSoon && recsData && !loading && (
+          <div style={{
+            borderRadius: 10, overflow: 'hidden',
+            border: `1px solid ${theme.border}`,
+            background: theme.surface,
+          }}>
+            {/* Summary */}
+            {recsData.summary && (
+              <div style={{
+                padding: '14px 20px',
+                borderBottom: `1px solid ${theme.border}`,
+                fontSize: '0.84rem', lineHeight: 1.6,
+                color: theme.text,
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+              }}>
+                <Icon name="recommend" size={18} style={{ color: theme.headerBorder, flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <div>{recsData.summary}</div>
+                  <span style={{
+                    display: 'inline-block', marginTop: 6,
+                    fontSize: '0.7rem', fontWeight: 600,
+                    background: effectiveRecsMode === 'missed_opportunity' ? '#e67e2220' : '#3b82f620',
+                    color: effectiveRecsMode === 'missed_opportunity' ? '#e67e22' : '#3b82f6',
+                    padding: '2px 8px', borderRadius: 4,
+                  }}>
+                    {effectiveRecsMode === 'missed_opportunity' ? 'Missed Opportunities' : 'Pre-release Prediction'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                <thead>
+                  <tr style={{
+                    borderBottom: `1px solid ${theme.border}`,
+                    background: `${theme.headerBorder}08`,
+                  }}>
+                    {['#', 'Venue', 'City', 'Chain', 'Predicted Grade', 'Confidence', 'Screens', 'Reasoning'].map(h => (
+                      <th key={h} style={{
+                        padding: '10px 12px', textAlign: 'left',
+                        fontWeight: 600, fontSize: '0.72rem',
+                        color: theme.textMuted, whiteSpace: 'nowrap',
+                        textTransform: 'uppercase', letterSpacing: '0.03em',
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(recsData.venues || []).map((v, i) => {
+                    const gradeColor = { A: '#27ae60', B: '#f5c542', C: '#e67e22' }
+                    const confColor = { High: '#27ae60', Medium: '#f5c542', Low: '#95a5a6' }
+                    return (
+                      <tr key={i} style={{
+                        borderBottom: `1px solid ${theme.border}`,
+                        transition: 'background 0.1s',
+                      }}
+                        onMouseEnter={e => e.currentTarget.style.background = `${theme.headerBorder}08`}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <td style={cellStyle}>{v.rank || i + 1}</td>
+                        <td style={{ ...cellStyle, fontWeight: 600, color: theme.text }}>{v.name}</td>
+                        <td style={cellStyle}>{v.city}</td>
+                        <td style={cellStyle}>{v.chain}</td>
+                        <td style={cellStyle}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{
+                              width: 8, height: 8, borderRadius: '50%',
+                              background: gradeColor[v.predicted_grade] || '#95a5a6',
+                            }} />
+                            {v.predicted_grade}
+                          </span>
+                        </td>
+                        <td style={cellStyle}>
+                          <span style={{
+                            padding: '2px 8px', borderRadius: 4,
+                            fontSize: '0.7rem', fontWeight: 600,
+                            background: (confColor[v.confidence] || '#95a5a6') + '20',
+                            color: confColor[v.confidence] || '#95a5a6',
+                          }}>
+                            {v.confidence}
+                          </span>
+                        </td>
+                        <td style={{ ...cellStyle, textAlign: 'center' }}>{v.screens || '—'}</td>
+                        <td style={{ ...cellStyle, fontSize: '0.76rem', lineHeight: 1.45, maxWidth: 340 }}>
+                          {v.reasoning}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Table footer */}
+            <div style={{
+              padding: '10px 20px',
+              borderTop: `1px solid ${theme.border}`,
+              fontSize: '0.72rem', color: theme.textMuted,
+              display: 'flex', justifyContent: 'space-between',
+            }}>
+              <span>{recsData.venues?.length || 0} recommended venues</span>
+              <span>{selectedFilm?.filmInfo?.title}</span>
+            </div>
+          </div>
+        )}
+
         {/* Streaming / completed report (text output) */}
-        {!isComingSoon && !marketingData && (reportText || loading) && (
+        {!isComingSoon && !marketingData && !recsData && (reportText || loading) && (
           <div style={{
             padding: 20, borderRadius: 10,
             background: theme.surface,
@@ -813,6 +1096,14 @@ export default function ReportsView({ inline = false }) {
               )}
               {selectedType === 'marketing' && selectedFilm && (
                 <><span style={{ opacity: 0.4 }}>|</span><span>{selectedFilm?.filmInfo?.title}</span></>
+              )}
+              {selectedType === 'venue_recs' && selectedFilm && (
+                <>
+                  <span style={{ opacity: 0.4 }}>|</span>
+                  <span>{selectedFilm?.filmInfo?.title}</span>
+                  <span style={{ opacity: 0.4 }}>|</span>
+                  <span>{effectiveRecsMode === 'missed_opportunity' ? 'Missed Opportunities' : 'Pre-release'}</span>
+                </>
               )}
               {loading && (
                 <span style={{ marginLeft: 'auto', color: theme.headerBorder, fontSize: '0.72rem' }}>
@@ -851,6 +1142,8 @@ export default function ReportsView({ inline = false }) {
           {selectedType === 'chain' && !selectedFilm && 'No film selected'}
           {selectedType === 'marketing' && selectedFilm && `${venues.filter(v => v.grade === 'B' || v.grade === 'C').length} Grade B+C target venues`}
           {selectedType === 'marketing' && !selectedFilm && 'No film selected'}
+          {selectedType === 'venue_recs' && selectedFilm && `${effectiveRecsMode === 'missed_opportunity' ? 'Missed opportunity' : 'Pre-release'} mode`}
+          {selectedType === 'venue_recs' && !selectedFilm && 'No film selected'}
           {isComingSoon && currentType.requires}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
