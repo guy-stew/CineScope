@@ -1066,8 +1066,9 @@ body {
 
 .map-venue-count {
   position: absolute;
-  top: 52px;
-  right: 12px;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
   color: #fff;
   padding: 6px 14px;
   border-radius: 20px;
@@ -1075,6 +1076,8 @@ body {
   font-weight: 600;
   z-index: 800;
   backdrop-filter: blur(4px);
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 /* Popup */

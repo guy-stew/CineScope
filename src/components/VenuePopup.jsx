@@ -305,7 +305,7 @@ export default function VenuePopup({ venue }) {
           }}>
             {venue.city}
             {venue.country === 'Ireland' ? ', Ireland' : ''}
-            {' \u00b7 '}{venue.chain || 'Independent'} {' \u00b7 '} {venue.category}
+            {' · '}{venue.chain || 'Independent'} {' · '} {venue.category}
           </div>
           {(venue.status || 'open') === 'closed' && (
             <span style={{
@@ -366,10 +366,10 @@ export default function VenuePopup({ venue }) {
                 color: theme.text,
               }}>
                 <div style={{ fontWeight: 700, marginBottom: 5, color: gradeColor, fontSize: '0.74rem' }}>
-                  Grade {grade} {GRADES[grade]?.name ? `\u2014 ${GRADES[grade].name}` : ''}
+                  Grade {grade} {GRADES[grade]?.name ? ` — ${GRADES[grade].name}` : ''}
                 </div>
                 <div style={{ color: theme.textMuted, fontSize: '0.66rem', marginBottom: 4 }}>
-                  Venues graded A\u2013E by revenue quartiles:
+                  Venues graded A–E by revenue quartiles:
                 </div>
                 {['A', 'B', 'C', 'D', 'E'].map(g => (
                   <div key={g} style={{
@@ -390,11 +390,11 @@ export default function VenuePopup({ venue }) {
                       flexShrink: 0,
                     }} />
                     <span>
-                      {g === 'A' && 'A \u2014 Top 25%'}
-                      {g === 'B' && 'B \u2014 25\u201350%'}
-                      {g === 'C' && 'C \u2014 50\u201375%'}
-                      {g === 'D' && 'D \u2014 Bottom 25%'}
-                      {g === 'E' && 'E \u2014 Not screened'}
+                      {g === 'A' && 'A — Top 25%'}
+                      {g === 'B' && 'B — 25–50%'}
+                      {g === 'C' && 'C — 50–75%'}
+                      {g === 'D' && 'D — Bottom 25%'}
+                      {g === 'E' && 'E — Not screened'}
                     </span>
                   </div>
                 ))}
@@ -437,7 +437,7 @@ export default function VenuePopup({ venue }) {
                 style={{ fontSize: '0.72em', marginLeft: 4, cursor: 'help' }}
                 title={`Combined from ${venue.screenEntries} screen entries`}
               >
-                {'\uD83D\uDDA5\uFE0F'}&times;{venue.screenEntries}
+                🖥️×{venue.screenEntries}
               </span>
             )}
           </div>
