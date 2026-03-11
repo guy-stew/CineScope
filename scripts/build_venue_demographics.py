@@ -12,6 +12,7 @@ import json
 import csv
 import math
 import os
+import io
 from collections import defaultdict
 
 # ─── Config ──────────────────────────────────────────────
@@ -199,20 +200,48 @@ def load_scotland_zones(base_dir):
     print(f"  Centroids: {len(centroids)}")
     
     # Helper to parse Scotland census files (skip metadata rows)
-    def parse_scotland_csv(filepath, skip_rows=5):
+    def parse_scotland_csv(filepath, skip_rows=5, verbose=False):
         """Parse Scotland Census CSV, returning header + data rows.
-        Scotland files have 4 metadata rows, then header row on line 5."""
+        Scotland files have metadata rows, then header row.
+        If skip_rows is wrong, set verbose=True to debug."""
         with open(filepath, encoding='utf-8-sig') as f:
-            for _ in range(skip_rows - 1):
-                f.readline()
-            reader = csv.reader(f)
-            headers = next(reader)
-            data = {}
-            for row in reader:
-                if row and row[0].startswith('S'):
-                    code = row[0].strip('"')
-                    data[code] = [safe_int_dash(v) for v in row[1:]]
-            return headers[1:], data
+            # Read all lines, find the header row (starts with geographic code pattern)
+            all_lines = f.readlines()
+        
+        # Strategy: skip_rows metadata lines, then header, then data
+        # But verify by checking if the expected header row looks like headers
+        header_line_idx = skip_rows - 1
+        
+        if verbose or True:  # Always print for debugging during this fix cycle
+            print(f"\n    --- Parsing {os.path.basename(filepath)} ---")
+            print(f"    Total lines: {len(all_lines)}")
+            for i in range(min(skip_rows + 2, len(all_lines))):
+                preview = all_lines[i].strip()[:120]
+                marker = " <-- HEADER" if i == header_line_idx else ""
+                marker = " <-- FIRST DATA" if i == skip_rows else marker
+                print(f"    Line {i}: {preview}{marker}")
+        
+        # Parse from the identified header line
+        text = ''.join(all_lines[header_line_idx:])
+        reader = csv.reader(io.StringIO(text))
+        headers = next(reader)
+        
+        if verbose or True:
+            print(f"    Headers (first 15): {headers[:15]}")
+        
+        data = {}
+        for row in reader:
+            if row and row[0].strip('"').startswith('S'):
+                code = row[0].strip('"')
+                data[code] = [safe_int_dash(v) for v in row[1:]]
+        
+        if verbose or True:
+            sample_code = list(data.keys())[:1]
+            if sample_code:
+                sample_vals = data[sample_code[0]][:15]
+                print(f"    Sample ({sample_code[0]}): first 15 vals = {sample_vals}")
+        
+        return headers[1:], data
         
     # 2. Age (UV102b - Age 20 categories by sex)
     headers, age_raw = parse_scotland_csv(os.path.join(base_dir, 'UV102b - Age (20) by sex.csv'))
@@ -257,6 +286,36 @@ def load_scotland_zones(base_dir):
             'male': male_total, 'female': female_total
         }
     print(f"  Age+Sex: {len(age_data)} zones")
+    
+    # Sanity check: flag if age percentages look wrong
+    # (under_25 should typically be 25-35%, not 85%)
+    if age_data:
+        sample_codes = list(age_data.keys())[:5]
+        print(f"\n  *** SCOTLAND AGE SANITY CHECK (first 5 zones) ***")
+        print(f"  UV101b headers: {headers_101[:15]}")
+        suspicious = False
+        for sc in sample_codes:
+            a = age_data[sc]
+            t = a['total']
+            if t > 0:
+                pct_u25 = round(a['under_25'] / t * 100, 1)
+                pct_25_44 = round(a['age_25_44'] / t * 100, 1)
+                pct_45_64 = round(a['age_45_64'] / t * 100, 1)
+                pct_65 = round(a['age_65_plus'] / t * 100, 1)
+                total_pct = pct_u25 + pct_25_44 + pct_45_64 + pct_65
+                flag = " *** SUSPICIOUS" if pct_u25 > 50 or pct_65 > 50 or abs(total_pct - 100) > 5 else ""
+                if flag: suspicious = True
+                print(f"    {sc}: <25={pct_u25}% 25-44={pct_25_44}% 45-64={pct_45_64}% 65+={pct_65}% (sum={total_pct}%){flag}")
+                # Also print raw values for debugging
+                raw = age_raw_101.get(sc, [])
+                print(f"      Raw vals[0:15]: {raw[:15]}")
+        
+        if suspicious:
+            print(f"\n  !!! WARNING: Age percentages look wrong — column indices may need adjustment !!!")
+            print(f"  Check the UV101b headers above and verify [1]=Male 0-15, [2]=Male 16-24, etc.")
+            print(f"  The header row might be: {headers_101[:15]}")
+            print(f"  If the first header is 'Total' (not a geographic label), the indices are correct.")
+            print(f"  If the first header is something else, adjust skip_rows in parse_scotland_csv().")
     
     # 3. Ethnicity (UV201)
     headers_201, eth_raw = parse_scotland_csv(os.path.join(base_dir, 'UV201 - Ethnic group.csv'))
@@ -349,17 +408,23 @@ def load_ireland_zones(base_dir, centroids_path):
     """Load Ireland Small Area centroids + SAPS demographics."""
     print("Loading Ireland SA data...")
     
-    # 1. Centroids — keyed by SA_PUB (matches SAPS GEOGID)
+    # 1. Centroids — key by BOTH SA_PUB and GEOGID for flexible matching
+    # GEOGID has 'A' prefix (e.g. 'A017010016'), SA_PUB does not ('017010016')
+    # SAPS file may use either format depending on vintage
     centroids = {}
     with open(centroids_path) as f:
         reader = csv.DictReader(f)
         for row in reader:
-            # SA_PUB is the numeric ID that matches SAPS GEOGID
-            centroids[row['SA_PUB']] = {
+            loc = {
                 'lat': float(row['latitude']),
                 'lng': float(row['longitude'])
             }
-    print(f"  Centroids: {len(centroids)}")
+            # Index by SA_PUB (numeric) and GEOGID ('A' prefix)
+            sa_pub = row['SA_PUB'].strip()
+            geogid = row['GEOGID'].strip()
+            centroids[sa_pub] = loc
+            centroids[geogid] = loc  # Also index by 'A'-prefixed key
+    print(f"  Centroids: {len(centroids) // 2} unique SAs (indexed by SA_PUB + GEOGID)")
     
     # 2. SAPS data
     saps_file = os.path.join(base_dir, 'SAPS_2022_Small_Area_270923.csv')
@@ -370,10 +435,27 @@ def load_ireland_zones(base_dir, centroids_path):
     
     with open(saps_file) as f:
         reader = csv.DictReader(f)
+        skipped_reasons = {'slash': 0, 'ireland': 0, 'short': 0, 'empty_pop': 0}
+        total_rows = 0
+        sample_geogids = []
+        
         for row in reader:
-            geogid = row.get('GEOGID', '')
-            # Skip non-SA rows (Ireland total, rows with slashes are Electoral Districts)
-            if '/' in geogid or geogid == 'Ireland' or len(geogid) < 5:
+            total_rows += 1
+            geogid = row.get('GEOGID', '').strip().strip('"')
+            
+            # Collect samples for diagnostic
+            if len(sample_geogids) < 5:
+                sample_geogids.append(geogid)
+            
+            # Skip non-SA rows (Ireland total, Electoral Districts with slashes)
+            if '/' in geogid:
+                skipped_reasons['slash'] += 1
+                continue
+            if geogid.upper() in ('IRELAND', 'IE0', ''):
+                skipped_reasons['ireland'] += 1
+                continue
+            if len(geogid) < 5:
+                skipped_reasons['short'] += 1
                 continue
             
             # Total population
@@ -381,6 +463,7 @@ def load_ireland_zones(base_dir, centroids_path):
             total_f = safe_int(row.get('T1_1AGETF', 0))
             total = safe_int(row.get('T1_1AGETT', 0))
             if total == 0:
+                skipped_reasons['empty_pop'] += 1
                 continue
             
             # Age breakdown (use T columns - total for both sexes)
@@ -425,13 +508,26 @@ def load_ireland_zones(base_dir, centroids_path):
                     'total': ten_total, 'owned': owned, 'rented': rented
                 }
     
+    print(f"  SAPS diagnostics: {total_rows} total rows")
+    print(f"    Sample GEOGIDs: {sample_geogids}")
+    print(f"    Skipped: {skipped_reasons}")
     print(f"  Age: {len(age_data)}, Sex: {len(sex_data)}, Tenure: {len(ten_data)}")
     
-    # Combine
+    # Show sample keys from age_data vs centroids for match debugging
+    age_keys_sample = list(age_data.keys())[:3]
+    cent_keys_sample = list(centroids.keys())[:6]
+    print(f"    Sample age_data keys: {age_keys_sample}")
+    print(f"    Sample centroid keys: {cent_keys_sample}")
+    
+    # Combine — iterate over age_data keys (SAPS GEOGIDs) and look them up in centroids
+    # This way we don't double-count from the dual-indexed centroids dict
     zones = []
-    for geogid, centroid in centroids.items():
-        if geogid not in age_data:
+    matched = 0
+    for geogid in age_data:
+        if geogid not in centroids:
             continue
+        matched += 1
+        centroid = centroids[geogid]
         zone = {
             'code': geogid,
             'lat': centroid['lat'],
@@ -446,7 +542,145 @@ def load_ireland_zones(base_dir, centroids_path):
         }
         zones.append(zone)
     
-    print(f"  Combined: {len(zones)} zones")
+    print(f"  Combined: {len(zones)} zones (matched {matched} of {len(age_data)} SAPS records to centroids)")
+    return zones
+
+
+# ─── Northern Ireland: Load DZ demographics ──────────────
+def load_ni_zones(base_dir):
+    """Load Northern Ireland Data Zone centroids + available demographics.
+    
+    DZ centroids should be in: census-2021-population-weighted-centroids-data-zone.csv
+    DZ demographics (if downloaded): tables in ni_dz_*.csv or similar
+    """
+    print("Loading Northern Ireland DZ data...")
+    
+    # 1. Centroids
+    centroids = {}
+    centroids_file = os.path.join(base_dir, 'census-2021-population-weighted-centroids-data-zone.csv')
+    if not os.path.exists(centroids_file):
+        print(f"  *** NI centroids file not found: {centroids_file}")
+        print(f"  Available files in {base_dir}:")
+        if os.path.exists(base_dir):
+            for fn in sorted(os.listdir(base_dir)):
+                print(f"    {fn}")
+        else:
+            print(f"    Directory does not exist")
+        return []
+    
+    with open(centroids_file) as f:
+        reader = csv.DictReader(f)
+        headers = reader.fieldnames
+        print(f"  Centroid columns: {headers}")
+        
+        # NI centroid CSVs typically have: DZ2021_code, X, Y, lat, lng, population
+        # Detect column names
+        code_col = None
+        lat_col = None
+        lng_col = None
+        pop_col = None
+        
+        for h in headers:
+            hl = h.lower().strip()
+            if 'dz' in hl and 'code' in hl:
+                code_col = h
+            elif hl in ('lat', 'latitude', 'y_lat'):
+                lat_col = h
+            elif hl in ('lng', 'lon', 'longitude', 'long', 'x_long'):
+                lng_col = h
+            elif hl in ('population', 'pop', 'usual_residents', 'total_pop', 'mid_2021'):
+                pop_col = h
+        
+        # Fallback: try common NI centroid CSV formats
+        if not code_col:
+            for h in headers:
+                if h.startswith('DZ') or 'zone' in h.lower():
+                    code_col = h
+                    break
+        if not lat_col:
+            for h in headers:
+                if 'lat' in h.lower():
+                    lat_col = h
+                    break
+        if not lng_col:
+            for h in headers:
+                if 'lon' in h.lower() or 'lng' in h.lower():
+                    lng_col = h
+                    break
+        
+        if not all([code_col, lat_col, lng_col]):
+            print(f"  *** Could not identify centroid columns. Found: code={code_col}, lat={lat_col}, lng={lng_col}")
+            print(f"  Headers: {headers}")
+            return []
+        
+        print(f"  Using columns: code={code_col}, lat={lat_col}, lng={lng_col}, pop={pop_col}")
+        
+        for row in reader:
+            try:
+                code = row[code_col].strip().strip('"')
+                lat = float(row[lat_col])
+                lng = float(row[lng_col])
+                pop = int(float(row[pop_col])) if pop_col and row.get(pop_col) else 0
+                centroids[code] = {'lat': lat, 'lng': lng, 'population': pop}
+            except (ValueError, KeyError) as e:
+                continue
+    
+    print(f"  Centroids: {len(centroids)} Data Zones")
+    
+    # 2. Look for DZ-level demographic tables
+    # NISRA publishes Census 2021 at DZ level as CSVs/Excel
+    # Check for common filenames
+    possible_files = [
+        'ni_dz_age.csv', 'DZ2021_age.csv', 'census-2021-dz-age.csv',
+        'ni_dz_demographics.csv', 'ni_usual_residents_dz.csv',
+    ]
+    found_demo = None
+    for fn in possible_files:
+        path = os.path.join(base_dir, fn)
+        if os.path.exists(path):
+            found_demo = path
+            break
+    
+    # Also check for any CSVs with 'dz' in the name
+    if not found_demo and os.path.exists(base_dir):
+        for fn in os.listdir(base_dir):
+            if 'dz' in fn.lower() and fn.endswith('.csv') and fn != os.path.basename(centroids_file):
+                found_demo = os.path.join(base_dir, fn)
+                print(f"  Found potential DZ demographics: {fn}")
+                break
+    
+    if found_demo:
+        print(f"  *** DZ demographic file found: {found_demo}")
+        print(f"  *** TODO: Parse this file and extract age/sex/ethnicity/religion/tenure")
+        print(f"  *** For now, creating population-only zones")
+    else:
+        print(f"  No DZ-level demographic tables found — creating population-only zones")
+        print(f"  To add NI demographics, download DZ-level Census 2021 tables from:")
+        print(f"    https://www.nisra.gov.uk/statistics/census/2021-census")
+        print(f"  Place CSVs in: {base_dir}")
+    
+    # 3. Build basic zones (population from centroids, no detailed demographics)
+    zones = []
+    for code, centroid in centroids.items():
+        pop = centroid.get('population', 0)
+        if pop == 0:
+            pop = 1  # Avoid division by zero; actual demographic ratios unknown
+        
+        zone = {
+            'code': code,
+            'lat': centroid['lat'],
+            'lng': centroid['lng'],
+            'population': pop,
+            'jurisdiction': 'NI',
+            'age': None,        # Pending — need DZ-level tables
+            'sex': None,        # Pending
+            'ethnicity': None,  # Pending
+            'religion': None,   # Pending
+            'tenure': None,     # Pending
+        }
+        zones.append(zone)
+    
+    print(f"  Combined: {len(zones)} zones (population only — demographics pending)")
     return zones
 
 
@@ -633,10 +867,15 @@ def main():
     ie_zones = load_ireland_zones(os.path.join(base, 'ireland'), ireland_centroids)
     all_zones.extend(ie_zones)
     
+    # Northern Ireland (population from centroids, demographics pending DZ tables)
+    ni_zones = load_ni_zones(os.path.join(base, 'northern-ireland'))
+    all_zones.extend(ni_zones)
+    
     print(f"\nTotal zones loaded: {len(all_zones)}")
     print(f"  England & Wales: {len(ew_zones)}")
     print(f"  Scotland: {len(sc_zones)}")
     print(f"  Ireland: {len(ie_zones)}")
+    print(f"  Northern Ireland: {len(ni_zones)}")
     
     # Compute catchments
     catchments = compute_catchments(venues, all_zones)
@@ -644,7 +883,7 @@ def main():
     # Build output keyed by venue name for easy lookup
     output = {
         'metadata': {
-            'generated': '2026-03-04',
+            'generated': '2026-03-11',
             'catchment_radius_miles': 15,
             'catchment_radius_km': CATCHMENT_RADIUS_KM,
             'total_venues': len(venues),
@@ -652,12 +891,14 @@ def main():
             'zones_used': {
                 'england_wales_msoa': len(ew_zones),
                 'scotland_oa': len(sc_zones),
-                'ireland_sa': len(ie_zones)
+                'ireland_sa': len(ie_zones),
+                'northern_ireland_dz': len(ni_zones),
             },
             'dimensions': ['age', 'sex', 'ethnicity', 'religion', 'tenure'],
             'notes': {
-                'ireland': 'Ethnicity and religion pending — CSO data not yet integrated',
-                'northern_ireland': 'Not yet integrated — NISRA DZ data download pending'
+                'ireland': 'Age, sex, tenure from SAPS. Ethnicity and religion pending separate CSO download.',
+                'northern_ireland': f'{len(ni_zones)} DZ centroids loaded. Detailed demographics pending NISRA DZ-level tables.',
+                'scotland': 'Age/sex from UV101b, ethnicity UV201, religion UV205, tenure UV403.',
             }
         },
         'venues': {}
