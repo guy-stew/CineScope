@@ -1,15 +1,17 @@
 /**
- * VenuePopup.jsx — CineScope v3.6
+ * VenuePopup.jsx — CineScope v3.6.1
  *
  * Redesigned venue popup for map markers.
- * Changes from v2.1:
+ * v3.6.1 additions:
+ *   - Council politics badge (party colour dot + party name + council + control type)
+ *   - Catchment demographics section (age, ethnicity, religion, sex, tenure bars)
+ *   - Data sourced from council_politics.json + venue_demographics.json (static files)
+ *   - Graceful "Data pending" for Ireland/NI venues without demographic profiles
+ *
+ * v3.6 features preserved:
  *   - Landscape 2-column layout (left: revenue/films, right: contact/chart)
  *   - Theme-aware (dark/light mode via ThemeContext)
- *   - "Average Revenue" label (was "Revenue")
- *   - Grade tooltip on hover (explains quartile system + venue position)
- *   - No "#" prefix on rankings
- *   - Styled close button handled via CSS (circle with offset)
- *   - More padding, spacing, CineScope design language
+ *   - Grade tooltip, rankings, contact edit, trend chart
  */
 
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
@@ -22,6 +24,101 @@ import * as api from '../utils/apiClient'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 
+// ── Demographic bar colour palettes ──
+const DEMO_COLORS = {
+  age: ['#42A5F5', '#1E88E5', '#1565C0', '#0D47A1'],
+  sex: ['#42A5F5', '#EC407A'],
+  ethnicity: ['#78909C', '#FFB74D', '#4DB6AC', '#BA68C8', '#A1887F'],
+  religion: ['#5C6BC0', '#26A69A', '#FFA726', '#78909C', '#AB47BC'],
+  tenure: ['#66BB6A', '#FFA726'],
+}
+
+const DEMO_LABELS = {
+  age: {
+    under_25: 'Under 25',
+    age_25_44: '25–44',
+    age_45_64: '45–64',
+    age_65_plus: '65+',
+  },
+  sex: {
+    male: 'Male',
+    female: 'Female',
+  },
+  ethnicity: {
+    white: 'White',
+    asian: 'Asian',
+    black: 'Black',
+    mixed: 'Mixed',
+    other: 'Other',
+  },
+  religion: {
+    christian: 'Christian',
+    muslim: 'Muslim',
+    hindu: 'Hindu',
+    no_religion: 'No religion',
+    other: 'Other',
+  },
+  tenure: {
+    owned: 'Owned',
+    rented: 'Rented',
+  },
+}
+
+
+// ── Stacked bar component ──
+function DemoBar({ label, data, colorKey, theme }) {
+  if (!data) return null
+  const colors = DEMO_COLORS[colorKey] || []
+  const labels = DEMO_LABELS[colorKey] || {}
+  const entries = Object.entries(data)
+
+  return (
+    <div style={{ marginBottom: 7 }}>
+      <div style={{
+        fontSize: '0.64rem', fontWeight: 600, color: theme.textMuted,
+        marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.03em',
+      }}>
+        {label}
+      </div>
+      {/* Stacked bar */}
+      <div style={{
+        display: 'flex', height: 12, borderRadius: 3, overflow: 'hidden',
+        background: `${theme.border}80`,
+      }}>
+        {entries.map(([key, pct], i) => (
+          <div
+            key={key}
+            style={{
+              width: `${pct}%`,
+              background: colors[i] || '#999',
+              minWidth: pct > 1.5 ? undefined : 1,
+              transition: 'width 0.3s ease',
+            }}
+            title={`${labels[key] || key}: ${pct.toFixed(1)}%`}
+          />
+        ))}
+      </div>
+      {/* Legend */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: '1px 8px', marginTop: 2,
+      }}>
+        {entries.map(([key, pct], i) => (
+          <span key={key} style={{
+            fontSize: '0.6rem', color: theme.textMuted, whiteSpace: 'nowrap',
+          }}>
+            <span style={{
+              display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
+              background: colors[i] || '#999', marginRight: 2, verticalAlign: 'middle',
+            }} />
+            {labels[key] || key} {pct.toFixed(1)}%
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+
 export default function VenuePopup({ venue }) {
   const {
     venues,
@@ -30,6 +127,8 @@ export default function VenuePopup({ venue }) {
     venueFilmData,
     importedFilms,
     revenueFormat,
+    councilLookup,
+    demographicsLookup,
   } = useApp()
   const { theme } = useTheme()
   const { getToken } = useAuth()
@@ -60,6 +159,32 @@ export default function VenuePopup({ venue }) {
     notes: '',
   })
   const [applyToChain, setApplyToChain] = useState(false)
+
+  // ── Demographics expanded state ──
+  const [demoExpanded, setDemoExpanded] = useState(false)
+
+
+  // ── Council politics lookup ──
+  const councilInfo = useMemo(() => {
+    if (!councilLookup) return null
+    return councilLookup.get(venue.name) || null
+  }, [councilLookup, venue.name])
+
+  // ── Demographics lookup ──
+  const demographics = useMemo(() => {
+    if (!demographicsLookup) return null
+    // Try exact key match: "VenueName|lat,lng"
+    const exactKey = `${venue.name}|${venue.lat},${venue.lng}`
+    const exact = demographicsLookup.get(exactKey)
+    if (exact) return exact
+
+    // Fallback: match by venue name prefix (handles floating-point precision differences)
+    const prefix = venue.name + '|'
+    for (const [key, profile] of demographicsLookup) {
+      if (key.startsWith(prefix)) return profile
+    }
+    return null
+  }, [demographicsLookup, venue.name, venue.lat, venue.lng])
 
 
   // ── Fetch contact on mount ──
@@ -221,6 +346,12 @@ export default function VenuePopup({ venue }) {
     if (e.nativeEvent) e.nativeEvent.stopImmediatePropagation()
   }, [])
 
+  // Is this venue in a region where we don't have demographics yet?
+  const isDataPendingRegion = venue.country === 'Ireland' ||
+    (councilInfo?.country === 'IE') ||
+    // NI venues have N09 LA codes in the politics data
+    (councilInfo?.la_code?.startsWith('N09'))
+
 
   // ── Shared label style ──
   const sectionLabel = {
@@ -307,6 +438,41 @@ export default function VenuePopup({ venue }) {
             {venue.country === 'Ireland' ? ', Ireland' : ''}
             {' · '}{venue.chain || 'Independent'} {' · '} {venue.category}
           </div>
+
+          {/* ── Council politics badge ── */}
+          {councilInfo && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              marginTop: 4,
+              fontSize: '0.7rem',
+            }}>
+              <span style={{
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: councilInfo.party_colour || '#888',
+                flexShrink: 0,
+                boxShadow: `0 0 0 1px ${theme.border}`,
+              }} />
+              <span style={{ color: theme.text, fontWeight: 500 }}>
+                {councilInfo.party_name}
+              </span>
+              <span style={{ color: theme.textMuted }}>
+                {councilInfo.control_type === 'majority' ? 'majority' :
+                 councilInfo.control_type === 'minority' ? 'minority' :
+                 councilInfo.control_type === 'coalition' ? 'coalition' :
+                 councilInfo.control_type === 'noc' ? '' : councilInfo.control_type}
+              </span>
+              <span style={{ color: `${theme.textMuted}88` }}>·</span>
+              <span style={{ color: theme.textMuted }}>
+                {councilInfo.la_name}
+              </span>
+            </div>
+          )}
+
           {(venue.status || 'open') === 'closed' && (
             <span style={{
               display: 'inline-block',
@@ -781,6 +947,102 @@ export default function VenuePopup({ venue }) {
           )}
         </div>
       </div>
+
+
+      {/* ══ CATCHMENT DEMOGRAPHICS SECTION ══ */}
+      {(demographics || isDataPendingRegion || councilLookup) && (
+        <div style={{
+          borderTop: `1px solid ${theme.border}`,
+          marginTop: 10,
+          paddingTop: 8,
+        }}>
+          {/* Section header — clickable to expand/collapse */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+            onClick={() => setDemoExpanded(prev => !prev)}
+          >
+            <div style={{
+              ...sectionLabel,
+              marginBottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}>
+              <span>Catchment Profile</span>
+              {demographics && (
+                <span style={{
+                  fontSize: '0.58rem',
+                  fontWeight: 400,
+                  textTransform: 'none',
+                  letterSpacing: 0,
+                  color: theme.textMuted,
+                }}>
+                  15mi · {demographics.catchment_population?.toLocaleString() || '?'} pop · {demographics.zones_count || '?'} zones
+                </span>
+              )}
+            </div>
+            <span style={{
+              fontSize: '0.7rem',
+              color: theme.textMuted,
+              transform: demoExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s ease',
+            }}>
+              ▼
+            </span>
+          </div>
+
+          {/* Expanded content */}
+          {demoExpanded && (
+            <div style={{ marginTop: 8 }}>
+              {demographics ? (
+                <>
+                  {demographics.age && (
+                    <DemoBar label="Age" data={demographics.age} colorKey="age" theme={theme} />
+                  )}
+                  {demographics.ethnicity && (
+                    <DemoBar label="Ethnicity" data={demographics.ethnicity} colorKey="ethnicity" theme={theme} />
+                  )}
+                  {demographics.religion && (
+                    <DemoBar label="Religion" data={demographics.religion} colorKey="religion" theme={theme} />
+                  )}
+                  {demographics.sex && (
+                    <DemoBar label="Sex" data={demographics.sex} colorKey="sex" theme={theme} />
+                  )}
+                  {demographics.tenure && (
+                    <DemoBar label="Tenure" data={demographics.tenure} colorKey="tenure" theme={theme} />
+                  )}
+                </>
+              ) : isDataPendingRegion ? (
+                <div style={{
+                  fontSize: '0.72rem',
+                  color: theme.textMuted,
+                  fontStyle: 'italic',
+                  padding: '6px 0',
+                }}>
+                  Demographic data pending for {venue.country === 'Ireland' || councilInfo?.country === 'IE'
+                    ? 'Ireland'
+                    : 'Northern Ireland'} venues
+                </div>
+              ) : (
+                <div style={{
+                  fontSize: '0.72rem',
+                  color: theme.textMuted,
+                  fontStyle: 'italic',
+                  padding: '6px 0',
+                }}>
+                  No demographic profile available
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

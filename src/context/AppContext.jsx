@@ -1,9 +1,15 @@
 /**
- * CineScope — App Context (v3.4 — Admin Impersonation)
+ * CineScope — App Context (v3.6.1 — Council + Demographics Data)
  *
  * Central state management for the entire application.
  * All persistent data now loads from / saves to the cloud backend
  * (Neon Postgres via Vercel serverless API), authenticated via Clerk.
+ *
+ * v3.6.1 changes:
+ *   - Loads council_politics.json + venue_demographics.json from /data/ on mount
+ *   - Builds lookup Maps: councilLookup (by venue name), demographicsLookup (by name|lat,lng)
+ *   - Exposes both lookups via context for VenuePopup consumption
+ *   - Static data loaded independently of user auth (public files, not user-specific)
  *
  * v3.4 changes:
  *   - Added admin impersonation: admins can "view as" another user
@@ -371,6 +377,10 @@ export function AppProvider({ children }) {
   // ── Film Catalogue (master list — single source of truth) ──
   const [catalogue, setCatalogue] = useState([])
 
+  // ── Static data lookups (council politics + venue demographics) ──
+  const [councilLookup, setCouncilLookup] = useState(null)
+  const [demographicsLookup, setDemographicsLookup] = useState(null)
+
   // ── Analysis Set (which catalogue films to include in combined view) ──
   const [analysisSet, setAnalysisSet] = useState(() => {
     try {
@@ -540,6 +550,45 @@ export function AppProvider({ children }) {
     initialLoad()
     return () => { cancelled = true }
   }, [authLoaded, loadCloudData])
+
+
+  // ── Load static data files (public, not user-specific) ──
+  useEffect(() => {
+    let cancelled = false
+    async function loadStaticData() {
+      try {
+        const [councilRes, demoRes] = await Promise.all([
+          fetch('/data/council_politics.json'),
+          fetch('/data/venue_demographics.json'),
+        ])
+        if (cancelled) return
+
+        if (councilRes.ok) {
+          const raw = await councilRes.json()
+          const map = new Map()
+          for (const v of raw.venues || []) {
+            map.set(v.venue_name, v)
+          }
+          map._metadata = raw.metadata
+          setCouncilLookup(map)
+        }
+
+        if (demoRes.ok) {
+          const raw = await demoRes.json()
+          const map = new Map()
+          for (const [key, profile] of Object.entries(raw.venues || {})) {
+            map.set(key, profile)
+          }
+          map._metadata = raw.metadata
+          setDemographicsLookup(map)
+        }
+      } catch (err) {
+        console.warn('CineScope: Failed to load static data files:', err)
+      }
+    }
+    loadStaticData()
+    return () => { cancelled = true }
+  }, [])
 
 
   // ── Refresh venues (called by VenueManager after add/edit/import) ──
@@ -1168,6 +1217,10 @@ export function AppProvider({ children }) {
 
     // API client wrapper (for Film Catalogue & TMDB components)
     apiClient,
+
+    // Static data lookups (council politics + venue demographics)
+    councilLookup,
+    demographicsLookup,
   }
 
   // ── Show loading screen while cloud data fetches ──
