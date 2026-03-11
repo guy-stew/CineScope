@@ -1,9 +1,16 @@
 /**
- * CineScope — Reports View (v3.5 — Stage 6: All report types complete)
+ * CineScope — Reports View (v3.6.1 — Demographic + Political AI Enrichment)
  *
  * Dedicated view for AI-powered report generation and data export.
  * Card picker selects report type, template editor customises prompts,
  * output panel streams AI text or structured tables.
+ *
+ * v3.6.1 changes:
+ *   - All AI report types now include demographic catchment + political
+ *     council data in the prompt via {{demographic_summary}} and
+ *     {{political_summary}} template placeholders
+ *   - buildEnrichmentForAI() called before each generation (fast — data
+ *     is cached from first popup load)
  *
  * All 5 report types wired: AI Insights, Chain Performance,
  * Marketing Targets, Venue Recommendations, CSV Data Export.
@@ -14,7 +21,7 @@ import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '@clerk/clerk-react'
 import { computeTrends, buildTrendSummaryForAI } from '../utils/trendAnalysis'
-import { buildChainDataForAI, buildFilmProfileForAI, generateReportFromPrompt } from '../utils/aiReport'
+import { buildChainDataForAI, buildFilmProfileForAI, generateReportFromPrompt, buildEnrichmentForAI } from '../utils/aiReport'
 import {
   REPORT_TYPES, PLACEHOLDER_DEFS, TEMPLATE_SETTINGS_KEYS,
   DEFAULT_TEMPLATES, SYSTEM_PROMPTS, substituteTemplate,
@@ -234,6 +241,9 @@ export default function ReportsView({ inline = false }) {
           console.warn('CineScope: Could not load film profiles for AI', profileErr)
         }
 
+        // Build demographic + political enrichment
+        const { demographicSummary, politicalSummary } = await buildEnrichmentForAI(venues)
+
         // Build placeholder values
         const filmTitles = trendData.filmTitles || importedFilms.map(f => f.filmInfo?.title || 'Untitled')
         const values = {
@@ -244,6 +254,8 @@ export default function ReportsView({ inline = false }) {
           declining_count: String(summary.declining || 0),
           trend_data: trendSummary,
           film_profiles: filmProfile || '(No film profile data available)',
+          demographic_summary: demographicSummary || '(Demographic data not available)',
+          political_summary: politicalSummary || '(Political data not available)',
         }
 
         const userMessage = substituteTemplate(tpl, values)
@@ -268,11 +280,16 @@ export default function ReportsView({ inline = false }) {
           console.warn('CineScope: Could not load film profile for chain report', profileErr)
         }
 
+        // Build demographic + political enrichment for chain venues
+        const { demographicSummary, politicalSummary } = await buildEnrichmentForAI(chainVenues)
+
         const values = {
           chain_name: selectedChain,
           film_title: selectedFilm?.filmInfo?.title || 'Unknown Film',
           chain_data: chainData,
           film_profile: filmProfile || '(No film profile data available)',
+          demographic_summary: demographicSummary || '(Demographic data not available)',
+          political_summary: politicalSummary || '(Political data not available)',
         }
 
         const userMessage = substituteTemplate(tpl, values)
@@ -328,6 +345,9 @@ export default function ReportsView({ inline = false }) {
           console.warn('CineScope: Could not load film profile for marketing report', profileErr)
         }
 
+        // Build demographic + political enrichment for B+C venues
+        const { demographicSummary, politicalSummary } = await buildEnrichmentForAI(venuesToSend)
+
         const values = {
           film_title: selectedFilm?.filmInfo?.title || 'Unknown Film',
           bc_count: String(venuesToSend.length),
@@ -337,6 +357,8 @@ export default function ReportsView({ inline = false }) {
           grade_a_avg: `£${gradeAAvg.toLocaleString()}`,
           venue_data: venueDataText,
           film_profile: filmProfile || '(No film profile data available)',
+          demographic_summary: demographicSummary || '(Demographic data not available)',
+          political_summary: politicalSummary || '(Political data not available)',
         }
 
         const userMessage = substituteTemplate(tpl, values)
@@ -442,6 +464,12 @@ export default function ReportsView({ inline = false }) {
           if (histLines.length > 0) historicalText = histLines.join('\n')
         }
 
+        // Build demographic + political enrichment for candidate venues
+        const enrichmentVenues = effectiveRecsMode === 'missed_opportunity'
+          ? baseVenues.filter(v => !new Set(venues.filter(vv => vv.grade && vv.grade !== 'E').map(vv => vv.name)).has(v.name))
+          : baseVenues
+        const { demographicSummary, politicalSummary } = await buildEnrichmentForAI(enrichmentVenues.slice(0, 60))
+
         const values = {
           mode: modeLabel,
           film_title: selectedFilm?.filmInfo?.title || 'Unknown Film',
@@ -449,6 +477,8 @@ export default function ReportsView({ inline = false }) {
           candidate_venues: candidateVenuesText,
           top_performers: topPerformersText,
           historical_data: historicalText,
+          demographic_summary: demographicSummary || '(Demographic data not available)',
+          political_summary: politicalSummary || '(Political data not available)',
         }
 
         const userMessage = substituteTemplate(tpl, values)

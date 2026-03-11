@@ -1,5 +1,11 @@
 /**
- * CineScope — Report Templates (v3.5 — Stage 6: All report types active)
+ * CineScope — Report Templates (v3.6.1 — Demographic + Political Enrichment)
+ *
+ * v3.6.1 changes:
+ *   - Added {{demographic_summary}} and {{political_summary}} placeholders
+ *     to all AI report types (insights, chain, marketing, venue_recs)
+ *   - Updated default templates to include enrichment data sections
+ *   - Updated system prompts to instruct Claude how to use the data
  */
 
 
@@ -60,12 +66,16 @@ export const PLACEHOLDER_DEFS = {
     { token: '{{declining_count}}',    description: 'Number of venues with declining grades' },
     { token: '{{trend_data}}',         description: 'Full trend summary (auto-generated)' },
     { token: '{{film_profiles}}',      description: 'Film metadata: genres, cast, director, keywords, financials' },
+    { token: '{{demographic_summary}}', description: 'Catchment demographics: age, ethnicity, religion, tenure by grade band' },
+    { token: '{{political_summary}}',  description: 'Council political control: party breakdown across venues' },
   ],
   chain: [
     { token: '{{chain_name}}',         description: 'Name of the selected cinema chain' },
     { token: '{{film_title}}',         description: 'Title of the selected film' },
     { token: '{{chain_data}}',         description: 'Full chain data summary (auto-generated)' },
     { token: '{{film_profile}}',       description: 'Film metadata' },
+    { token: '{{demographic_summary}}', description: 'Catchment demographics for chain venues' },
+    { token: '{{political_summary}}',  description: 'Council political control for chain venues' },
   ],
   marketing: [
     { token: '{{film_title}}',         description: 'Title of the selected film' },
@@ -76,6 +86,8 @@ export const PLACEHOLDER_DEFS = {
     { token: '{{grade_a_avg}}',        description: 'Grade A average revenue (the benchmark)' },
     { token: '{{venue_data}}',         description: 'Full B+C venue list' },
     { token: '{{film_profile}}',       description: 'Film metadata' },
+    { token: '{{demographic_summary}}', description: 'Catchment demographics for B+C venues' },
+    { token: '{{political_summary}}',  description: 'Council political control for B+C venues' },
   ],
   venue_recs: [
     { token: '{{mode}}',               description: 'Analysis mode: "missed_opportunity" or "pre_release"' },
@@ -84,6 +96,8 @@ export const PLACEHOLDER_DEFS = {
     { token: '{{candidate_venues}}',   description: 'Unscreened venues to evaluate (auto-generated)' },
     { token: '{{top_performers}}',     description: 'Grade A/B venues as context for what "good" looks like' },
     { token: '{{historical_data}}',    description: 'Performance data from other imported films' },
+    { token: '{{demographic_summary}}', description: 'Catchment demographics for candidate venues' },
+    { token: '{{political_summary}}',  description: 'Council political control for candidate venues' },
   ],
 }
 
@@ -112,7 +126,7 @@ Please provide a report with these sections:
 
 2. KEY FINDINGS -- What patterns stand out? Which chains/regions are consistently strong or weak? Any surprises?
 
-3. MARKETING OPPORTUNITIES -- Identify B and C grade venues/regions where targeted marketing could push performance up. Focus on improving venues and those with high local population. When cast or genre data is available, suggest how the film's profile could inform targeting.
+3. MARKETING OPPORTUNITIES -- Identify B and C grade venues/regions where targeted marketing could push performance up. Focus on improving venues and those with high local population. When cast or genre data is available, suggest how the film's profile could inform targeting. When demographic data shows a young, diverse, or distinctive catchment near an underperforming venue, call it out with a specific recommendation (e.g. TikTok for under-25 catchments, culturally targeted campaigns for diverse areas).
 
 4. VENUES TO WATCH -- Highlight the top improvers (momentum to capitalise on) and top decliners (may need investigation).
 
@@ -124,7 +138,11 @@ Keep the tone professional but conversational. Use GBP for currency. Be specific
 
 {{trend_data}}
 
-{{film_profiles}}`,
+{{film_profiles}}
+
+{{demographic_summary}}
+
+{{political_summary}}`,
 
   chain: `Write a performance report for the {{chain_name}} cinema chain about the film "{{film_title}}".
 
@@ -136,7 +154,7 @@ Please cover:
 
 2. TOP PERFORMERS -- Celebrate the best venues by name, with revenue and grade.
 
-3. GROWTH OPPORTUNITIES -- Constructively highlight underperformers. Where population density data suggests untapped audience, mention it.
+3. GROWTH OPPORTUNITIES -- Constructively highlight underperformers. Where catchment demographic data shows a large, young, or diverse local population, reference it as untapped potential (e.g. "your venue sits in an area with 33% under-25s but earned below average").
 
 4. CHAIN VS NETWORK -- How does {{chain_name}} compare to the overall average?
 
@@ -148,7 +166,11 @@ Use GBP for currency. Be specific with venue names and numbers. Keep under 500 w
 
 {{chain_data}}
 
-{{film_profile}}`,
+{{film_profile}}
+
+{{demographic_summary}}
+
+{{political_summary}}`,
 
   marketing: `You are analysing Grade B and C cinema venues for the film "{{film_title}}".
 
@@ -162,6 +184,7 @@ For each venue, write a short (1-2 sentence) marketing note explaining:
 - Why this venue is a target (what's the gap vs Grade A performance?)
 - What specific marketing action might help (social media, local press, chain negotiation, screening times)
 - Reference the chain type or location if relevant
+- When catchment demographic data is provided, tailor the recommendation (e.g. young catchment = TikTok/Instagram, older = local press/matinee focus, diverse = culturally targeted campaigns)
 
 Rate each venue's potential as "High", "Medium", or "Low" based on how likely marketing could close the gap.
 
@@ -189,7 +212,11 @@ IMPORTANT: Respond with ONLY a JSON object in this exact format, no other text:
 
 {{venue_data}}
 
-{{film_profile}}`,
+{{film_profile}}
+
+{{demographic_summary}}
+
+{{political_summary}}`,
 
   venue_recs: `You are recommending cinema venues for the film "{{film_title}}".
 
@@ -205,6 +232,8 @@ Consider:
 - Screen count (larger venues can dedicate more screens)
 - Historical performance at similar films (if available below)
 - Category (Independent vs Large Chain vs Small/Premium Chain)
+- Catchment demographics (when provided -- young catchments suit different films than older ones)
+- Council area (when provided -- arts-friendly councils may indicate receptive local audiences)
 
 Rank venues from strongest recommendation to weakest. Only include venues you'd actually recommend (minimum confidence of Medium).
 
@@ -236,20 +265,24 @@ IMPORTANT: Respond with ONLY a JSON object in this exact format, no other text:
 
 --- HISTORICAL PERFORMANCE DATA ---
 
-{{historical_data}}`,
+{{historical_data}}
+
+{{demographic_summary}}
+
+{{political_summary}}`,
 }
 
 
 // ─── System Prompts ──────────────────────────────────────────────
 
 export const SYSTEM_PROMPTS = {
-  insights: `You are CineScope's AI analyst -- a sharp, commercially-minded cinema distribution analyst helping Austin Shaw at Liberator Film Services make smarter marketing decisions. You receive trend data showing how cinema venues across the UK and Ireland perform across multiple film releases, including grades (A=top quartile, B=above average, C=below average, D=poor, E=not screened). Write concise, actionable analysis. Use GBP for currency.`,
+  insights: `You are CineScope's AI analyst -- a sharp, commercially-minded cinema distribution analyst helping Austin Shaw at Liberator Film Services make smarter marketing decisions. You receive trend data showing how cinema venues across the UK and Ireland perform across multiple film releases, including grades (A=top quartile, B=above average, C=below average, D=poor, E=not screened). You may also receive catchment demographic profiles (age, ethnicity, religion, tenure within 15 miles of venues) and council political context (which party controls each venue's local authority). When demographic data shows a young or diverse catchment near an underperforming venue, call it out as a specific marketing opportunity. Write concise, actionable analysis. Use GBP for currency.`,
 
-  chain: `You are CineScope's AI analyst writing a chain-specific performance report. This report will be sent to a cinema chain's manager, so it must be professional, constructive, and externally appropriate. Reference specific venue names and data. Use GBP for currency.`,
+  chain: `You are CineScope's AI analyst writing a chain-specific performance report. This report will be sent to a cinema chain's manager, so it must be professional, constructive, and externally appropriate. Reference specific venue names and data. You may receive catchment demographics and council data -- use these to add depth to growth opportunity analysis (e.g. "your Leeds venue is in an area with 35% under-25s"). Use GBP for currency.`,
 
-  marketing: `You are CineScope's AI analyst generating structured marketing target data for Grade B and C cinema venues. You MUST respond with valid JSON only -- no markdown, no explanation, no backticks. The JSON must match the schema specified in the user message exactly. Every venue in the input data must appear in your output. Use GBP for currency values (numbers only, no symbols in the JSON).`,
+  marketing: `You are CineScope's AI analyst generating structured marketing target data for Grade B and C cinema venues. You may receive catchment demographic data -- when available, use it to tailor marketing notes (e.g. recommend TikTok for venues with young catchments, local press for older areas, culturally targeted campaigns for diverse catchments). You MUST respond with valid JSON only -- no markdown, no explanation, no backticks. The JSON must match the schema specified in the user message exactly. Every venue in the input data must appear in your output. Use GBP for currency values (numbers only, no symbols in the JSON).`,
 
-  venue_recs: `You are CineScope's AI venue recommender for UK/Ireland cinema distribution. You predict which cinema venues would perform well for a specific film based on venue characteristics, chain type, location, and historical patterns. You MUST respond with valid JSON only -- no markdown, no explanation, no backticks. The JSON must match the schema specified in the user message exactly. Recommend 20-40 venues maximum, ranked by predicted performance. Use GBP for currency values (numbers only, no symbols in the JSON).`,
+  venue_recs: `You are CineScope's AI venue recommender for UK/Ireland cinema distribution. You predict which cinema venues would perform well for a specific film based on venue characteristics, chain type, location, and historical patterns. You may also receive catchment demographic profiles and council political data -- use these to strengthen your reasoning (e.g. a venue in a young, diverse catchment suits certain film genres better). You MUST respond with valid JSON only -- no markdown, no explanation, no backticks. The JSON must match the schema specified in the user message exactly. Recommend 20-40 venues maximum, ranked by predicted performance. Use GBP for currency values (numbers only, no symbols in the JSON).`,
 }
 
 

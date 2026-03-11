@@ -1,9 +1,19 @@
 /**
- * CineScope AI Report Generator (v2.0 cloud)
+ * CineScope AI Report Generator (v2.2 — demographic + political enrichment)
  *
  * Sends trend analysis data to Claude via the server-side proxy at
  * /api/ai/report. The user's Anthropic API key is stored in the
  * database and never exposed to the browser.
+ *
+ * v2.2 changes:
+ *   - generateAIReport() and generateChainAIReport() now accept optional
+ *     enrichment text (demographic + political summaries) and append it
+ *     to the user message
+ *   - System prompts updated to mention demographic/political context
+ *   - buildEnrichmentForAI() convenience wrapper for report generation
+ *
+ * v2.1 additions:
+ *   - generateReportFromPrompt() — generic entry point for custom templates
  *
  * v2.0 changes:
  *   - Removed direct Anthropic API calls (no more x-api-key header)
@@ -11,9 +21,6 @@
  *   - Functions now take `getToken` (Clerk auth) instead of `apiKey`
  *   - Calls go through /api/ai/report server proxy
  *   - SSE stream parsing logic unchanged
- *
- * v2.1 additions:
- *   - generateReportFromPrompt() — generic entry point for custom templates
  *
  * v1.11 features preserved:
  *   - generateChainAIReport() — chain-tailored analysis for PDF pitch packs
@@ -23,6 +30,7 @@
  */
 
 import { generateAIReport as apiGenerateAIReport } from './apiClient'
+import { buildEnrichmentSummariesForAI } from './venueEnrichment'
 
 const MODEL = 'claude-sonnet-4-20250514'
 
@@ -116,13 +124,17 @@ You will receive trend data from CineScope showing how cinema venues across the 
 
 You may also receive FILM PROFILES with metadata about the films being analysed — including genres, cast, director, keywords, certification, and financial data. When film profiles are provided, use them to make your analysis more contextual and targeted. For example: reference the cast's audience demographics when suggesting marketing targets, use genre and keywords to identify which venue types are the best fit, and reference financial ROI data when making investment recommendations.
 
+You may also receive CATCHMENT DEMOGRAPHICS showing the population profile within a 15-mile radius of venues (age, ethnicity, religion, housing tenure), broken down by grade band. When demographic data is provided, use it to sharpen marketing recommendations — e.g. if under-25s are overrepresented near underperforming venues, recommend TikTok/Instagram targeting; if an area is heavily 65+, suggest traditional media or matinee-focused campaigns.
+
+You may also receive COUNCIL POLITICAL CONTEXT showing which political party controls each venue's local council. Use this to identify opportunities for local authority partnerships (arts-friendly councils), regional campaign coordination (multiple venues in one council area), and to add geographic/political colour to the narrative.
+
 Write a concise, actionable analysis report covering:
 
 1. **Executive Summary** (2-3 sentences) — The big picture. What's the headline story across these releases?
 
 2. **Key Findings** — What patterns stand out? Which chains/regions are consistently strong or weak? Are there any surprises?
 
-3. **Marketing Opportunities** — Specifically identify B and C grade venues/regions where targeted social media marketing could push performance up. Focus on venues that are improving or have high local population. When cast or genre data is available, suggest how the film's profile could inform targeting (e.g. younger cast = Instagram/TikTok targeting for 18-34 demographic).
+3. **Marketing Opportunities** — Specifically identify B and C grade venues/regions where targeted social media marketing could push performance up. Focus on venues that are improving or have high local population. When cast or genre data is available, suggest how the film's profile could inform targeting (e.g. younger cast = Instagram/TikTok targeting for 18-34 demographic). When demographic data shows a young catchment near an underperforming venue, call it out specifically.
 
 4. **Venues to Watch** — Highlight the top improvers (momentum worth capitalising on) and top decliners (may need investigation or deprioritisation).
 
@@ -139,17 +151,21 @@ You will receive performance data for a SPECIFIC cinema chain. This report will 
 
 You may also receive a FILM PROFILE with metadata about the film — including genres, cast, director, keywords, and certification. When a film profile is provided, reference it naturally in your analysis. For example: mention how the film's genre or cast appeals to specific audience demographics, and suggest targeted marketing approaches based on the film's profile.
 
+You may also receive CATCHMENT DEMOGRAPHICS showing the age/ethnicity/tenure profile of the population within 15 miles of each venue. When provided, use this to add depth to your growth opportunity analysis — e.g. "Your Leeds venue sits in an area with 35% under-25s but earned only £X — a social media push targeting younger audiences could unlock significant potential here."
+
+You may also receive COUNCIL POLITICAL CONTEXT showing which local authority area each venue sits in. Use this for geographic colour and to suggest local partnership opportunities where relevant.
+
 Write a concise, tailored performance report covering:
 
 1. **Chain Overview** (2-3 sentences) — How did this chain perform overall? Set the context: number of venues, total and average revenue, overall grade.
 
 2. **Top Performers** — Which venues in this chain did best? Celebrate specific locations by name, with revenue and grade. If a venue outperformed the network average, highlight it.
 
-3. **Growth Opportunities** — Which venues in this chain underperformed? For each, note the grade and revenue. Where population density data is available and relevant, reference it (e.g. "Your Leeds venue sits in a densely populated area but earned only £X — there may be untapped audience here"). Frame these constructively — as opportunities, not failures.
+3. **Growth Opportunities** — Which venues in this chain underperformed? For each, note the grade and revenue. Where demographic data shows the catchment has a large, young, or diverse population, call it out as untapped potential. Frame these constructively — as opportunities, not failures.
 
 4. **Chain vs Network** — How does this chain compare to the overall network average? Is it above or below? By how much?
 
-5. **Recommendations** — 2-3 specific, actionable suggestions for improving performance at their weaker venues. Think marketing activity, screening times, local partnerships. When film profile data is available, tailor suggestions to the film's audience (e.g. social media targeting based on cast demographics).
+5. **Recommendations** — 2-3 specific, actionable suggestions for improving performance at their weaker venues. Think marketing activity, screening times, local partnerships. When film profile or demographic data is available, tailor suggestions to the film's audience and local population.
 
 Tone: Professional and respectful — this is going to someone outside the company. Use £ for currency. Be specific with venue names, cities, and numbers. Keep the total report under 500 words.`
 
@@ -161,13 +177,18 @@ Tone: Professional and respectful — this is going to someone outside the compa
  * @param {string} trendSummary — Pre-built text summary of trend data
  * @param {Function} onChunk — Called with each text chunk as it streams in
  * @param {string} [filmProfile] — Optional film profile text from buildFilmProfileForAI()
+ * @param {string} [enrichmentText] — Optional demographic + political summary from buildEnrichmentForAI()
  * @returns {Promise<string>} — Complete report text
  */
-export async function generateAIReport(getToken, trendSummary, onChunk, filmProfile) {
+export async function generateAIReport(getToken, trendSummary, onChunk, filmProfile, enrichmentText) {
   let userMessage = `Here is the CineScope trend data for analysis. Please write the insights report.\n\n${trendSummary}`
 
   if (filmProfile) {
     userMessage += `\n\n${filmProfile}`
+  }
+
+  if (enrichmentText) {
+    userMessage += `\n\n${enrichmentText}`
   }
 
   return _callProxy(getToken, SYSTEM_PROMPT, userMessage, onChunk)
@@ -185,9 +206,10 @@ export async function generateAIReport(getToken, trendSummary, onChunk, filmProf
  * @param {Object} selectedFilm — Current film object (filmInfo, stats)
  * @param {Function} onChunk — Called with each text chunk as it streams in
  * @param {Object} [catalogueEntry] — Optional catalogue entry with TMDB metadata
+ * @param {string} [enrichmentText] — Optional demographic + political summary
  * @returns {Promise<string>} — Complete report text
  */
-export async function generateChainAIReport(getToken, chainName, chainVenues, allVenues, selectedFilm, onChunk, catalogueEntry) {
+export async function generateChainAIReport(getToken, chainName, chainVenues, allVenues, selectedFilm, onChunk, catalogueEntry, enrichmentText) {
   let dataSummary = buildChainDataForAI(chainName, chainVenues, allVenues, selectedFilm)
 
   if (catalogueEntry) {
@@ -195,6 +217,10 @@ export async function generateChainAIReport(getToken, chainName, chainVenues, al
     if (filmProfile) {
       dataSummary += `\n\n${filmProfile}`
     }
+  }
+
+  if (enrichmentText) {
+    dataSummary += `\n\n${enrichmentText}`
   }
 
   return _callProxy(getToken, CHAIN_SYSTEM_PROMPT, dataSummary, onChunk)
@@ -272,15 +298,41 @@ export function buildChainDataForAI(chainName, chainVenues, allVenues, selectedF
     lines.push('')
   }
 
-  // Population context hint
+  // Population context hint (when enrichment data is not passed separately)
   lines.push(`NOTES:`)
-  lines.push(`  Population density data is available in CineScope. When venues in densely populated areas underperform, this may indicate untapped audience potential worth investigating with targeted local marketing.`)
+  lines.push(`  Demographic catchment profiles and council political data may be provided separately if available.`)
 
   return lines.join('\n')
 }
 
 
 // ─── Generic Custom Prompt Report ───────────────────────────────
+
+/**
+ * Build enrichment text (demographics + politics) for a set of venues.
+ * Convenience wrapper that callers can use to get a single text block
+ * ready to pass as the `enrichmentText` parameter to generateAIReport
+ * or generateChainAIReport, or to substitute into {{demographic_summary}}
+ * and {{political_summary}} template placeholders.
+ *
+ * @param {Array} venues — Array of venue objects (need name, lat, lng, grade, revenue, city)
+ * @returns {Promise<{ enrichmentText: string, demographicSummary: string, politicalSummary: string }>}
+ */
+export async function buildEnrichmentForAI(venues) {
+  try {
+    const { demographicSummary, politicalSummary } = await buildEnrichmentSummariesForAI(venues)
+
+    let enrichmentText = ''
+    if (demographicSummary) enrichmentText += demographicSummary
+    if (politicalSummary) enrichmentText += (enrichmentText ? '\n\n' : '') + politicalSummary
+
+    return { enrichmentText, demographicSummary, politicalSummary }
+  } catch (err) {
+    console.warn('Failed to build enrichment for AI:', err)
+    return { enrichmentText: '', demographicSummary: '', politicalSummary: '' }
+  }
+}
+
 
 /**
  * Generate a report using a custom system prompt and user message.
